@@ -48,7 +48,7 @@ function json<T>(env: Env, name: string, dflt: T): T {
  * in the data directory so secrets survive restarts. Production deployments should supply the key
  * from a secret manager instead.
  */
-export function loadConfig(env: Env = process.env, opts: { version?: string; cwd?: string } = {}): Config {
+export function loadConfig(env: Env = process.env, opts: { version?: string; cwd?: string; /** Tooling that only reads must not invent and store a key. */ persistMasterKey?: boolean } = {}): Config {
   const cwd = opts.cwd ?? process.cwd();
   const environment = (env.OMNIFLOW_ENV ?? 'production') as EnvironmentName;
   if (!['development', 'staging', 'production'].includes(environment)) fail('OMNIFLOW_ENV', 'must be development, staging or production');
@@ -57,12 +57,19 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 
   let masterKey = env.OMNIFLOW_MASTER_KEY?.trim();
+  let masterKeySource: Config['masterKeySource'] = 'env';
   if (!masterKey) {
     const keyFile = join(dataDir, 'master.key');
-    if (existsSync(keyFile)) masterKey = readFileSync(keyFile, 'utf8').trim();
-    else {
+    if (existsSync(keyFile)) {
+      masterKey = readFileSync(keyFile, 'utf8').trim();
+      masterKeySource = 'file';
+    } else {
       masterKey = generateMasterKey();
-      writeFileSync(keyFile, `${masterKey}\n`, { mode: 0o600 });
+      if (opts.persistMasterKey === false) masterKeySource = 'ephemeral';
+      else {
+        writeFileSync(keyFile, `${masterKey}\n`, { mode: 0o600 });
+        masterKeySource = 'generated';
+      }
     }
   }
 
@@ -102,6 +109,7 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
     publicUrl: env.OMNIFLOW_PUBLIC_URL ?? `http://localhost:${port}`,
     logLevel,
     masterKey,
+    masterKeySource,
     previousMasterKeys: (env.OMNIFLOW_PREVIOUS_MASTER_KEYS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     admin: { email: env.OMNIFLOW_ADMIN_EMAIL ?? 'admin@omniflow.local', password: env.OMNIFLOW_ADMIN_PASSWORD },
     adapters,

@@ -28,6 +28,8 @@ export interface Config {
   publicUrl: string;
   logLevel: LogLevel;
   masterKey: string;
+  /** Where the master key came from. `ephemeral` means this process invented one that is not stored (read-only tooling). */
+  masterKeySource: 'env' | 'file' | 'generated' | 'ephemeral';
   /** Previous master keys, kept readable until secrets are rotated. */
   previousMasterKeys: string[];
   admin: { email: string; password: string | undefined };
