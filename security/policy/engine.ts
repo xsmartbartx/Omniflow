@@ -8,13 +8,13 @@ import {
 } from '../../core/index.ts';
 import type { Plan } from '../../schemas/plan.ts';
 import type { PolicyDocument } from '../../schemas/policy-manifest.ts';
-import {
-  type Action,
-  type AutonomyTier,
-  type EnvironmentName,
-  type PolicyDecision,
-  type Principal,
-  type Role,
+import type {
+  Action,
+  AutonomyTier,
+  EnvironmentName,
+  PolicyDecision,
+  Principal,
+  Role,
 } from '../../schemas/policy.ts';
 
 /**
