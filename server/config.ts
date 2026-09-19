@@ -87,6 +87,9 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
   };
   for (const [name, cmd] of Object.entries(allowedCommands)) if (!cmd.startsWith('/')) fail('OMNIFLOW_SHELL_ALLOWED_COMMANDS', `entry ${name} ('${cmd}') must be an absolute path`);
 
+  const alertChannels = (env.OMNIFLOW_ALERT_CHANNELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  for (const c of alertChannels) if (!(c in adapters.channels)) fail('OMNIFLOW_ALERT_CHANNELS', `names channel '${c}', which is not defined in OMNIFLOW_CHANNELS`);
+
   const port = int(env, 'OMNIFLOW_PORT', 8080, 1, 65535);
   const logLevel = (env.OMNIFLOW_LOG_LEVEL ?? 'info') as LogLevel;
   if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel)) fail('OMNIFLOW_LOG_LEVEL', 'must be debug, info, warn, error or silent');
@@ -112,6 +115,9 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
     rateLimitPerMinute: int(env, 'OMNIFLOW_RATE_LIMIT_PER_MIN', 600, 10, 100_000),
     trustProxy: bool(env, 'OMNIFLOW_TRUST_PROXY', false),
     metricsToken: env.OMNIFLOW_METRICS_TOKEN,
+    alertChannels,
+    analysisIntervalHours: int(env, 'OMNIFLOW_ANALYSIS_INTERVAL_HOURS', 24, 0, 24 * 30),
+    alertIntervalSeconds: int(env, 'OMNIFLOW_ALERT_INTERVAL_SECONDS', 60, 5, 3600),
     version: opts.version ?? '1.0.0',
   };
 }

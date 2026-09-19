@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type CapabilityRegistry, createDefaultRegistry } from '../capabilities/index.ts';
+import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
-import { createMetrics } from '../insight/index.ts';
+import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
 import { CircuitBreakers, StepRuntime } from '../orchestration/runtime/index.ts';
@@ -58,6 +58,20 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const approvals = new ApprovalService({ state, orchestrator, policy, clock });
   const auth = new Authenticator(state, { sessionTtlHours: config.sessionTtlHours, log });
   const metrics = createMetrics(state, { version: config.version, environment: config.environment, breakers: () => breakers.snapshot() });
+  const analysis = new AnalysisAgent({ state, clock, log });
+  const alerts = new AlertManager({
+    state,
+    clock,
+    log,
+    circuits: () => breakers.snapshot(),
+    config: { intervalMs: config.alertIntervalSeconds * 1000 },
+    notify: async (alert, event) => {
+      const text = formatAlert(alert, event);
+      const results = await Promise.allSettled(config.alertChannels.map((name) => sendToChannel(config.adapters, name, text)));
+      results.forEach((r, i) => r.status === 'rejected' && log.error('could not deliver alert', { channel: config.alertChannels[i], key: alert.key, error: r.reason }));
+    },
+  });
+  let analysisTimer: NodeJS.Timeout | undefined;
 
   const app: Omniflow = {
     config,
@@ -76,6 +90,8 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     approvals,
     auth,
     metrics,
+    analysis,
+    alerts,
 
     async start() {
       state.identity.ensureTenant('default', 'Default');
@@ -84,6 +100,18 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       const { recovered } = orchestrator.start();
       scheduler.start();
       triggers.start();
+      alerts.start();
+      if (config.analysisIntervalHours > 0) {
+        // First pass a few minutes after boot (so there is history to read), then on the configured cadence.
+        const every = config.analysisIntervalHours * 3_600_000;
+        const first = setTimeout(() => {
+          analysis.runAll();
+          analysisTimer = setInterval(() => analysis.runAll(), every);
+          analysisTimer.unref();
+        }, Math.min(every, 5 * 60_000));
+        first.unref();
+        analysisTimer = first;
+      }
       if (config.seedExamples) seedExamples(app);
       state.events.append({ tenant: 'default', type: 'system.started', data: { version: config.version, environment: config.environment, recovered } });
       log.info('omniflow started', { version: config.version, environment: config.environment, recovered, capabilities: capabilities.latest().length });
@@ -93,6 +121,8 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     async stop() {
       scheduler.stop();
       triggers.stop();
+      alerts.stop();
+      if (analysisTimer) clearTimeout(analysisTimer);
       await orchestrator.stop();
       state.events.append({ tenant: 'default', type: 'system.stopped', data: {} });
       state.db.checkpoint();

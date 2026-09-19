@@ -1,7 +1,7 @@
 import type { CapabilityRegistry } from '../capabilities/index.ts';
 import type { AdapterConfig } from '../capabilities/index.ts';
 import type { Clock, LogLevel, Logger } from '../core/index.ts';
-import type { MetricsRegistry } from '../insight/index.ts';
+import type { AlertManager, AnalysisAgent, MetricsRegistry } from '../insight/index.ts';
 import type { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import type { RegistryService } from '../orchestration/registry/index.ts';
 import type { CircuitBreakers } from '../orchestration/runtime/index.ts';
@@ -41,6 +41,12 @@ export interface Config {
   rateLimitPerMinute: number;
   trustProxy: boolean;
   metricsToken: string | undefined;
+  /** Names (from `adapters.channels`) that receive alerts. */
+  alertChannels: string[];
+  /** How often the Analysis Agent runs, in hours. 0 disables it. */
+  analysisIntervalHours: number;
+  /** How often alert conditions are evaluated. */
+  alertIntervalSeconds: number;
   version: string;
 }
 
@@ -61,6 +67,8 @@ export interface Omniflow {
   approvals: ApprovalService;
   auth: Authenticator;
   metrics: MetricsRegistry;
+  analysis: AnalysisAgent;
+  alerts: AlertManager;
   /** Start background loops, recover interrupted runs, bootstrap the first admin. */
   start(): Promise<{ recovered: number; bootstrap?: { email: string; password: string } }>;
   stop(): Promise<void>;

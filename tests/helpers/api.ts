@@ -111,6 +111,7 @@ export async function makeApi(opts: { env?: Record<string, string> } = {}): Prom
       await app.orchestrator.stop();
       app.scheduler.stop();
       app.triggers.stop();
+      app.alerts.stop();
     },
   };
   return api;
