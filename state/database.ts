@@ -105,14 +105,20 @@ export class Db {
   }
 
   migrate(): number {
-    this.exec('CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');
+    this.exec(
+      'CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)',
+    );
     const applied = new Set(this.all<{ id: number }>('SELECT id FROM _migrations').map((r) => r.id));
     let count = 0;
     for (const m of MIGRATIONS) {
       if (applied.has(m.id)) continue;
       this.transaction(() => {
         this.exec(m.sql);
-        this.run('INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)', [m.id, m.name, new Date().toISOString()]);
+        this.run('INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)', [
+          m.id,
+          m.name,
+          new Date().toISOString(),
+        ]);
       });
       count++;
     }

@@ -93,10 +93,14 @@ export class ArtifactStore {
     const meta = this.meta(tenant, ref);
     if (!meta) throw new NotFoundError('Artifact', ref);
     if (meta.tombstonedAt) {
-      throw new OmniflowError('ARTIFACT_ERASED', `Artifact '${ref}' was erased (${meta.tombstoneReason ?? 'no reason recorded'})`, {
-        errorClass: 'business',
-        retryable: false,
-      });
+      throw new OmniflowError(
+        'ARTIFACT_ERASED',
+        `Artifact '${ref}' was erased (${meta.tombstoneReason ?? 'no reason recorded'})`,
+        {
+          errorClass: 'business',
+          retryable: false,
+        },
+      );
     }
     const data = readFileSync(this.pathFor(tenant, ref.slice('sha256:'.length)));
     // Verify integrity on every read: a bit-flipped or swapped file must never be served as valid.
@@ -118,16 +122,21 @@ export class ArtifactStore {
     const meta = this.meta(tenant, ref);
     if (!meta || meta.tombstonedAt) return false;
     rmSync(this.pathFor(tenant, ref.slice('sha256:'.length)), { force: true });
-    this.db.run(
-      'UPDATE artifacts SET tombstoned_at = ?, tombstone_reason = ? WHERE tenant_id = ? AND hash = ?',
-      [this.clock.now().toISOString(), reason, tenant, ref],
-    );
+    this.db.run('UPDATE artifacts SET tombstoned_at = ?, tombstone_reason = ? WHERE tenant_id = ? AND hash = ?', [
+      this.clock.now().toISOString(),
+      reason,
+      tenant,
+      ref,
+    ]);
     return true;
   }
 
   list(tenant: string, runId?: string): ArtifactMeta[] {
     const rows = runId
-      ? this.db.all<Row>('SELECT * FROM artifacts WHERE tenant_id = ? AND run_id = ? ORDER BY created_at', [tenant, runId])
+      ? this.db.all<Row>('SELECT * FROM artifacts WHERE tenant_id = ? AND run_id = ? ORDER BY created_at', [
+          tenant,
+          runId,
+        ])
       : this.db.all<Row>('SELECT * FROM artifacts WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 500', [tenant]);
     return rows.map(toMeta);
   }

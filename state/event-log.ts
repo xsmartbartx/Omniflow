@@ -1,4 +1,4 @@
-import { contentHash, type Clock, ValidationError, newId, redact, systemClock } from '../core/index.ts';
+import { type Clock, contentHash, newId, redact, systemClock, ValidationError } from '../core/index.ts';
 import {
   EVENT_CATALOGUE,
   type EventActor,
@@ -141,9 +141,10 @@ export class EventLog {
 
     const tenant = evt.tenant;
     return this.db.transaction(() => {
-      const last = this.db.get<{ hash: string }>('SELECT hash FROM events WHERE tenant_id = ? ORDER BY seq DESC LIMIT 1', [
-        tenant,
-      ]);
+      const last = this.db.get<{ hash: string }>(
+        'SELECT hash FROM events WHERE tenant_id = ? ORDER BY seq DESC LIMIT 1',
+        [tenant],
+      );
       const base: Omit<EventRecord, 'seq' | 'hash'> = {
         id: newId('evt'),
         tenant,

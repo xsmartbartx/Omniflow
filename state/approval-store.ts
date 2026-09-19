@@ -121,8 +121,8 @@ export class ApprovalStore {
   list(f: { tenant: string; status?: ApprovalStatus; runId?: string; limit?: number }): ApprovalRecord[] {
     const w = ['tenant_id = ?'];
     const p: string[] = [f.tenant];
-    if (f.status) (w.push('status = ?'), p.push(f.status));
-    if (f.runId) (w.push('run_id = ?'), p.push(f.runId));
+    if (f.status) w.push('status = ?'), p.push(f.status);
+    if (f.runId) w.push('run_id = ?'), p.push(f.runId);
     const limit = Math.min(f.limit ?? 100, 500);
     return this.db
       .all<Row>(`SELECT * FROM approvals WHERE ${w.join(' AND ')} ORDER BY requested_at DESC LIMIT ${limit}`, p)
@@ -140,26 +140,39 @@ export class ApprovalStore {
           retryable: false,
         });
       }
-      this.db.run(
-        `UPDATE approvals SET status = ?, decided_by = ?, decided_at = ?, comment = ? WHERE id = ?`,
-        [status, by, this.clock.now().toISOString(), comment ?? null, id],
-      );
+      this.db.run(`UPDATE approvals SET status = ?, decided_by = ?, decided_at = ?, comment = ? WHERE id = ?`, [
+        status,
+        by,
+        this.clock.now().toISOString(),
+        comment ?? null,
+        id,
+      ]);
       return this.get(id)!;
     });
   }
 
   /** Extend the deadline once (escalation). */
   escalate(id: string, newExpiry: string): void {
-    this.db.run(`UPDATE approvals SET escalated = 1, expires_at = ? WHERE id = ? AND status = 'pending'`, [newExpiry, id]);
+    this.db.run(`UPDATE approvals SET escalated = 1, expires_at = ? WHERE id = ? AND status = 'pending'`, [
+      newExpiry,
+      id,
+    ]);
   }
 
   due(nowIso: string): ApprovalRecord[] {
     return this.db
-      .all<Row>(`SELECT * FROM approvals WHERE status = 'pending' AND expires_at <= ? ORDER BY expires_at ASC LIMIT 200`, [nowIso])
+      .all<Row>(
+        `SELECT * FROM approvals WHERE status = 'pending' AND expires_at <= ? ORDER BY expires_at ASC LIMIT 200`,
+        [nowIso],
+      )
       .map(toRecord);
   }
 
   pendingCount(tenant: string): number {
-    return this.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND status = 'pending'`, [tenant])?.n ?? 0;
+    return (
+      this.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM approvals WHERE tenant_id = ? AND status = 'pending'`, [
+        tenant,
+      ])?.n ?? 0
+    );
   }
 }

@@ -369,13 +369,13 @@ export class RunStore {
   private filter(f: RunFilter): { where: string; params: Array<string | number> } {
     const w: string[] = [];
     const params: Array<string | number> = [];
-    if (f.tenant) (w.push('tenant_id = ?'), params.push(f.tenant));
-    if (f.workflow) (w.push('workflow_name = ?'), params.push(f.workflow));
-    if (f.status?.length) (w.push(`status IN (${f.status.map(() => '?').join(',')})`), params.push(...f.status));
-    if (f.triggerType) (w.push('trigger_type = ?'), params.push(f.triggerType));
-    if (f.parentRunId) (w.push('parent_run_id = ?'), params.push(f.parentRunId));
-    if (f.since) (w.push('created_at >= ?'), params.push(f.since));
-    if (f.before) (w.push('created_at < ?'), params.push(f.before));
+    if (f.tenant) w.push('tenant_id = ?'), params.push(f.tenant);
+    if (f.workflow) w.push('workflow_name = ?'), params.push(f.workflow);
+    if (f.status?.length) w.push(`status IN (${f.status.map(() => '?').join(',')})`), params.push(...f.status);
+    if (f.triggerType) w.push('trigger_type = ?'), params.push(f.triggerType);
+    if (f.parentRunId) w.push('parent_run_id = ?'), params.push(f.parentRunId);
+    if (f.since) w.push('created_at >= ?'), params.push(f.since);
+    if (f.before) w.push('created_at < ?'), params.push(f.before);
     return { where: w.length ? `WHERE ${w.join(' AND ')}` : '', params };
   }
 
@@ -497,13 +497,18 @@ export class RunStore {
     params.push(runId, stepId);
     const res = this.db.run(`UPDATE step_states SET ${sets.join(', ')} WHERE run_id = ? AND step_id = ?`, params);
     if (res.changes === 0) {
-      throw new OmniflowError('STEP_NOT_FOUND', `Step '${stepId}' of run '${runId}' not found`, { errorClass: 'catastrophic' });
+      throw new OmniflowError('STEP_NOT_FOUND', `Step '${stepId}' of run '${runId}' not found`, {
+        errorClass: 'catastrophic',
+      });
     }
     return this.getStep(runId, stepId)!;
   }
 
   nextCompletionSeq(runId: string): number {
-    return (this.db.get<{ m: number | null }>('SELECT MAX(completed_seq) AS m FROM step_states WHERE run_id = ?', [runId])?.m ?? 0) + 1;
+    return (
+      (this.db.get<{ m: number | null }>('SELECT MAX(completed_seq) AS m FROM step_states WHERE run_id = ?', [runId])
+        ?.m ?? 0) + 1
+    );
   }
 
   /** Steps whose timer (retry back-off, sleep, event/approval timeout) has elapsed. */
@@ -573,7 +578,10 @@ export class RunStore {
   /** Aggregate view used by dashboards and metrics. */
   countByStatus(tenant?: string): Record<string, number> {
     const rows = tenant
-      ? this.db.all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM runs WHERE tenant_id = ? GROUP BY status', [tenant])
+      ? this.db.all<{ status: string; n: number }>(
+          'SELECT status, COUNT(*) AS n FROM runs WHERE tenant_id = ? GROUP BY status',
+          [tenant],
+        )
       : this.db.all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM runs GROUP BY status');
     return Object.fromEntries(rows.map((r) => [r.status, r.n]));
   }

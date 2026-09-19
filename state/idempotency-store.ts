@@ -37,9 +37,8 @@ export class IdempotencyStore {
    * @param owner   `runId/stepId` of the claimant. The same owner may re-claim its own in-progress key
    *                (crash recovery); a different owner must wait until it completes or expires.
    * @param leaseMs how long an in-progress claim is honoured before it is considered abandoned
-   * @param ttlMs   how long a completed key is remembered
    */
-  claim(tenant: string, capability: string, key: string, owner: string, leaseMs: number, ttlMs = 7 * 86_400_000): ClaimResult {
+  claim(tenant: string, capability: string, key: string, owner: string, leaseMs: number): ClaimResult {
     return this.db.transaction(() => {
       const now = this.clock.now();
       const nowIso = now.toISOString();
@@ -49,8 +48,10 @@ export class IdempotencyStore {
       );
       if (row) {
         const expired = row.expires_at <= nowIso;
-        if (row.state === 'succeeded' && !expired) return { state: 'replay', output: fromJson(row.output) ?? null } as const;
-        if (row.state === 'in-progress' && !expired && row.owner !== owner) return { state: 'busy', owner: row.owner } as const;
+        if (row.state === 'succeeded' && !expired)
+          return { state: 'replay', output: fromJson(row.output) ?? null } as const;
+        if (row.state === 'in-progress' && !expired && row.owner !== owner)
+          return { state: 'busy', owner: row.owner } as const;
         // expired (either kind) or our own abandoned claim → take it over
         this.db.run(
           `UPDATE idempotency SET state = 'in-progress', owner = ?, output = NULL, updated_at = ?, expires_at = ?
@@ -64,13 +65,19 @@ export class IdempotencyStore {
          VALUES (?, ?, ?, 'in-progress', ?, ?, ?, ?)`,
         [tenant, capability, key, owner, nowIso, nowIso, new Date(now.getTime() + leaseMs).toISOString()],
       );
-      void ttlMs;
       return { state: 'claimed', reclaimed: false } as const;
     });
   }
 
   /** Record the successful outcome so that any later attempt replays it. */
-  complete(tenant: string, capability: string, key: string, owner: string, output: unknown, ttlMs = 7 * 86_400_000): void {
+  complete(
+    tenant: string,
+    capability: string,
+    key: string,
+    owner: string,
+    output: unknown,
+    ttlMs = 7 * 86_400_000,
+  ): void {
     const now = this.clock.now();
     this.db.run(
       `UPDATE idempotency SET state = 'succeeded', output = ?, updated_at = ?, expires_at = ?
@@ -95,12 +102,18 @@ export class IdempotencyStore {
     );
   }
 
-  peek(tenant: string, capability: string, key: string): { state: string; owner: string; output?: unknown } | undefined {
+  peek(
+    tenant: string,
+    capability: string,
+    key: string,
+  ): { state: string; owner: string; output?: unknown } | undefined {
     const r = this.db.get<Row>(
       'SELECT state, owner, output, updated_at, expires_at FROM idempotency WHERE tenant_id = ? AND capability = ? AND key = ?',
       [tenant, capability, key],
     );
-    return r ? { state: r.state, owner: r.owner, ...(r.output !== null ? { output: fromJson(r.output) } : {}) } : undefined;
+    return r
+      ? { state: r.state, owner: r.owner, ...(r.output !== null ? { output: fromJson(r.output) } : {}) }
+      : undefined;
   }
 
   purgeExpired(): number {
