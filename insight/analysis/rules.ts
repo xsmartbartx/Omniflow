@@ -121,11 +121,24 @@ export const retryStorms: Rule = (input, t) => {
 
 const fingerprint = (s: PlanStep): string => (s.capability ? `${s.capability.name}|${Object.keys(s.with ?? {}).sort().join(',')}` : s.type);
 
-function differingParameters(a: WorkflowFacts, b: WorkflowFacts): string[] {
-  const byFp = new Map(b.plan.steps.map((s) => [fingerprint(s), s]));
+/** A workflow's steps as a bag: the nth occurrence of a fingerprint is distinct from the (n-1)th. */
+function fingerprints(wf: WorkflowFacts): Map<string, PlanStep> {
+  const seen = new Map<string, number>();
+  const out = new Map<string, PlanStep>();
+  for (const s of wf.plan.steps) {
+    if (s.type === 'terminate') continue;
+    const fp = fingerprint(s);
+    const n = seen.get(fp) ?? 0;
+    seen.set(fp, n + 1);
+    out.set(`${fp}#${n}`, s);
+  }
+  return out;
+}
+
+function differingParameters(a: Map<string, PlanStep>, b: Map<string, PlanStep>): string[] {
   const out = new Set<string>();
-  for (const s of a.plan.steps) {
-    const other = byFp.get(fingerprint(s));
+  for (const [fp, s] of a) {
+    const other = b.get(fp);
     if (!other?.with || !s.with) continue;
     for (const k of Object.keys(s.with)) if (JSON.stringify(s.with[k]) !== JSON.stringify(other.with[k])) out.add(`${s.capability?.name ?? s.type}.${k}`);
   }
@@ -135,24 +148,25 @@ function differingParameters(a: WorkflowFacts, b: WorkflowFacts): string[] {
 /** Two workflows that are the same workflow with different parameters. */
 export const duplicateWorkflows: Rule = (input, t) => {
   const out: Finding[] = [];
-  const sets = input.workflows.map((wf) => ({ wf, fps: new Set(wf.plan.steps.filter((s) => s.type !== 'terminate').map(fingerprint)) }));
-  for (let i = 0; i < sets.length; i++) {
-    for (let j = i + 1; j < sets.length; j++) {
-      const a = sets[i]!;
-      const b = sets[j]!;
-      if (Math.min(a.fps.size, b.fps.size) < 3) continue;
-      const shared = [...a.fps].filter((f) => b.fps.has(f)).length;
-      const similarity = shared / (a.fps.size + b.fps.size - shared);
+  const bags = input.workflows.map((wf) => ({ wf, steps: fingerprints(wf) }));
+  for (let i = 0; i < bags.length; i++) {
+    for (let j = i + 1; j < bags.length; j++) {
+      const a = bags[i]!;
+      const b = bags[j]!;
+      if (Math.min(a.steps.size, b.steps.size) < 3) continue;
+      const shared = [...a.steps.keys()].filter((f) => b.steps.has(f)).length;
+      const union = a.steps.size + b.steps.size - shared;
+      const similarity = shared / union;
       if (similarity < t.duplicateSimilarity) continue;
       const [x, y] = [a.wf.name, b.wf.name].sort();
-      const params = differingParameters(a.wf, b.wf);
+      const params = differingParameters(a.steps, b.steps);
       out.push({
         rule: 'duplicate-workflows',
         severity: 'medium',
         key: `duplicate-workflows:${x}:${y}`,
         workflow: x!,
         title: `'${x}' and '${y}' are near-duplicates`,
-        summary: `${x} and ${y} share ${pct(similarity)} of their steps (${shared} of ${a.fps.size + b.fps.size - shared}). Two copies drift apart and have to be fixed twice.`,
+        summary: `${x} and ${y} share ${pct(similarity)} of their steps (${shared} of ${union}). Two copies drift apart and have to be fixed twice.`,
         recommendation: params.length
           ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${params.length > 5 ? '…' : ''} — make those inputs.`
           : `Merge them into one workflow; they do the same thing.`,
@@ -190,8 +204,10 @@ export const costHotspots: Rule = (input, t) => {
         evidence: { cost: round(wf.runs.cost), totalCost: round(total), share: round(share), runs: wf.runs.total },
       });
     }
+    // A step being most of its *own* workflow's cost only matters if the workflow matters, and if there is a choice of steps.
+    const meaningful = ratio(wf.runs.cost, total) >= 0.25 && [...wf.steps.values()].filter((s) => s.cost > 0).length >= 2;
     for (const s of wf.steps.values()) {
-      if (wf.runs.cost < t.minCost || ratio(s.cost, wf.runs.cost) < t.costStepShare) continue;
+      if (!meaningful || ratio(s.cost, wf.runs.cost) < t.costStepShare) continue;
       const planStep = wf.plan.steps.find((p) => p.id === s.stepId);
       out.push({
         rule: 'cost-hotspot',
