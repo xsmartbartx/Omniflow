@@ -165,7 +165,7 @@ export function scanTemplates(value: unknown, basePath = ''): FoundTemplate[] {
         else throw e;
       }
     } else if (Array.isArray(v)) {
-      v.forEach((x, i) => walk(x, `${path}[${i}]`));
+      for (let i = 0; i < v.length; i++) walk(v[i], `${path}[${i}]`);
     } else if (v !== null && typeof v === 'object') {
       for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);
     }

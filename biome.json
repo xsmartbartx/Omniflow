@@ -31,7 +31,8 @@
       "suspicious": {
         "noExplicitAny": "off",
         "noAssignInExpressions": "off",
-        "noControlCharactersInRegex": "off"
+        "noControlCharactersInRegex": "off",
+        "noTemplateCurlyInString": "off"
       },
       "complexity": {
         "noStaticOnlyClass": "off",

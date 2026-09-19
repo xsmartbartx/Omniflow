@@ -67,7 +67,9 @@ describe('identifiers and seeded randomness', () => {
 
   it('is monotonic across the same millisecond', () => {
     const t = Date.now() + 10_000;
-    expect(ulid(t) < ulid(t)).toBe(true);
+    const first = ulid(t);
+    const second = ulid(t);
+    expect(first < second).toBe(true);
   });
 
   it('generates identical sequences from identical seeds', () => {

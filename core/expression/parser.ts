@@ -135,10 +135,6 @@ class Parser {
     const t = this.peek();
     return t.type === 'punct' && t.value === v;
   }
-  private isKeyword(v: string): boolean {
-    const t = this.peek();
-    return t.type === 'ident' && t.value === v;
-  }
   private expectPunct(v: string): Token {
     const t = this.peek();
     if (t.type !== 'punct' || t.value !== v) {
