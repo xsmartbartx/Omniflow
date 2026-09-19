@@ -147,6 +147,12 @@ function classifyNetworkError(e: unknown, req: SafeRequest): CapabilityError {
   });
 }
 
+/** Abandon a response stream without letting its abort surface as an uncaught 'error' event. */
+function discard(body: { on(e: 'error', l: () => void): unknown; destroy(): unknown }): void {
+  body.on('error', () => {});
+  body.destroy();
+}
+
 /** An HTTP client that can only reach what it has been explicitly allowed to reach. */
 export async function safeRequest(req: SafeRequest): Promise<SafeResponse> {
   const headers: Record<string, string> = {};
@@ -186,7 +192,7 @@ export async function safeRequest(req: SafeRequest): Promise<SafeResponse> {
       const status = res.statusCode;
       const location = res.headers.location;
       if (status >= 300 && status < 400 && typeof location === 'string' && req.followRedirects !== false) {
-        res.body.destroy();
+        discard(res.body);
         if (hop >= req.maxRedirects) {
           throw new CapabilityError('HTTP_TOO_MANY_REDIRECTS', `More than ${req.maxRedirects} redirects`, {
             errorClass: 'business',
@@ -212,7 +218,7 @@ export async function safeRequest(req: SafeRequest): Promise<SafeResponse> {
         size += buf.length;
         if (size > req.maxResponseBytes) {
           truncated = true;
-          res.body.destroy();
+          discard(res.body);
           break;
         }
         chunks.push(buf);
