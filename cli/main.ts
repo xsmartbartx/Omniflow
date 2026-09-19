@@ -8,10 +8,14 @@ import { ApiError, ConnectionError } from './client.ts';
 import { adminCommand } from './commands/admin.ts';
 import { compileCommand, devCommand, validateCommand } from './commands/local.ts';
 import {
+  alertsCommand,
+  analyzeCommand,
   approvalsCommand,
   auditCommand,
   capabilitiesCommand,
   changesCommand,
+  insightsCommand,
+  proposalsCommand,
   publishCommand,
   runCommand,
   runsCommand,
@@ -46,6 +50,10 @@ const COMMANDS: Record<string, Command> = {
   capabilities: capabilitiesCommand,
   secrets: secretsCommand,
   audit: auditCommand,
+  insights: insightsCommand,
+  alerts: alertsCommand,
+  analyze: analyzeCommand,
+  proposals: proposalsCommand,
   admin: adminCommand,
 };
 

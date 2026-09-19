@@ -395,3 +395,69 @@ export async function auditCommand(ctx: CliContext): Promise<number> {
   }
   throw new UsageError(`Unknown audit subcommand '${sub}'. Try: verify, export`);
 }
+
+// -------------------------------------------------------------------- insight
+
+export async function insightsCommand(ctx: CliContext): Promise<number> {
+  const api = client(ctx);
+  const s = ctx.style;
+  const hours = intFlag(ctx.args, 'hours') ?? 24;
+  const o = await api.get(`/v1/insights/overview?hours=${hours}`);
+  emit(ctx, o, () => {
+    const rate = (r: number | null) => (r === null ? '—' : `${Math.round(r * 100)}%`);
+    return [
+      s.bold(`Last ${o.window.hours}h`),
+      `runs ${o.runs.total} · succeeded ${s.green(String(o.runs.succeeded))} · failed ${o.runs.failed ? s.red(String(o.runs.failed)) : '0'} · success rate ${rate(o.runs.successRate)}`,
+      `active ${o.runs.active} · queued ${o.runs.queued} · approvals pending ${o.approvals.pending} · manual intervention ${rate(o.manualInterventionRate)}`,
+      `latency p50 ${humanDuration(o.latencyMs.p50)} · p95 ${humanDuration(o.latencyMs.p95)} · cost ${o.cost.total}`,
+      ...(o.workflows.length ? ['', table(o.workflows.map((w: any) => [w.name, String(w.runs), String(w.failed), rate(w.successRate), humanDuration(w.p95Ms), String(w.cost)]), ['WORKFLOW', 'RUNS', 'FAILED', 'SUCCESS', 'P95', 'COST'], s)] : []),
+      ...(o.failingSteps.length ? ['', s.bold('Failing steps'), table(o.failingSteps.map((f: any) => [`${f.workflow} › ${f.stepId}`, `${f.failed}/${f.executions}`, f.topError ?? '']), ['STEP', 'FAILED', 'MOST OFTEN'], s)] : []),
+    ].join('\n');
+  });
+  return 0;
+}
+
+export async function alertsCommand(ctx: CliContext): Promise<number> {
+  const api = client(ctx);
+  const s = ctx.style;
+  const r = await api.get('/v1/insights/alerts');
+  emit(ctx, r, () =>
+    r.active.length === 0
+      ? `${s.green('✓')} No open alerts.`
+      : r.active.map((a: any) => `${a.severity === 'critical' ? s.red('CRITICAL') : s.yellow('WARNING')}  ${s.bold(a.title)}  ${s.dim(ago(a.raisedAt))}\n  ${a.message}`).join('\n\n'),
+  );
+  return r.active.some((a: any) => a.severity === 'critical') ? 1 : 0;
+}
+
+export async function analyzeCommand(ctx: CliContext): Promise<number> {
+  const r = await client(ctx).post('/v1/insights/analyze');
+  emit(ctx, r, () => `${ctx.style.green('✓')} analysis complete: ${r.findings} finding(s), ${r.raised} new proposal(s), ${r.suppressed} already known, ${r.resolved} resolved`);
+  return 0;
+}
+
+export async function proposalsCommand(ctx: CliContext): Promise<number> {
+  const sub = ctx.args.positionals[1] ?? 'list';
+  const api = client(ctx);
+  const s = ctx.style;
+  if (sub === 'list') {
+    const r = await api.get(`/v1/proposals?status=${flag(ctx.args, 'status') ?? 'open'}`);
+    emit(ctx, r.items, () =>
+      r.items.length === 0
+        ? 'No proposals.'
+        : table(r.items.map((p: any) => [p.id, p.body?.severity ?? '', p.workflowName ?? '—', p.title]), ['PROPOSAL', 'SEVERITY', 'WORKFLOW', 'TITLE'], s),
+    );
+    return 0;
+  }
+  const id = need(ctx, 2, 'proposal id');
+  if (sub === 'show') {
+    const p = await api.get(`/v1/proposals/${encodeURIComponent(id)}`);
+    emit(ctx, p, () => [s.bold(p.title), '', p.body?.summary ?? '', '', `${s.bold('Recommendation:')} ${p.body?.recommendation ?? ''}`, '', s.dim(JSON.stringify(p.body?.evidence ?? {}, null, 2))].join('\n'));
+    return 0;
+  }
+  if (sub === 'accept' || sub === 'dismiss') {
+    await api.post(`/v1/proposals/${encodeURIComponent(id)}/decide`, { status: sub === 'accept' ? 'accepted' : 'dismissed' });
+    ctx.out(`${s.green('✓')} ${sub === 'accept' ? 'accepted' : 'dismissed'} ${id}\n`);
+    return 0;
+  }
+  throw new UsageError(`Unknown proposals subcommand '${sub}'. Try: list, show, accept, dismiss`);
+}

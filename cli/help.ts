@@ -25,6 +25,10 @@ Talk to a server (set OMNIFLOW_URL and OMNIFLOW_API_KEY)
   changes [list|show]          Change requests; also  approve|reject|withdraw <id>
   capabilities                 The capability catalogue and its health
   secrets list|set|delete      Manage secrets (values via stdin: --stdin)
+  insights [--hours n]         Dashboard: outcomes, latency, cost, failing steps
+  alerts                       Open alerts (exit 1 if any is critical)
+  analyze                      Run the Analysis Agent now
+  proposals [list|show]        Improvement proposals; also  accept|dismiss <id>
   audit verify|export          Check the tamper-evident audit chain / export it  [--out file]
 
 Operate the data directory (run on the server host; OMNIFLOW_DATA_DIR)

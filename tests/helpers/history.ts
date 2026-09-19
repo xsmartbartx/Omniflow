@@ -44,7 +44,7 @@ export interface RunSpec {
   status?: 'succeeded' | 'failed' | 'cancelled' | 'running' | 'queued';
   /** Milliseconds after the (manual) clock's current time at which the run was created. */
   stepIds?: string[];
-  steps?: Record<string, StepPatch & { error?: ErrorInfo }>;
+  steps?: Record<string, StepPatch>;
   cost?: number;
   trigger?: { type: string; payload?: unknown };
   /** ms the run waits in the queue before starting. */

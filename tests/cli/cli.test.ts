@@ -431,3 +431,37 @@ describe('admin commands on a data directory', () => {
     expect(r.err).toContain('No OmniFlow database');
   });
 });
+
+describe('insight commands', () => {
+  it('shows the dashboard, alerts, and the proposal queue', async () => {
+    const api = await makeApi();
+    try {
+      await api.server.listen({ host: '127.0.0.1', port: 0 });
+      const addr = api.server.server.address();
+      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
+      const wf = yamlWf('swallow', [echoStep('a', 1), { id: 'flaky', type: 'capability', uses: 'util-fail@^1', dependsOn: ['a'], onError: 'continue', with: { errorClass: 'business', message: 'nope' } }]);
+      expect((await cli(['publish', '-'], { env, stdin: wf })).code).toBe(0);
+      for (let i = 0; i < 12; i++) await cli(['run', 'swallow'], { env });
+      await until(() => api.app.state.runs.listRuns({ tenant: 'default', workflow: 'swallow', limit: 50 }).filter((r) => r.status === 'succeeded').length === 12);
+
+      const overview = await cli(['insights', '--hours', '6'], { env });
+      expect(overview.code).toBe(0);
+      expect(overview.out).toContain('Last 6h');
+      expect(overview.out).toContain('swallow');
+      expect(overview.out).toContain('flaky');
+
+      expect((await cli(['alerts'], { env })).out).toContain('No open alerts');
+      const analysed = await cli(['analyze'], { env });
+      expect(analysed.out).toMatch(/\d+ new proposal/);
+      const list = await cli(['proposals'], { env });
+      expect(list.out).toContain("Step 'flaky'");
+      const id = /(prp_\w+)/.exec(list.out)![1]!;
+      expect((await cli(['proposals', 'show', id], { env })).out).toContain('Recommendation:');
+      expect((await cli(['proposals', 'dismiss', id], { env })).code).toBe(0);
+      expect((await cli(['proposals'], { env })).out).not.toContain(id);
+      expect((await cli(['proposals', 'wobble', id], { env })).code).toBe(2);
+    } finally {
+      await api.stop();
+    }
+  });
+});
