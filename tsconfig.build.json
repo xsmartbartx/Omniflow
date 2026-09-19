@@ -8,8 +8,17 @@
     "declaration": false
   },
   "include": [
-    "core", "schemas", "security", "capabilities", "state", "orchestration",
-    "insight", "authoring", "gateway", "cli", "server"
+    "core",
+    "schemas",
+    "security",
+    "capabilities",
+    "state",
+    "orchestration",
+    "insight",
+    "authoring",
+    "gateway",
+    "cli",
+    "server"
   ],
   "exclude": ["node_modules", "dist", "coverage", "tests"]
 }

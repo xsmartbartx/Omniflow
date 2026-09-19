@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AuthenticationError,
-  canonicalize,
   ConflictError,
+  canonicalize,
   contentHash,
   createLogger,
   createRng,
@@ -18,8 +18,8 @@ import {
   NotFoundError,
   newId,
   OmniflowError,
-  parseDuration,
   PolicyDeniedError,
+  parseDuration,
   RateLimitedError,
   REDACTED,
   redact,
@@ -153,7 +153,9 @@ describe('error taxonomy', () => {
     expect(new OmniflowError('X', 'm', { errorClass: 'transient' }).retryable).toBe(true);
     expect(new OmniflowError('X', 'm', { errorClass: 'contract' }).retryable).toBe(false);
     expect(new OmniflowError('X', 'm', { errorClass: 'systemic' }).retryable).toBe(true);
-    expect(new OmniflowError('X', 'm', { errorClass: 'transient', retryable: false }).retryable).toBe(false);
+    expect(
+      new OmniflowError('X', 'm', { errorClass: 'transient', retryable: false }).retryable,
+    ).toBe(false);
   });
 
   it('serialises to plain data without stack traces', () => {
@@ -176,7 +178,11 @@ describe('error taxonomy', () => {
 
   it('normalises foreign errors and non-errors', () => {
     const fromNode = Object.assign(new Error('boom'), { code: 'ECONNRESET' });
-    expect(toErrorInfo(fromNode)).toMatchObject({ code: 'ECONNRESET', class: 'systemic', retryable: true });
+    expect(toErrorInfo(fromNode)).toMatchObject({
+      code: 'ECONNRESET',
+      class: 'systemic',
+      retryable: true,
+    });
     expect(toErrorInfo('str')).toMatchObject({ code: 'INTERNAL', message: 'str' });
   });
 
@@ -264,7 +270,13 @@ describe('logger', () => {
     log.child({ runId: 'r1' }).info('hello', { password: 'x', n: 1 });
     log.error('bad', { err: new Error('Bearer abcdefghijklmnop') });
     expect(records).toHaveLength(2);
-    expect(records[0]).toMatchObject({ level: 'info', msg: 'hello', runId: 'r1', password: REDACTED, n: 1 });
+    expect(records[0]).toMatchObject({
+      level: 'info',
+      msg: 'hello',
+      runId: 'r1',
+      password: REDACTED,
+      n: 1,
+    });
     expect(JSON.stringify(records[1])).not.toContain('abcdefghijklmnop');
   });
 });
