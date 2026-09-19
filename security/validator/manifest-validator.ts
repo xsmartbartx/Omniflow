@@ -732,6 +732,14 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
 
   function checkRefs(refs: Reference[], path: PathSegment[], scope: ExprScope) {
     for (const r of refs) {
+      if (r.root === 'secrets' && !scope.secrets) {
+        error(
+          path,
+          'SECRET_NOT_ALLOWED',
+          `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`,
+        );
+        continue;
+      }
       if (!scope.roots.has(r.root)) {
         const hint = scope.roots.size ? ` (available here: ${[...scope.roots].join(', ')})` : '';
         error(

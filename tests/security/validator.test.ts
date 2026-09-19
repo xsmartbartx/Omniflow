@@ -342,7 +342,7 @@ describe('manifest validator: step-type rules', () => {
       id: 'big',
       type: 'map',
       items: 'inputs.list',
-      maxItems: 100000000,
+      maxItems: 10,
       uses: 'util-noop@^1',
       dependsOn: ['fetch'],
     });
@@ -351,7 +351,18 @@ describe('manifest validator: step-type rules', () => {
     expect(c).toContain('WAIT_NEEDS_ONE_OF');
     expect(c).toContain('WAIT_EVENT_NEEDS_TIMEOUT');
     expect(c).toContain('PARALLEL_NEEDS_BRANCHES');
-    expect(c).toContain('SCHEMA_MAXIMUM'); // maxItems above the schema ceiling
+  });
+
+  it('rejects a fan-out above the platform ceiling', () => {
+    const m: any = base();
+    m.steps.push({
+      id: 'big',
+      type: 'map',
+      items: 'inputs.list',
+      maxItems: 100000000,
+      uses: 'util-noop@^1',
+    });
+    expect(codes(m)).toContain('SCHEMA_MAXIMUM');
   });
 
   it('validates capability references, durations, egress and sunset', () => {

@@ -21,6 +21,7 @@ function createAjv(options: { useDefaults: boolean; strict: boolean }): AjvInsta
     useDefaults: options.useDefaults,
     coerceTypes: false,
     removeAdditional: false,
+    verbose: true,
   });
   applyFormats(ajv);
   return ajv;
