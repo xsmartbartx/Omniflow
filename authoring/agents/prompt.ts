@@ -103,7 +103,7 @@ export function capabilityCatalogue(caps: CapabilityDeclaration[]): string {
       const inputs = Object.entries(props.properties ?? {})
         .map(([k, v]) => `${k}${props.required?.includes(k) ? '*' : ''}: ${typeName(v)}`)
         .join(', ');
-      const outs = Object.keys(((c.outputSchema as { properties?: Record<string, unknown> }) ?? {}).properties ?? {}).join(', ');
+      const outs = Object.keys((c.outputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {}).join(', ');
       return `- ${c.name}@${c.version} [${c.effect}${c.egress.mode === 'none' ? '' : `, egress:${c.egress.mode}`}] ${c.description.split('. ')[0]?.slice(0, 200)}\n    with: { ${inputs} }   output: { ${outs} }`;
     })
     .join('\n');

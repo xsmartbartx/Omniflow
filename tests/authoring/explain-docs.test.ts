@@ -146,7 +146,7 @@ describe('generated documentation', () => {
     const m = workflowMermaid(wf().plan);
     const lines = m.split('\n');
     expect(lines[0]).toBe('flowchart TD');
-    const declared = new Set(lines.flatMap((l) => (/^ {2}(s\d+|start)[\[({]/.exec(l) ? [/^ {2}(\w+)/.exec(l)![1]!] : [])));
+    const declared = new Set(lines.flatMap((l) => (/^ {2}(s\d+|start)[[({]/.exec(l) ? [/^ {2}(\w+)/.exec(l)![1]!] : [])));
     expect(declared.size).toBe(6); // five steps + start
     for (const l of lines.filter((x) => /-->|-\.->|-\. /.test(x))) {
       const ids = [...l.matchAll(/\b(s\d+|start)\b/g)].map((x) => x[1]!);

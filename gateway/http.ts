@@ -66,14 +66,17 @@ export function statusFor(e: unknown): number {
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
   if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
-  if (e instanceof OmniflowError && (e.code === 'LLM_UNAVAILABLE' || e.code === 'LLM_BAD_RESPONSE' || e.code === 'LLM_AUTH' || e.code === 'LLM_REJECTED')) return 502;
+  if (e instanceof OmniflowError && e.code.startsWith('LLM_')) return 502;
   if (e instanceof OmniflowError) return e.errorClass === 'contract' ? 400 : e.errorClass === 'authorisation' ? 403 : e.errorClass === 'business' ? 409 : 500;
   return 500;
 }
 
+/** Server-side conditions whose messages are written for the caller (configuration and upstream-provider problems). */
+const USER_FACING_5XX = new Set(['AI_NOT_CONFIGURED', 'LLM_UNAVAILABLE', 'LLM_BAD_RESPONSE', 'LLM_AUTH', 'LLM_REJECTED']);
+
 export function problem(e: unknown, requestId: string): { status: number; body: ProblemBody; headers?: Record<string, string> } {
   const status = statusFor(e);
-  if (e instanceof OmniflowError && status < 500) {
+  if (e instanceof OmniflowError && (status < 500 || USER_FACING_5XX.has(e.code))) {
     const info = e.toInfo();
     return {
       status,
@@ -179,9 +182,18 @@ export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: Ro
       if (def.raw) return reply;
       return result === undefined ? null : result;
     };
+    const optionalBody = def.schema?.body !== undefined && !(def.schema.body as { required?: string[] }).required?.length;
     fastify.route({
       method: def.method,
       url: def.url,
+      ...(optionalBody
+        ? {
+            // A body whose fields are all optional may be omitted entirely.
+            preValidation: async (req: FastifyRequest) => {
+              if (req.body === undefined || req.body === null) req.body = {};
+            },
+          }
+        : {}),
       ...(def.schema ? { schema: def.schema } : {}),
       handler,
     });
@@ -206,7 +218,7 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
       ...(d.public ? { security: [] } : {}),
       ...(d.action ? { 'x-required-action': d.action } : {}),
       ...(params.length ? { parameters: params } : {}),
-      ...(d.schema?.body ? { requestBody: { required: true, content: { 'application/json': { schema: d.schema.body } } } } : {}),
+      ...(d.schema?.body ? { requestBody: { required: ((d.schema.body as { required?: string[] }).required?.length ?? 0) > 0, content: { 'application/json': { schema: d.schema.body } } } } : {}),
       responses: {
         [String(d.status ?? 200)]: { description: 'Success' },
         '400': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Problem' } } } },

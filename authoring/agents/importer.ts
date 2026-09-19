@@ -158,7 +158,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
       cron = fields.join(' ');
       command = words.slice(5).join(' ');
       // recover the original spacing of the command (split/join above collapsed it)
-      const m = new RegExp(`^\\s*(?:\\S+\\s+){5}([\\s\\S]*)$`).exec(line);
+      const m = /^\s*(?:\S+\s+){5}([\s\S]*)$/.exec(line);
       if (m) command = m[1]!.trim();
     }
     if (command === '') {

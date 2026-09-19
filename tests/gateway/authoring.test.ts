@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 
 const wf = (name: string, version: string, value: unknown = 1) => yamlWf(name, [echoStep('a', value)], {}, version);
-const versions = (name: string) => api.app.state.registry.listVersions('default', name).map((v) => v.version);
+const versions = (name: string) => api.app.state.registry.listVersions('default', name).map((v) => v.version).sort();
 
 describe('status and availability', () => {
   it('reports whether AI authoring is on', async () => {
@@ -294,7 +294,7 @@ describe('crontab import over HTTP', () => {
     // an operator reviews it, then it is published through the normal path (a shell step in production needs approval)
     const sub = await author.post(`/v1/drafts/${plain.draft.id}/submit`);
     expect(sub.status).toBe(202);
-    expect(sub.body.decision.reasonCode).toBe('PROD_SHELL_NEEDS_APPROVAL');
+    expect(sub.body.decision.reason).toContain('Shell steps'); // several reasons apply; all are listed
     expect((await author.post('/v1/import/crontab', { text: '' })).status).toBe(400);
   });
 });
