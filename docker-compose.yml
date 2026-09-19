@@ -13,7 +13,7 @@ services:
     image: ${OMNIFLOW_IMAGE:-omniflow:latest}
     restart: unless-stopped
     env_file:
-      - path: .env
+      - path: ${OMNIFLOW_ENV_FILE:-.env}
         required: false
     environment:
       OMNIFLOW_ENV: ${OMNIFLOW_ENV:-production}
@@ -47,7 +47,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      OMNIFLOW_DOMAIN: ${OMNIFLOW_DOMAIN:?set OMNIFLOW_DOMAIN in .env to use the tls profile}
+      # Set OMNIFLOW_DOMAIN in .env to your public hostname; "localhost" gets a local, self-signed certificate.
+      OMNIFLOW_DOMAIN: ${OMNIFLOW_DOMAIN:-localhost}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

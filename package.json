@@ -8,6 +8,14 @@
   "engines": {
     "node": ">=24"
   },
+  "files": [
+    "dist",
+    "console",
+    "workflows",
+    "policies/examples",
+    "LICENSE",
+    "README.md"
+  ],
   "bin": {
     "omniflow": "dist/cli/main.js"
   },
