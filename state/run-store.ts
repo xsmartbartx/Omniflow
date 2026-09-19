@@ -146,12 +146,12 @@ export type RunPatch = Partial<
   Pick<RunRecord, 'error' | 'outputs' | 'cost' | 'cancelRequested' | 'startedAt' | 'finishedAt'>
 >;
 
-export type StepPatch = Partial<
-  Omit<StepRecord, 'runId' | 'stepId' | 'updatedAt'> & {
-    output: unknown | null;
-    error: ErrorInfo | null;
-  }
->;
+/** `undefined` leaves a column alone; `null` clears it. */
+export type StepPatch = {
+  [K in keyof Omit<StepRecord, 'runId' | 'stepId' | 'updatedAt'>]?: K extends 'status' | 'attempt' | 'cost'
+    ? StepRecord[K]
+    : StepRecord[K] | null;
+};
 
 interface RunRow {
   id: string;
