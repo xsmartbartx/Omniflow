@@ -113,7 +113,7 @@ export default async function run(ctx) {
     ctx.poll(async () => { if (!TERMINAL_RUN.has(data.run.status)) await refresh(); else clear(liveNote); }, 4000);
   }
 
-  return h('div', { class: 'stack' }, head, explainBox, graphBox, stepsBox, approvalsBox, childrenBox, h('div', { class: 'grid grid-2' }, summary, card('Event log', log, { actions: liveNote })));
+  return h('div', { class: 'stack' }, head, explainBox, graphBox, stepsBox, approvalsBox, childrenBox, card('Event log', log, { actions: liveNote }), summary);
 }
 
 export async function decide(approval, decision, after) {

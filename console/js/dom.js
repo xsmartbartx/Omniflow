@@ -43,8 +43,14 @@ export function svg(tag, props, ...children) {
   return el;
 }
 
+/** Empty an element. Its `append` becomes null-safe (null/false are skipped, arrays flattened), so views can write `clear(box).append(cond ? node : null)`. */
 export function clear(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
+  if (!el.dataset.safeAppend) {
+    const native = Element.prototype.append.bind(el);
+    el.append = (...children) => native(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false).map((c) => (c instanceof Node ? c : String(c))));
+    el.dataset.safeAppend = '1';
+  }
   return el;
 }
 

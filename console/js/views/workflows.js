@@ -23,7 +23,7 @@ export default async function workflows(ctx) {
         empty: items.length ? 'No workflow matches these filters.' : 'No workflows yet. Create your first one in the editor.',
         onRow: (w) => (location.hash = `#/workflows/${api.enc(w.name)}`),
         columns: [
-          { label: 'Workflow', render: (w) => h('div', {}, wfLink(w.name), w.description ? h('div', { class: 'muted' }, w.description) : null) },
+          { label: 'Workflow', class: 'wide', render: (w) => h('div', {}, wfLink(w.name), w.description ? h('div', { class: 'muted' }, w.description) : null) },
           { label: 'Version', class: 'nowrap', render: (w) => h('span', {}, w.stableVersion ?? '—', w.canary ? badge(`canary ${w.canary.version} · ${w.canary.percent}%`, 'accent') : null) },
           { label: 'State', render: (w) => statusBadge(stateOf(w)) },
           { label: 'Criticality', render: (w) => w.criticality ?? '—' },
