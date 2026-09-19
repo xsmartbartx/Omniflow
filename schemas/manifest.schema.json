@@ -1,0 +1,1850 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omniflow.dev/schemas/workflow-manifest.v1.json",
+  "title": "OmniFlow Workflow Manifest",
+  "description": "Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "triggers", "inputs", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "omniflow.dev/v1"
+    },
+    "kind": {
+      "const": "Workflow"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+          "maxLength": 64
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$"
+        },
+        "owner": {
+          "type": "string",
+          "maxLength": 254,
+          "minLength": 1
+        },
+        "team": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "labels": {
+          "type": "object",
+          "maxProperties": 30,
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "criticality": {
+          "enum": ["low", "medium", "high", "critical"]
+        }
+      },
+      "required": ["name", "version", "owner"],
+      "additionalProperties": false
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "manual"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "schedule"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "cron": {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 9
+              },
+              "timezone": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "inputs": {
+                "type": "object",
+                "maxProperties": 100
+              },
+              "catchup": {
+                "enum": ["none", "latest"]
+              }
+            },
+            "required": ["type", "cron"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "webhook"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "inputs": {
+                "type": "object",
+                "maxProperties": 100
+              }
+            },
+            "required": ["type", "name"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "event"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "event": {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              "filter": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "inputs": {
+                "type": "object",
+                "maxProperties": 100
+              }
+            },
+            "required": ["type", "event"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "workflow-completion"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "workflow": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "status": {
+                "enum": ["succeeded", "failed", "any"]
+              },
+              "inputs": {
+                "type": "object",
+                "maxProperties": 100
+              }
+            },
+            "required": ["type", "workflow"],
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": ["string", "integer", "number", "boolean", "object", "array"]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "default": {},
+          "enum": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 500
+          },
+          "pattern": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "format": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "minimum": {
+            "type": "number"
+          },
+          "maximum": {
+            "type": "number"
+          },
+          "minLength": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxLength": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "items": {
+            "type": "object",
+            "maxProperties": 50
+          },
+          "properties": {
+            "type": "object",
+            "maxProperties": 100
+          },
+          "sensitivity": {
+            "enum": ["public", "internal", "confidential", "secret"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      }
+    },
+    "context": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "capability"
+              },
+              "uses": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 3
+              },
+              "with": {
+                "type": "object",
+                "maxProperties": 100
+              },
+              "egress": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "minLength": 1
+                },
+                "maxItems": 50,
+                "uniqueItems": true
+              },
+              "sunset": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "required": ["id", "type", "uses"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "branch"
+              },
+              "cases": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 50,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "maxLength": 64
+                    },
+                    "when": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    }
+                  },
+                  "required": ["name", "when"],
+                  "additionalProperties": false
+                }
+              },
+              "default": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              }
+            },
+            "required": ["id", "type", "cases"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "parallel"
+              },
+              "join": {
+                "enum": ["all", "any"]
+              }
+            },
+            "required": ["id", "type", "join", "dependsOn"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "map"
+              },
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "maxItems": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100000
+              },
+              "concurrency": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 256
+              },
+              "errorTolerance": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "percent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                },
+                "additionalProperties": false
+              },
+              "uses": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 3
+              },
+              "with": {
+                "type": "object",
+                "maxProperties": 100
+              },
+              "egress": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "minLength": 1
+                },
+                "maxItems": 50,
+                "uniqueItems": true
+              },
+              "sunset": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "required": ["id", "type", "items", "maxItems", "uses"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "approval"
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              },
+              "approvers": {
+                "type": "object",
+                "properties": {
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    "maxItems": 20
+                  },
+                  "users": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 254
+                    },
+                    "maxItems": 50
+                  }
+                },
+                "additionalProperties": false
+              },
+              "onTimeout": {
+                "enum": ["deny", "escalate", "approve"]
+              },
+              "justification": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              },
+              "allowSelfApproval": {
+                "type": "boolean"
+              }
+            },
+            "required": ["id", "type", "message", "timeout", "onTimeout"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "wait"
+              },
+              "duration": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "until": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                  },
+                  "correlation": {
+                    "type": "string",
+                    "maxLength": 4096
+                  }
+                },
+                "required": ["event"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["id", "type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "subworkflow"
+              },
+              "workflow": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "version": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$"
+              },
+              "with": {
+                "type": "object",
+                "maxProperties": 100
+              }
+            },
+            "required": ["id", "type", "workflow", "version"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 2000
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "maxLength": 64
+                },
+                "uniqueItems": true,
+                "maxItems": 50
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "timeout": {
+                "type": ["string", "integer"],
+                "minimum": 0,
+                "maxLength": 64
+              },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "attempts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "backoff": {
+                    "enum": ["fixed", "exponential"]
+                  },
+                  "initialDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "maxDelay": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  },
+                  "jitter": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "retryOn": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "transient",
+                        "contract",
+                        "authorisation",
+                        "business",
+                        "systemic",
+                        "catastrophic"
+                      ]
+                    },
+                    "uniqueItems": true
+                  }
+                },
+                "required": ["attempts"],
+                "additionalProperties": false
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "compensate": {
+                "type": "object",
+                "properties": {
+                  "uses": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "minLength": 3
+                  },
+                  "with": {
+                    "type": "object",
+                    "maxProperties": 100
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "timeout": {
+                    "type": ["string", "integer"],
+                    "minimum": 0,
+                    "maxLength": 64
+                  }
+                },
+                "required": ["uses"],
+                "additionalProperties": false
+              },
+              "onError": {
+                "oneOf": [
+                  {
+                    "enum": ["fail", "continue", "compensate"]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "routeTo": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "required": ["routeTo"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "produces": {
+                "type": "object",
+                "maxProperties": 50
+              },
+              "sensitivity": {
+                "enum": ["public", "internal", "confidential", "secret"]
+              },
+              "type": {
+                "const": "terminate"
+              },
+              "status": {
+                "enum": ["success", "failure"]
+              },
+              "errorClass": {
+                "enum": [
+                  "transient",
+                  "contract",
+                  "authorisation",
+                  "business",
+                  "systemic",
+                  "catastrophic"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["id", "type", "status"],
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      }
+    },
+    "guards": {
+      "type": "object",
+      "properties": {
+        "pre": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "expr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["name", "expr"],
+            "additionalProperties": false
+          },
+          "maxItems": 50
+        },
+        "invariants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "expr": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "message": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["name", "expr"],
+            "additionalProperties": false
+          },
+          "maxItems": 50
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "maxProperties": 50
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "timeout": {
+          "type": ["string", "integer"],
+          "minimum": 0,
+          "maxLength": 64
+        },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "attempts": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "backoff": {
+              "enum": ["fixed", "exponential"]
+            },
+            "initialDelay": {
+              "type": ["string", "integer"],
+              "minimum": 0,
+              "maxLength": 64
+            },
+            "maxDelay": {
+              "type": ["string", "integer"],
+              "minimum": 0,
+              "maxLength": 64
+            },
+            "jitter": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "retryOn": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "transient",
+                  "contract",
+                  "authorisation",
+                  "business",
+                  "systemic",
+                  "catastrophic"
+                ]
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": ["attempts"],
+          "additionalProperties": false
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "concurrencyPolicy": {
+          "enum": ["queue", "skip"]
+        },
+        "maxParallelSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "dataResidency": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "maxItems": 20
+        },
+        "maxRunCost": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maxDailyCost": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dedupWindow": {
+          "type": ["string", "integer"],
+          "minimum": 0,
+          "maxLength": 64
+        },
+        "dedupKey": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "additionalProperties": false
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "slo": {
+          "type": "object",
+          "properties": {
+            "successRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "p95Duration": {
+              "type": ["string", "integer"],
+              "minimum": 0,
+              "maxLength": 64
+            }
+          },
+          "additionalProperties": false
+        },
+        "alerts": {
+          "type": "object",
+          "properties": {
+            "onFailure": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "maxItems": 20
+            },
+            "onCompensationFailed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "maxItems": 20
+            },
+            "onApprovalRequested": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "maxLength": 64
+              },
+              "maxItems": 20
+            }
+          },
+          "additionalProperties": false
+        },
+        "metrics": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 4096,
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "unit": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": ["name", "value"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

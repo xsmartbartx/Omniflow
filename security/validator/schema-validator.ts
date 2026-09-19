@@ -1,15 +1,15 @@
-import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ErrorObject } from 'ajv';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { contentHash, type Issue } from '../../core/index.ts';
-import { formatPath, type Locator, parsePointer, type PathSegment } from './source-map.ts';
+import { formatPath, type Locator, type PathSegment, parsePointer } from './source-map.ts';
 
 type AjvInstance = InstanceType<typeof Ajv2020>;
 type ValidateFn = ReturnType<AjvInstance['compile']>;
 
 // `ajv-formats` ships CommonJS; under NodeNext its default export is the module namespace.
-const applyFormats = ((addFormats as unknown as { default?: typeof addFormats }).default ??
-  addFormats) as (ajv: AjvInstance) => AjvInstance;
+const applyFormats = ((addFormats as unknown as { default?: unknown }).default ??
+  addFormats) as unknown as (ajv: AjvInstance) => AjvInstance;
 
 function createAjv(options: { useDefaults: boolean; strict: boolean }): AjvInstance {
   const ajv = new Ajv2020({
@@ -71,7 +71,9 @@ export function didYouMean(input: string, candidates: readonly string[]): string
       bestScore = score;
     }
   }
-  return best !== undefined && bestScore <= Math.max(2, Math.floor(input.length / 3)) ? best : undefined;
+  return best !== undefined && bestScore <= Math.max(2, Math.floor(input.length / 3))
+    ? best
+    : undefined;
 }
 
 function describeType(schemaType: unknown): string {
@@ -164,12 +166,18 @@ export interface SchemaResult {
 }
 
 /** Validate an OmniFlow-owned document against one of our own (strict) schemas. */
-export function validateAgainstSchema(schema: object, value: unknown, locate?: Locator): SchemaResult {
+export function validateAgainstSchema(
+  schema: object,
+  value: unknown,
+  locate?: Locator,
+): SchemaResult {
   const fn = compileCached(strictAjv, 'strict', schema);
   const ok = fn(value) as boolean;
   if (ok) return { ok: true, issues: [] };
   // Drop noisy composite errors when a more specific one exists.
-  const errors = (fn.errors ?? []).filter((e) => e.keyword !== 'oneOf' || (fn.errors ?? []).length === 1);
+  const errors = (fn.errors ?? []).filter(
+    (e) => e.keyword !== 'oneOf' || (fn.errors ?? []).length === 1,
+  );
   const seen = new Set<string>();
   const issues: Issue[] = [];
   for (const e of errors) {

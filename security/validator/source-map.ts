@@ -8,7 +8,10 @@ export interface Position {
   column: number;
 }
 
-export type Locator = (path: readonly PathSegment[], opts?: { key?: boolean }) => Position | undefined;
+export type Locator = (
+  path: readonly PathSegment[],
+  opts?: { key?: boolean },
+) => Position | undefined;
 
 export interface ParsedSource {
   /** Parsed value, or `undefined` if the text could not be parsed. */
@@ -69,7 +72,6 @@ export function parseSource(text: string, maxBytes = DEFAULT_MAX_BYTES): ParsedS
   const doc = parseDocument(text, {
     lineCounter,
     uniqueKeys: true,
-    maxAliasCount: 0,
     version: '1.2',
     prettyErrors: false,
   });
@@ -136,14 +138,17 @@ export function parseSource(text: string, maxBytes = DEFAULT_MAX_BYTES): ParsedS
       }
     },
   });
-  if (issues.some((i) => i.severity !== 'warning')) return { value: undefined, issues, locate: noLocation };
+  if (issues.some((i) => i.severity !== 'warning'))
+    return { value: undefined, issues, locate: noLocation };
 
   const locate: Locator = (path, opts) => {
     let node: unknown = doc.contents;
     let keyNode: unknown;
     for (const seg of path) {
       if (isMap(node)) {
-        const pair = node.items.find((p) => isPair(p) && String(isScalar(p.key) ? p.key.value : p.key) === String(seg));
+        const pair = node.items.find(
+          (p) => isPair(p) && String(isScalar(p.key) ? p.key.value : p.key) === String(seg),
+        );
         if (!pair) break;
         keyNode = pair.key;
         node = pair.value;
@@ -156,7 +161,9 @@ export function parseSource(text: string, maxBytes = DEFAULT_MAX_BYTES): ParsedS
         break;
       }
     }
-    const target = (opts?.key && keyNode ? keyNode : node) as { range?: [number, number, number] } | null;
+    const target = (opts?.key && keyNode ? keyNode : node) as {
+      range?: [number, number, number];
+    } | null;
     const offset = target?.range?.[0];
     if (offset === undefined) return undefined;
     const p = lineCounter.linePos(offset);

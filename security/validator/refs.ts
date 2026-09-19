@@ -20,8 +20,7 @@ export function parseCapabilityRef(ref: string): CapabilityRef | null {
   return { name, range };
 }
 
-const HOST =
-  /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/;
+const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/;
 
 /** Egress entries are hostnames, optionally with a leading `*.` wildcard and/or a port. Bare `*` is refused. */
 export function isValidEgressHost(host: string): boolean {

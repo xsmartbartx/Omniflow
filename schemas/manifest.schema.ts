@@ -11,7 +11,8 @@ type Schema = Record<string, unknown>;
 
 const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 const IDENT = '^[A-Za-z][A-Za-z0-9_]*$';
-const SEMVER = '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
+const SEMVER =
+  '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
 
 const str = (extra: Schema = {}): Schema => ({ type: 'string', maxLength: 4096, ...extra });
 const kebab = (): Schema => ({ type: 'string', pattern: KEBAB, maxLength: 64 });
@@ -41,10 +42,7 @@ const retry: Schema = obj(
 );
 
 const onError: Schema = {
-  oneOf: [
-    { enum: ['fail', 'continue', 'compensate'] },
-    obj({ routeTo: kebab() }, ['routeTo']),
-  ],
+  oneOf: [{ enum: ['fail', 'continue', 'compensate'] }, obj({ routeTo: kebab() }, ['routeTo'])],
 };
 
 const compensate: Schema = obj(
@@ -89,7 +87,12 @@ const hosts: Schema = {
 const steps: Schema[] = [
   step(
     'capability',
-    { uses: str({ minLength: 3 }), with: freeObject(), egress: hosts, sunset: str({ maxLength: 32 }) },
+    {
+      uses: str({ minLength: 3 }),
+      with: freeObject(),
+      egress: hosts,
+      sunset: str({ maxLength: 32 }),
+    },
     ['uses'],
   ),
   step(

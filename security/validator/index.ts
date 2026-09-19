@@ -10,9 +10,9 @@ export {
   checkSchemaDefinition,
   didYouMean,
   type SchemaResult,
+  type ValueResult,
   validateAgainstSchema,
   validateValue,
-  type ValueResult,
 } from './schema-validator.ts';
 export {
   DEFAULT_MAX_BYTES,
