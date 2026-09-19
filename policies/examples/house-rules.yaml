@@ -1,0 +1,19 @@
+# Operator policy: rules on top of the built-in ones (which can never be weakened).
+# To use: copy into the directory named by OMNIFLOW_POLICY_DIR and restart. A rule that fails to
+# parse stops the server from starting — a broken governance rule is never silently skipped.
+apiVersion: omniflow.dev/v1
+kind: Policy
+metadata:
+  name: house-rules
+rules:
+  - id: no-shell-in-production
+    effect: deny
+    actions: [workflow.publish]
+    when: environment == "production" && contains(plan.analysis.families, "shell")
+    reason: Shell steps are not allowed in production. Use a typed capability.
+  - id: critical-needs-two
+    effect: require-approval
+    actions: [workflow.publish]
+    when: workflow.criticality == "critical"
+    approvals: 2
+    reason: Critical workflows need two approvers.

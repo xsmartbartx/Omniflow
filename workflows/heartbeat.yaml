@@ -1,0 +1,23 @@
+# A scheduled workflow. It proves the scheduler is alive: check its runs on the Runs page.
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: heartbeat
+  version: 1.0.0
+  owner: platform@example.com
+  description: Runs every morning so you can see that scheduling works. Safe to disable.
+  criticality: low
+triggers:
+  - type: schedule
+    name: daily
+    cron: "0 6 * * *"
+    timezone: UTC
+inputs: {}
+steps:
+  - id: beat
+    type: capability
+    uses: util-echo@^1
+    with:
+      value: alive
+outputs:
+  status: "${{ steps.beat.output.value }}"

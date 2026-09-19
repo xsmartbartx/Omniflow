@@ -1,0 +1,41 @@
+# Control flow in one place: a branch, a fan-out over a list (map), and a join.
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: order-router
+  version: 1.0.0
+  owner: ops@example.com
+  description: Routes a batch of orders — big ones to review, the rest straight through.
+  criticality: low
+triggers:
+  - type: manual
+inputs:
+  orders:
+    type: array
+    required: true
+    maxItems: 100
+    description: "A list of { id, total } objects"
+steps:
+  - id: classify
+    type: map
+    items: "inputs.orders"
+    maxItems: 100
+    concurrency: 5
+    uses: util-echo@^1
+    with:
+      value: "${{ item.id }}"
+  - id: any-large
+    type: branch
+    dependsOn: [classify]
+    cases:
+      - name: has-large
+        when: "len(inputs.orders) > 0 && max(pluck(inputs.orders, 'total')) >= 1000"
+    default: all-small
+  - id: flag-for-review
+    type: capability
+    uses: util-noop@^1
+    dependsOn: [any-large]
+    when: "steps.any-large.output.case == 'has-large'"
+outputs:
+  processed: "${{ len(inputs.orders) }}"
+  needsReview: "${{ steps.any-large.output.case == 'has-large' }}"

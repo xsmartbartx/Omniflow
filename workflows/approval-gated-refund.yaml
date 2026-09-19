@@ -1,0 +1,44 @@
+# Human-in-the-loop: the run pauses at "sign-off" until a *different* person approves it
+# (four-eyes: whoever started the run cannot approve it). Approve in the console or with:
+#   omniflow approvals approve <id>
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: approval-gated-refund
+  version: 1.0.0
+  owner: finance@example.com
+  description: Refunds an order only after a person signs off.
+  criticality: high
+triggers:
+  - type: manual
+inputs:
+  orderId:
+    type: string
+    required: true
+  amount:
+    type: number
+    required: true
+    minimum: 0.01
+steps:
+  - id: validate
+    type: capability
+    uses: util-assert@^1
+    with:
+      condition: "${{ inputs.amount < 10000 }}"
+      message: Refunds of 10,000 or more need a manual process.
+  - id: sign-off
+    type: approval
+    dependsOn: [validate]
+    message: "Refund ${{ inputs.amount }} for order ${{ inputs.orderId }}?"
+    approvers:
+      roles: [approver, admin]
+    timeout: 4h
+    onTimeout: deny
+  - id: refund
+    type: capability
+    uses: util-echo@^1
+    dependsOn: [sign-off]
+    with:
+      value: "refunded ${{ inputs.orderId }}"
+outputs:
+  result: "${{ steps.refund.output.value }}"

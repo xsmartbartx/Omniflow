@@ -1,0 +1,29 @@
+# An external system POSTs a signed event; OmniFlow relays it to a chat channel.
+# Create the signing secret in the console (Triggers → Signing secret) and configure the channel:
+#   OMNIFLOW_CHANNELS='{"ops":"https://hooks.slack.com/services/..."}'
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: webhook-to-channel
+  version: 1.0.0
+  owner: ops@example.com
+  description: Relays incoming webhook events to the ops chat channel.
+  criticality: low
+triggers:
+  - type: webhook
+    name: incoming
+    inputs:
+      title: "${{ event.payload.title }}"
+      detail: "${{ event.payload.detail }}"
+inputs:
+  title: { type: string, required: true, maxLength: 200 }
+  detail: { type: string, default: "" , maxLength: 2000 }
+steps:
+  - id: relay
+    type: capability
+    uses: notify-channel@^1
+    with:
+      channel: ops
+      text: "${{ inputs.title }} — ${{ inputs.detail }}"
+    idempotencyKey: "relay-${{ run.id }}"
+    retry: { attempts: 4, backoff: exponential, initialDelay: 2s }

@@ -1,0 +1,32 @@
+# The smallest useful workflow: one input, two steps, one output.
+# Run it:  omniflow run hello-world --input name=Ada --wait
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: hello-world
+  version: 1.0.0
+  owner: platform@example.com
+  description: Greets someone. The smallest useful workflow — start here.
+  criticality: low
+triggers:
+  - type: manual
+inputs:
+  name:
+    type: string
+    default: world
+    description: Who to greet
+steps:
+  - id: greet
+    type: capability
+    uses: util-echo@^1
+    with:
+      value: "Hello, ${{ inputs.name }}!"
+  - id: shout
+    type: capability
+    uses: util-echo@^1
+    dependsOn: [greet]
+    with:
+      value: "${{ upper(steps.greet.output.value) }}"
+outputs:
+  greeting: "${{ steps.greet.output.value }}"
+  loud: "${{ steps.shout.output.value }}"

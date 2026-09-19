@@ -1,0 +1,32 @@
+# Reads a number from a database each night and alerts when it looks wrong.
+#   OMNIFLOW_DATASOURCES='{"warehouse":"postgres://user:pass@db:5432/warehouse"}'
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: nightly-row-count
+  version: 1.0.0
+  owner: data@example.com
+  description: Counts yesterday's orders and fails loudly if there were none.
+  criticality: medium
+triggers:
+  - type: schedule
+    name: nightly
+    cron: "30 1 * * *"
+    timezone: UTC
+inputs: {}
+steps:
+  - id: count
+    type: capability
+    uses: database-query@^1
+    with:
+      datasource: warehouse
+      sql: "SELECT count(*) AS n FROM orders WHERE created_at >= now() - interval '1 day'"
+  - id: check
+    type: capability
+    uses: util-assert@^1
+    dependsOn: [count]
+    with:
+      condition: "${{ steps.count.output.rows[0].n > 0 }}"
+      message: No orders in the last day — the pipeline may be broken.
+outputs:
+  orders: "${{ steps.count.output.rows[0].n }}"

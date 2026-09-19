@@ -1,0 +1,35 @@
+# The model classifies; the workflow decides. The ticket text is untrusted, so it goes in `data`
+# (framed as data, never as instructions) and the answer is validated against a schema.
+apiVersion: omniflow.dev/v1
+kind: Workflow
+metadata:
+  name: llm-ticket-triage
+  version: 1.0.0
+  owner: support@example.com
+  description: Classifies a support ticket by urgency.
+  criticality: low
+triggers:
+  - type: manual
+inputs:
+  ticket:
+    type: string
+    required: true
+    maxLength: 20000
+    sensitivity: confidential
+steps:
+  - id: classify
+    type: capability
+    uses: llm-inference@^1
+    with:
+      instructions: Classify the support ticket as urgent, normal or low. Give a one-sentence reason.
+      data: "${{ inputs.ticket }}"
+      schema:
+        type: object
+        required: [priority, reason]
+        additionalProperties: false
+        properties:
+          priority: { enum: [urgent, normal, low] }
+          reason: { type: string }
+    sensitivity: confidential
+outputs:
+  priority: "${{ steps.classify.output.json.priority }}"
