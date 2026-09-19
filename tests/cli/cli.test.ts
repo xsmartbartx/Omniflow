@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -504,7 +504,10 @@ describe('authoring commands', () => {
       const imported = await cli(['import', 'crontab', 'crontab', '--out-dir', 'imported'], { env, cwd: dir });
       expect(imported.code).toBe(0);
       expect(imported.out).toContain('skipped');
-      expect(readFileSync(join(dir, 'imported', 'cron-curl-https-backup-example-com-run.yaml'), 'utf8')).toContain('shell-exec@^1');
+      const files = readdirSync(join(dir, 'imported')).sort();
+      expect(files.filter((f) => f.endsWith('.yaml'))).toHaveLength(2);
+      expect(files.filter((f) => f.endsWith('.sh'))).toHaveLength(1);
+      expect(readFileSync(join(dir, 'imported', files.find((f) => f.startsWith('cron-curl') && f.endsWith('.yaml'))!), 'utf8')).toContain('shell-exec@^1');
       expect(imported.out).toContain('suggested scripts');
       expect((await cli(['import', 'nonsense', 'x'], { env })).code).toBe(2);
 
