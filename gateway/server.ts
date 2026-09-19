@@ -142,21 +142,19 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     else if (fv.statusCode && fv.statusCode < 500 && !(e as { errorClass?: unknown }).errorClass) {
       // Fastify's own 4xx (payload too large, malformed JSON, unsupported media type…)
       const status = fv.statusCode;
-      void reply
-        .code(status)
-        .send({
-          error: {
-            code: fv.code ?? 'BAD_REQUEST',
-            message:
-              status === 413
-                ? 'The request body is too large'
-                : status === 415
-                  ? 'Send application/json'
-                  : 'The request could not be understood',
-            class: 'contract',
-            requestId: req.id,
-          },
-        });
+      void reply.code(status).send({
+        error: {
+          code: fv.code ?? 'BAD_REQUEST',
+          message:
+            status === 413
+              ? 'The request body is too large'
+              : status === 415
+                ? 'Send application/json'
+                : 'The request could not be understood',
+          class: 'contract',
+          requestId: req.id,
+        },
+      });
       return;
     }
     const p = problem(e, req.id);

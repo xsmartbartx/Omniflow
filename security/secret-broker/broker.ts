@@ -13,9 +13,7 @@ import type { Lease } from '../../schemas/capability.ts';
 export interface SecretStorePort {
   put(tenant: string, name: string, cipher: string, keyId: string, by: string, description?: string): void;
   get(tenant: string, name: string): { cipher: string; keyId: string; version: number } | undefined;
-  list(
-    tenant: string,
-  ): Array<{
+  list(tenant: string): Array<{
     name: string;
     keyId: string;
     version: number;

@@ -462,14 +462,12 @@ export class AuthoringService {
               },
             }
           : {}),
-        versions: this.st.registry
-          .listVersions(principal.tenant, name)
-          .map((x) => ({
-            version: x.version,
-            status: x.status,
-            publishedAt: x.publishedAt,
-            publishedBy: x.publishedBy,
-          })),
+        versions: this.st.registry.listVersions(principal.tenant, name).map((x) => ({
+          version: x.version,
+          status: x.status,
+          publishedAt: x.publishedAt,
+          publishedBy: x.publishedBy,
+        })),
         ...(risk?.level
           ? {
               risk: {
