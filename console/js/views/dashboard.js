@@ -1,8 +1,8 @@
 import * as api from '../api.js';
-import { charts } from './_charts.js';
+import { runsChart } from '../charts.js';
 import { clear, h } from '../dom.js';
-import { ago, duration, number, percent, tone } from '../format.js';
-import { badge, button, card, dataTable, notice, pageHeader, statusBadge } from '../ui.js';
+import { duration, number, percent } from '../format.js';
+import { badge, button, card, dataTable, notice, pageHeader } from '../ui.js';
 import { wfLink } from './common.js';
 
 export default async function dashboard(ctx) {
@@ -25,7 +25,7 @@ export default async function dashboard(ctx) {
         kpi('Manual work', percent(o.manualInterventionRate), 'runs that needed a person'),
       ),
       h('div', { class: 'grid grid-2' },
-        card('Runs per hour', h('div', {}, charts.runs(o.hourly), h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar-ok', style: { background: 'var(--good)' } }), 'Succeeded'), h('span', {}, h('i', { style: { background: 'var(--bad)' } }), 'Failed'), h('span', {}, h('i', { style: { background: 'var(--muted)' } }), 'Other')))),
+        card('Runs per hour', h('div', {}, runsChart(o.hourly), h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'bar-ok', style: { background: 'var(--good)' } }), 'Succeeded'), h('span', {}, h('i', { style: { background: 'var(--bad)' } }), 'Failed'), h('span', {}, h('i', { style: { background: 'var(--muted)' } }), 'Other')))),
         card('Needs attention', o.failingSteps.length ? dataTable({ rows: o.failingSteps, columns: [{ label: 'Step', render: (f) => h('span', {}, wfLink(f.workflow), h('span', { class: 'muted' }, ` › ${f.stepId}`)) }, { label: 'Failed', class: 'num', render: (f) => `${f.failed}/${f.executions}` }, { label: 'Most often', render: (f) => (f.topError ? h('code', {}, f.topError) : '—') }] }) : h('p', { class: 'muted' }, 'No failing steps in this window. '), { flush: o.failingSteps.length > 0 }),
       ),
       card('Workflows', dataTable({ empty: 'No runs in this window.', rows: o.workflows, onRow: (w) => (location.hash = `#/workflows/${api.enc(w.name)}`), columns: [{ label: 'Workflow', render: (w) => wfLink(w.name) }, { label: 'Runs', class: 'num', render: (w) => number(w.runs) }, { label: 'Failed', class: 'num', render: (w) => (w.failed ? badge(String(w.failed), 'bad') : '0') }, { label: 'Success', class: 'num', render: (w) => percent(w.successRate) }, { label: 'p95', class: 'num', render: (w) => duration(w.p95Ms) }, { label: 'Cost', class: 'num', render: (w) => number(w.cost) }] }), { flush: true }),
