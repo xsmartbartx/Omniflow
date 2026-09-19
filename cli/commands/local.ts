@@ -229,11 +229,12 @@ export async function devCommand(ctx: CliContext): Promise<number> {
       }
     });
     const tick = () => {
-      for (const step of app.state.runs.getSteps(runId)) {
+      const steps = [...app.state.runs.getSteps(runId)].sort((a, b) => (a.completedSeq ?? Number.MAX_SAFE_INTEGER) - (b.completedSeq ?? Number.MAX_SAFE_INTEGER) || a.stepId.localeCompare(b.stepId));
+      for (const step of steps) {
         const key = `${step.stepId}:${step.status}`;
         if (printed.has(key) || !['succeeded', 'failed', 'skipped', 'cancelled'].includes(step.status)) continue;
         printed.add(key);
-        ctx.out(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${step.error ? s.dim(`  ${step.error.message}`) : ''}\n`);
+        (ctx.json ? ctx.err : ctx.out)(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${step.error ? s.dim(`  ${step.error.message}`) : ''}\n`);
       }
     };
 

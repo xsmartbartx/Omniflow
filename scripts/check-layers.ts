@@ -28,7 +28,8 @@ const ALLOWED: Record<string, string[]> = {
   insight: ['core', 'schemas', 'security', 'capabilities', 'state'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
   gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring'],
-  cli: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway'],
+  // The CLI is an entry point like `server`, and its embedded mode (`omniflow dev`) uses the composition root.
+  cli: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway', 'server'],
   server: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway'],
 };
 

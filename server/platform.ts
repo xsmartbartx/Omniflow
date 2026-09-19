@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { type CapabilityRegistry, createDefaultRegistry } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
-import { createMetrics, type MetricsRegistry } from '../insight/index.ts';
+import { createMetrics } from '../insight/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
 import { CircuitBreakers, StepRuntime } from '../orchestration/runtime/index.ts';
