@@ -1,0 +1,24 @@
+# Keep the build context small and free of anything that must not ship.
+.git
+.github
+.claude
+node_modules
+dist
+coverage
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+tests
+docs
+deploy
+*.md
+!README.md
+!LICENSE
+!workflows/**/*.md
+Dockerfile
+docker-compose*.yml
+.dockerignore

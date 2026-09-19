@@ -1,0 +1,25 @@
+# Automatic HTTPS in front of OmniFlow. Used by `docker compose --profile tls up -d`.
+{$OMNIFLOW_DOMAIN} {
+	encode zstd gzip
+
+	# Live run streams (server-sent events) must not be buffered or cut off.
+	@stream path_regexp stream ^/v1/runs/[^/]+/stream$
+	reverse_proxy @stream omniflow:8080 {
+		flush_interval -1
+		transport http {
+			read_timeout 1h
+		}
+	}
+
+	reverse_proxy omniflow:8080 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	request_body {
+		max_size 2MB
+	}
+}

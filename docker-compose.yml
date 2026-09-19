@@ -1,0 +1,59 @@
+# OmniFlow on one host.
+#
+#   cp .env.example .env        # then edit it (at minimum: OMNIFLOW_ADMIN_PASSWORD, OMNIFLOW_MASTER_KEY)
+#   docker compose up -d
+#   open http://localhost:8080
+#
+# HTTPS: docker compose --profile tls up -d   (Caddy obtains certificates; set OMNIFLOW_DOMAIN in .env)
+name: omniflow
+
+services:
+  omniflow:
+    build: .
+    image: ${OMNIFLOW_IMAGE:-omniflow:latest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OMNIFLOW_ENV: ${OMNIFLOW_ENV:-production}
+    # Bound to loopback: put a TLS-terminating proxy (the `tls` profile, or your own) in front of it.
+    ports:
+      - "${OMNIFLOW_BIND:-127.0.0.1}:${OMNIFLOW_PORT:-8080}:8080"
+    volumes:
+      - omniflow-data:/data
+      - ./policies:/etc/omniflow/policies:ro
+    # Hardening: nothing here needs to write outside /data and /tmp, or hold any privilege.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    profiles: [tls]
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      omniflow:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      OMNIFLOW_DOMAIN: ${OMNIFLOW_DOMAIN:?set OMNIFLOW_DOMAIN in .env to use the tls profile}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  omniflow-data:
+  caddy-data:
+  caddy-config:

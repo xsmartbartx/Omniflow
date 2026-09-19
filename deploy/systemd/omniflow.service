@@ -1,0 +1,43 @@
+# Bare-metal install:
+#   useradd --system --home /var/lib/omniflow --shell /usr/sbin/nologin omniflow
+#   install -d -o omniflow -g omniflow -m 0700 /var/lib/omniflow
+#   install -d /opt/omniflow && tar -xzf omniflow-<version>.tgz -C /opt/omniflow   # or: npm ci --omit=dev && npm run build
+#   install -m 0640 -o root -g omniflow .env.example /etc/omniflow/omniflow.env    # then edit it
+#   systemctl enable --now omniflow
+[Unit]
+Description=OmniFlow workflow engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=omniflow
+Group=omniflow
+WorkingDirectory=/opt/omniflow
+EnvironmentFile=/etc/omniflow/omniflow.env
+Environment=NODE_ENV=production OMNIFLOW_DATA_DIR=/var/lib/omniflow NODE_OPTIONS=--disable-warning=ExperimentalWarning
+ExecStart=/usr/bin/node dist/server/main.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+# Sandboxing. (No MemoryDenyWriteExecute: V8's JIT needs writable+executable memory.)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/omniflow
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
