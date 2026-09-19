@@ -42,7 +42,7 @@ jobs:
           node dist/cli/main.js validate workflows workflows/optional
       - name: Known vulnerabilities in production dependencies
         run: npm audit --omit=dev --audit-level=high
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
