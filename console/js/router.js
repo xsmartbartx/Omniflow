@@ -2,7 +2,11 @@
 
 export function compile(pattern) {
   const keys = [];
-  const re = new RegExp(`^${pattern.replace(/\/:([A-Za-z]+)/g, (_m, k) => (keys.push(k), '/([^/]+)')).replace(/\//g, '\\/')}$`);
+  const source = pattern.replace(/\/:([A-Za-z]+)/g, (_m, k) => {
+    keys.push(k);
+    return '/([^/]+)';
+  });
+  const re = new RegExp(`^${source.replace(/\//g, '\\/')}$`);
   return { re, keys };
 }
 

@@ -96,7 +96,11 @@ export default async function editor(ctx) {
     }
   });
   ctx.cleanup(() => clearTimeout(timer));
-  const warnLeave = (ev) => dirty && (ev.preventDefault(), (ev.returnValue = ''));
+  const warnLeave = (ev) => {
+    if (!dirty) return;
+    ev.preventDefault();
+    ev.returnValue = '';
+  };
   window.addEventListener('beforeunload', warnLeave);
   ctx.cleanup(() => window.removeEventListener('beforeunload', warnLeave));
 

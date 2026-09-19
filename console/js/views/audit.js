@@ -35,7 +35,10 @@ export default async function audit() {
     clear(more).append(r.items.length === 100 ? button('Load older', { onClick: () => load(true) }) : h('span', { class: 'muted' }, `${rows.length} of ${r.total} events shown`));
   };
   let debounce;
-  type.addEventListener('input', () => (clearTimeout(debounce), (debounce = setTimeout(() => load(false), 300))));
+  type.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => load(false), 300);
+  });
   await load(false);
 
   const verifyBox = h('div');

@@ -26,7 +26,7 @@ const ROUTES = [
 ];
 
 const root = document.getElementById('app');
-let cleanups = [];
+const cleanups = [];
 let badgeTimer;
 const counts = { approvals: 0, changes: 0, alerts: 0 };
 
@@ -47,7 +47,10 @@ function makeCtx(match) {
         }
       };
       const id = setInterval(tick, ms);
-      cleanups.push(() => ((stopped = true), clearInterval(id)));
+      cleanups.push(() => {
+        stopped = true;
+        clearInterval(id);
+      });
     },
     navigate,
     refreshBadges,

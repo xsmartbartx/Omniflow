@@ -19,11 +19,14 @@ export default async function runs(ctx) {
     if (status.value) q.set('status', status.value);
     const r = await api.get(`/v1/runs?${q}`);
     clear(list).append(runsTable(r.items, { empty: 'No runs match.' }));
-    clear(footer).append(`Showing ${r.items.length} of ${r.total}.`, r.items.length < r.total ? h('button', { class: 'btn btn-sm', type: 'button', onClick: () => ((limit += 50), load()) }, 'Show more') : '');
+    clear(footer).append(`Showing ${r.items.length} of ${r.total}.`, r.items.length < r.total ? h('button', { class: 'btn btn-sm', type: 'button', onClick: () => { limit += 50; load(); } }, 'Show more') : '');
     return r;
   };
   let debounce;
-  workflow.addEventListener('input', () => (clearTimeout(debounce), (debounce = setTimeout(load, 250))));
+  workflow.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(load, 250);
+  });
   status.addEventListener('change', load);
   await load();
   ctx.poll(load, 5000);

@@ -39,7 +39,7 @@ export function layoutGraph(nodes, edges) {
 
   // order within layers: a few barycentre sweeps to reduce crossings, ties broken by input order (stable)
   const order = new Map();
-  layers.forEach((l) => l.forEach((id, i) => order.set(id, i)));
+  for (const l of layers) for (const [i, id] of l.entries()) order.set(id, i);
   const bary = (id, nb) => {
     const ns = nb.get(id);
     return ns.length ? ns.reduce((s, n) => s + order.get(n), 0) / ns.length : order.get(id);
@@ -49,18 +49,18 @@ export function layoutGraph(nodes, edges) {
     const seq = down ? layers.slice(1) : layers.slice(0, -1).reverse();
     for (const l of seq) {
       l.sort((a, b) => bary(a, down ? preds : succs) - bary(b, down ? preds : succs) || order.get(a) - order.get(b));
-      l.forEach((id, i) => order.set(id, i));
+      for (const [i, id] of l.entries()) order.set(id, i);
     }
   }
 
   const widest = Math.max(1, ...layers.map((l) => l.length));
   const width = PAD * 2 + widest * NODE_W + (widest - 1) * GAP_X;
   const pos = new Map();
-  layers.forEach((l, li) => {
+  for (const [li, l] of layers.entries()) {
     const rowW = l.length * NODE_W + (l.length - 1) * GAP_X;
     const x0 = (width - rowW) / 2;
-    l.forEach((id, i) => pos.set(id, { x: x0 + i * (NODE_W + GAP_X), y: PAD + li * (NODE_H + GAP_Y), layer: li }));
-  });
+    for (const [i, id] of l.entries()) pos.set(id, { x: x0 + i * (NODE_W + GAP_X), y: PAD + li * (NODE_H + GAP_Y), layer: li });
+  }
 
   const laidOut = nodes.map((n) => ({ ...n, ...pos.get(n.id), w: NODE_W, h: NODE_H }));
   const laidEdges = edges
@@ -106,7 +106,11 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
       );
       if (onSelect) {
         g.addEventListener('click', () => onSelect(d.id));
-        g.addEventListener('keydown', (ev) => (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), onSelect(d.id)));
+        g.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'Enter' && ev.key !== ' ') return;
+          ev.preventDefault();
+          onSelect(d.id);
+        });
       }
       return g;
     }),

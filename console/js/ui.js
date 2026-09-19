@@ -81,10 +81,8 @@ export function button(label, { kind = 'secondary', onClick, disabled, title, sm
       } catch (e) {
         toast(e?.message ?? String(e), 'bad');
       } finally {
-        if (el.isConnected || true) {
-          el.disabled = !!disabled;
-          if (busyLabel && el.lastChild && original !== undefined) el.lastChild.textContent = original;
-        }
+        el.disabled = !!disabled;
+        if (busyLabel && el.lastChild && original !== undefined) el.lastChild.textContent = original;
       }
     });
   }
@@ -105,7 +103,10 @@ export function kv(pairs) {
 
 export function codeBlock(text, { copy = true, label } = {}) {
   const pre = h('pre', { class: 'code' }, h('code', {}, text));
-  return h('div', { class: 'codeblock' }, label ? h('div', { class: 'codeblock-label' }, label) : null, copy ? button('', { kind: 'ghost', small: true, icon: 'copy', title: 'Copy', onClick: async () => (await copyText(text), toast('Copied', 'good')) }) : null, pre);
+  return h('div', { class: 'codeblock' }, label ? h('div', { class: 'codeblock-label' }, label) : null, copy ? button('', { kind: 'ghost', small: true, icon: 'copy', title: 'Copy', onClick: async () => {
+    await copyText(text);
+    toast('Copied', 'good');
+  } }) : null, pre);
 }
 
 export async function copyText(text) {
@@ -233,7 +234,7 @@ export function formDialog({ title, intro, fields, submitLabel = 'Save', danger 
     title,
     wide,
     body: h('form', { class: 'form', onSubmit: (e) => e.preventDefault() }, intro ? h('p', { class: 'muted' }, intro) : null, controls.map((x) => x.node), errorSlot),
-    onOpen: (dlg) => controls[0]?.c.focus?.(),
+    onOpen: () => controls[0]?.c.focus?.(),
     actions: (close) => [
       button('Cancel', { onClick: () => close(null) }),
       button(submitLabel, {

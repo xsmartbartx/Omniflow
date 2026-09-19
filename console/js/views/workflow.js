@@ -1,5 +1,5 @@
 import * as api from '../api.js';
-import { clear, h } from '../dom.js';
+import { h } from '../dom.js';
 import { ago, number, shortHash, timestamp } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { renderMarkdown } from '../markdown.js';

@@ -28,7 +28,7 @@ export default async function run(ctx) {
   const childrenBox = h('div');
   const log = h('div', { class: 'eventlog', role: 'log', 'aria-live': 'off' });
   const seen = new Set();
-  let liveNote = h('span', { class: 'muted' });
+  const liveNote = h('span', { class: 'muted' });
 
   const addEvent = (e) => {
     if (seen.has(e.seq)) return;

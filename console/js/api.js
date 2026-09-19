@@ -12,7 +12,10 @@ export class ApiError extends Error {
 
 const listeners = new Set();
 /** Called when the server says the session is gone. */
-export const onUnauthenticated = (fn) => (listeners.add(fn), () => listeners.delete(fn));
+export function onUnauthenticated(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
 
 async function request(method, path, body, accept = 'application/json') {
   let res;
