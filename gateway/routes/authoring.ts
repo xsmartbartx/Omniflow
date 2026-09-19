@@ -148,7 +148,7 @@ export function authoringRoutes(): RouteDef[] {
       schema: { body: obj({ text: { type: 'string', minLength: 1, maxLength: 200_000 }, owner: { type: 'string', maxLength: 200 }, timezone: { type: 'string', maxLength: 64 } }, ['text']) },
       handler: ({ app, principal, body }) => {
         const r = app.authoring.importCrontab(principal, body);
-        return { drafts: r.drafts.map(({ draft, notes, line }) => ({ line, notes, draft: { id: draft.id, workflowName: draft.workflowName ?? null, validation: draft.validation } })), skipped: r.skipped, environment: r.environment };
+        return { drafts: r.drafts.map(({ draft, notes, line, script }) => ({ line, notes, ...(script ? { script } : {}), draft: { id: draft.id, workflowName: draft.workflowName ?? null, validation: draft.validation } })), skipped: r.skipped, environment: r.environment };
       },
     },
     {

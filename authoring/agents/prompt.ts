@@ -31,10 +31,12 @@ steps:
     type: capability
     uses: notify-webhook@^1
     dependsOn: [is-large]
-    when: "steps.is-large.output.branch == 'large'"
+    when: "steps.is-large.output.case == 'large'"
+    egress: [hooks.example.com]
     with:
       url: https://hooks.example.com/orders
-      body: { text: "Large order \${{ inputs.orderId }}: \${{ inputs.total }}" }
+      format: generic
+      text: "Large order \${{ inputs.orderId }}: \${{ inputs.total }}"
     idempotencyKey: "alert-\${{ inputs.orderId }}"
     retry: { attempts: 3, backoff: exponential, initialDelay: 2s }
 outputs:
@@ -69,7 +71,7 @@ compensate: { uses: "capability@^1", with: {...} }.
 
 Step types:
   capability : { type: capability, uses: "name@^1", with: { ...inputs of that capability... }, egress?: [hosts], sunset?: "YYYY-MM-DD" }
-  branch     : { type: branch, cases: [{ name, when }], default?: name }        output.branch is the chosen case name
+  branch     : { type: branch, cases: [{ name, when }], default?: name }        the chosen case name is in steps.<id>.output.case
   parallel   : { type: parallel, join: all|any }                                 a join point; list its branches in dependsOn
   map        : { type: map, items: "<expression yielding an array>", maxItems: N, concurrency?, uses: "capability@^1", with: { ... use item.* } }
   approval   : { type: approval, message, approvers?: { roles?: [..], users?: [..] }, timeout: "1h", onTimeout: deny|escalate|approve }
@@ -87,6 +89,7 @@ Expressions:
 Rules that will make the manifest fail if broken:
   - Reference only steps that are (transitively) in dependsOn. Step ids must exist. No cycles.
   - "uses" must name a capability from the catalogue below, with inputs that match its input schema exactly (no extra properties).
+  - A capability whose network reach is 'step' (see egress in the catalogue) needs an "egress: [host]" list on the step, naming every host it may call.
   - Every effectful capability step needs an idempotencyKey; prefer a compensate step for effectful steps that can be undone.
   - Never write a secret, password or token as a literal value. Reference \${{ secrets.NAME }} and say in openQuestions which secret must be created.
   - Do not invent capabilities. If the catalogue cannot do what is asked, say so in openQuestions and build the closest honest workflow.

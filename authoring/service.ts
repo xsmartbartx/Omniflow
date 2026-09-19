@@ -215,9 +215,9 @@ export class AuthoringService {
   }
 
   /** Crontab → one Lift draft per job. Deterministic. */
-  importCrontab(principal: Principal, input: { text: string; owner?: string; timezone?: string }): { drafts: Array<{ draft: DraftRecord; notes: string[]; line: number }>; skipped: ImportResult['skipped']; environment: ImportResult['environment'] } {
+  importCrontab(principal: Principal, input: { text: string; owner?: string; timezone?: string }): { drafts: Array<{ draft: DraftRecord; notes: string[]; line: number; script?: { path: string; content: string } }>; skipped: ImportResult['skipped']; environment: ImportResult['environment'] } {
     const r = importCrontab(input.text, { owner: input.owner ?? principal.name, today: this.clock.now().toISOString().slice(0, 10), ...(input.timezone ? { timezone: input.timezone } : {}) });
-    const drafts = r.workflows.map((w) => ({ draft: this.createDraft(principal, { manifest: w.manifest, origin: 'import', notes: { importedFrom: 'crontab', line: w.line, source: w.source, notes: w.notes } }), notes: w.notes, line: w.line }));
+    const drafts = r.workflows.map((w) => ({ draft: this.createDraft(principal, { manifest: w.manifest, origin: 'import', notes: { importedFrom: 'crontab', line: w.line, source: w.source, notes: w.notes, ...(w.script ? { script: w.script } : {}) } }), notes: w.notes, line: w.line, ...(w.script ? { script: w.script } : {}) }));
     return { drafts, skipped: r.skipped, environment: r.environment };
   }
 

@@ -15,6 +15,8 @@ export interface ImportedWorkflow {
   manifest: string;
   /** Things the person should know or decide, in plain language. */
   notes: string[];
+  /** Set when the command needs shell syntax: OmniFlow refuses `sh -c` strings, so the command must live in a script file. */
+  script?: { path: string; content: string };
 }
 
 export interface ImportResult {
@@ -32,6 +34,8 @@ export interface ImportOptions {
   sunsetDays?: number;
   team?: string;
   timezone?: string;
+  /** Where operator-installed scripts live (default /opt/omniflow/scripts). */
+  scriptDir?: string;
 }
 
 const MACROS: Record<string, string> = {
@@ -155,14 +159,26 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     }
 
     const notes: string[] = [];
+    let script: ImportedWorkflow['script'];
+
+    // A stable, readable name from the first word(s) of the command.
+    const words0 = command.split(/[\s|&;<>]+/).filter(Boolean);
+    const exeWord = (words0[0] ?? 'job').split('/').pop() ?? 'job';
+    let name = `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !SHELL_SYNTAX.test(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
+    for (let n = 2; used.has(name); n++) name = `${name.replace(/-\d+$/, '')}-${n}`;
+    used.add(name);
+
     let argv: string[];
     if (SHELL_SYNTAX.test(command)) {
-      argv = ['/bin/sh', '-c', command];
-      notes.push('The command uses shell syntax (pipes, redirects, globs or substitutions), so it is wrapped in `/bin/sh -c`. It works, but it is the least safe form. Plan to split it into typed steps.');
+      const path = `${(opts.scriptDir ?? '/opt/omniflow/scripts').replace(/\/$/, '')}/${name}.sh`;
+      script = { path, content: `#!/bin/sh\nset -eu\n${command}\n` };
+      argv = [path];
+      notes.push(`The command uses shell syntax (pipes, redirects, globs or substitutions). OmniFlow refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to OMNIFLOW_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`);
     } else {
       const parsed = tokenize(command);
       if (!parsed || parsed.length === 0) {
         skip('The command has unbalanced quotes');
+        used.delete(name);
         continue;
       }
       argv = parsed;
@@ -180,11 +196,6 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     if (result.environment.MAILTO) notes.push(`The crontab mailed output to ${result.environment.MAILTO}. Configure an alert channel (OMNIFLOW_ALERT_CHANNELS) so failures are reported the same way.`);
     if (Object.keys(result.environment).some((k) => k !== 'MAILTO')) notes.push('The crontab sets environment variables. Shell steps run with a scrubbed environment; pass what the job needs through the step `env`.');
     notes.push(`Schedules run in ${opts.timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`);
-
-    let name = `cron-${slug(argv[0]!.split('/').pop() ?? 'job')}${argv[0] === '/bin/sh' ? '' : `-${slug(argv.slice(1).find((a) => !a.startsWith('-')) ?? '')}`}`.replace(/-+$/, '');
-    name = name.replace(/-{2,}/g, '-');
-    for (let n = 2; used.has(name); n++) name = `${name.replace(/-\d+$/, '')}-${n}`;
-    used.add(name);
 
     const manifest = {
       apiVersion: 'omniflow.dev/v1',
@@ -213,7 +224,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
         },
       ],
     };
-    result.workflows.push({ name, line: i + 1, source: line, manifest: stringify(manifest, { lineWidth: 0 }), notes });
+    result.workflows.push({ name, line: i + 1, source: line, manifest: stringify(manifest, { lineWidth: 0 }), notes, ...(script ? { script } : {}) });
   }
   return result;
 }
