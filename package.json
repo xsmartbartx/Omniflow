@@ -1,0 +1,48 @@
+{
+  "name": "omniflow",
+  "version": "1.0.0",
+  "description": "OmniFlow — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": false,
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "omniflow": "dist/cli/main.js"
+  },
+  "scripts": {
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/main.ts",
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json",
+    "start": "node --disable-warning=ExperimentalWarning dist/server/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check:layers": "node scripts/check-layers.ts",
+    "verify": "npm run typecheck && npm run lint && npm run check:layers && npm run test"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.4",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "croner": "^10.0.1",
+    "fastify": "^5.12.5",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.23.0",
+    "semver": "^7.8.5",
+    "undici": "^8.10.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/semver": "^7.8.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}
