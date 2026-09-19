@@ -134,7 +134,7 @@ export class TriggerManager {
         return { name, type: type as string, config, ...(nextFireAt ? { nextFireAt } : {}) };
       });
     this.st.triggers.replaceForWorkflow(tenant, workflow, version, specs);
-    this.st.triggers.listForWorkflow(tenant, workflow).forEach((t) => this.st.triggers.patch(t.id, { enabled: true }));
+    this.setEnabled(tenant, workflow, true);
 
     for (const s of specs) {
       if (s.type === 'webhook' && !this.broker.has(tenant, this.secretName(workflow, s.name))) {
@@ -222,7 +222,7 @@ export class TriggerManager {
   /** Create or replace a webhook's signing secret. The plaintext is returned once and never retrievable again. */
   rotateWebhookSecret(tenant: string, workflow: string, trigger: string): WebhookSecretInfo {
     const t = this.st.triggers.find(tenant, workflow, trigger);
-    if (!t || t.type !== 'webhook') throw new NotFoundError('Webhook trigger', `${workflow}/${trigger}`);
+    if (t?.type !== 'webhook') throw new NotFoundError('Webhook trigger', `${workflow}/${trigger}`);
     const secret = `whsec_${randomToken(32)}`;
     this.broker.put(tenant, this.secretName(workflow, trigger), secret, 'system:trigger-manager', `Signing secret for webhook ${workflow}/${trigger}`);
     return { trigger, secret };
@@ -231,7 +231,7 @@ export class TriggerManager {
   handleWebhook(d: WebhookDelivery): TriggerResult {
     const t = this.st.triggers.find(d.tenant, d.workflow, d.trigger);
     // Same error for "no such webhook" and "bad signature" — do not reveal which webhooks exist.
-    if (!t || t.type !== 'webhook' || !t.enabled) throw new AuthenticationError('Webhook authentication failed');
+    if (t?.type !== 'webhook' || !t.enabled) throw new AuthenticationError('Webhook authentication failed');
     if (Buffer.byteLength(d.rawBody, 'utf8') > MAX_WEBHOOK_BODY) {
       throw new ValidationError('Webhook payload is too large', [{ path: 'body', code: 'PAYLOAD_TOO_LARGE', message: 'Payloads are limited to 1 MiB' }]);
     }
@@ -322,6 +322,8 @@ export class TriggerManager {
   private mapInputs(t: TriggerRecord, event: { type: string; payload: unknown }, tenant: string): Record<string, unknown> {
     const mapping = t.config.inputs as Record<string, unknown> | undefined;
     if (!mapping) {
+      // A completion payload (run id, status, outputs…) is not shaped like workflow inputs; map it explicitly.
+      if (t.type === 'workflow-completion') return {};
       if (event.payload === null || typeof event.payload !== 'object' || Array.isArray(event.payload)) return {};
       return event.payload as Record<string, unknown>;
     }
