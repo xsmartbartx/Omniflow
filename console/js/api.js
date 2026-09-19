@@ -58,3 +58,35 @@ export const enc = encodeURIComponent;
 export function issuesOf(e) {
   return Array.isArray(e?.details?.issues) ? e.details.issues : [];
 }
+
+/** Follow a server-sent-event stream with fetch (EventSource cannot see named events generically). */
+export async function stream(path, onEvent, signal) {
+  const res = await fetch(path, { credentials: 'same-origin', headers: { accept: 'text/event-stream' }, signal });
+  if (!res.ok || !res.body) throw new ApiError(res.status, `HTTP_${res.status}`, `Could not open the live stream (HTTP ${res.status})`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    let idx = buffer.indexOf('\n\n');
+    while (idx >= 0) {
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const data = block
+        .split('\n')
+        .filter((l) => l.startsWith('data:'))
+        .map((l) => l.slice(5).trim())
+        .join('\n');
+      if (data) {
+        try {
+          onEvent(JSON.parse(data));
+        } catch {
+          /* ignore malformed frames */
+        }
+      }
+      idx = buffer.indexOf('\n\n');
+    }
+  }
+}
