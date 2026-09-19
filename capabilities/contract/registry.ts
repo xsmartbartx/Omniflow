@@ -127,6 +127,15 @@ export class CapabilityRegistry {
     return parsed ? this.resolve(parsed.name, parsed.range) : undefined;
   }
 
+  /** All registered versions of a capability, ascending. */
+  versions(name: string): string[] {
+    return [...(this.byName.get(name)?.keys() ?? [])].sort(semver.compare);
+  }
+
+  names(): string[] {
+    return [...this.byName.keys()].sort();
+  }
+
   has(name: string): boolean {
     return this.byName.has(name);
   }
