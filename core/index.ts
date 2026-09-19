@@ -1,6 +1,7 @@
 export * from './canonical.ts';
 export * from './errors.ts';
 export * from './expression/index.ts';
+export * from './graph.ts';
 export * from './ids.ts';
 export * from './json.ts';
 export * from './log.ts';
