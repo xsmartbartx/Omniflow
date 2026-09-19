@@ -261,3 +261,11 @@ textarea.input { resize: vertical; line-height: 1.45; }
 .login-card { width: min(400px, 100%); }
 .login-card .brand { color: var(--text); padding: 0 0 6px; font-size: 20px; }
 .login-card .card-body { display: flex; flex-direction: column; gap: 14px; padding: 24px; }
+
+/* ---------- diff */
+.diff { padding: 8px 0; }
+.diff-line { display: grid; grid-template-columns: 22px 1fr; padding: 0 10px; white-space: pre-wrap; }
+.diff-mark { color: var(--muted); user-select: none; }
+.diff-add { background: var(--good-bg); }
+.diff-del { background: var(--bad-bg); }
+.diff-gap { padding: 2px 10px; color: var(--muted); font-style: italic; background: var(--panel); }
