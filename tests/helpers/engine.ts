@@ -5,6 +5,7 @@ import { Orchestrator, type OrchestratorConfig } from '../../orchestration/orche
 import { CircuitBreakers, StepRuntime } from '../../orchestration/runtime/index.ts';
 import type { CapabilityDeclaration, EventRecord, Plan } from '../../schemas/index.ts';
 import { createKeyring, generateMasterKey, SecretBroker } from '../../security/secret-broker/index.ts';
+import { validateValue } from '../../security/validator/index.ts';
 import type { RunRecord } from '../../state/index.ts';
 import { makeState, principal, type TestState } from './state.ts';
 
@@ -278,11 +279,14 @@ export function makeEngine(opts: EngineOptions = {}): Engine {
     submit(name, inputs = {}, o = {}) {
       const v = state.registry.latestVersion('default', name)!;
       const plan = state.registry.getPlan('default', v.planHash)!;
+      // The run service validates inputs against the plan's schema and applies defaults; do the same here.
+      const checked = validateValue<Record<string, unknown>>(plan.inputSchema, inputs);
+      if (!checked.ok) throw new Error(`invalid inputs: ${JSON.stringify(checked.issues)}`);
       const run = orch.createRun({
         tenant: 'default',
         plan,
         planHash: v.planHash,
-        inputs,
+        inputs: checked.value,
         principal: principal(),
         trigger: { type: 'manual' },
         ...(o.dryRun ? { dryRun: true } : {}),

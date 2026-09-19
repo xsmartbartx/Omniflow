@@ -586,7 +586,11 @@ export class Orchestrator {
       const step = this.st.runs.getStep(runId, stepId);
       if (run && step && step.status === 'running' && step.attempt === attempt && !isTerminalRun(run.status)) {
         const ps = this.plan(run).steps.find((x) => x.id === stepId)!;
-        if (res.kind === 'succeeded') {
+        if (run.cancelRequested && res.kind !== 'succeeded') {
+          // Cancellation is not a fault: the aborted step simply ends as cancelled.
+          this.st.runs.patchStep(runId, stepId, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
+          this.event(run, 'step.skipped', { reason: 'run-cancelled' }, stepId, attempt);
+        } else if (res.kind === 'succeeded') {
           this.succeedStep(run, ps, res.output, { cost: res.cost, durationMs: res.durationMs, replayed: res.replayed ?? false, simulated: res.simulated ?? false });
         } else if (res.kind === 'failed') {
           this.failStep(run, ps, res.error, res.phase, res.durationMs);
@@ -637,10 +641,12 @@ export class Orchestrator {
     this.checkInvariants(run);
   }
 
-  private failStep(run: RunRecord, ps: PlanStep, error: ErrorInfo, phase: string, durationMs = 0): void {
+  private failStep(run: RunRecord, ps: PlanStep, error: ErrorInfo, phase: string, durationMs = 0, allowRetry = true): void {
     const rec = this.st.runs.getStep(run.id, ps.id)!;
     const now = this.clock.now();
-    const retryable = ps.type === 'capability' || ps.type === 'map' || ps.type === 'subworkflow';
+    // Failures raised by the engine itself (a `when` that cannot be evaluated, a bad branch) are
+    // the manifest's fault, not the world's: re-dispatching would only hide them.
+    const retryable = allowRetry && (ps.type === 'capability' || ps.type === 'map' || ps.type === 'subworkflow');
     const verdict = retryable ? shouldRetry(ps.retry, rec.attempt, error) : { retry: false, reason: 'not retryable' };
     if (verdict.retry && ps.retry) {
       const delay = backoffDelayMs(ps.retry, rec.attempt, createRng(run.seed).fork(`${ps.id}/${rec.attempt}`).next());
@@ -832,6 +838,12 @@ export class Orchestrator {
   }
 
   private finishRun(run: RunRecord, status: RunStatus, patch: { error?: ErrorInfo; outputs?: Record<string, unknown> }): RunRecord {
+    // A run that was waiting resumes (`WaitingApproval/WaitingEvent → Running`) before it can succeed.
+    const live = this.st.runs.getRun(run.id);
+    if (live && status === 'succeeded' && (live.status === 'waiting-approval' || live.status === 'waiting-event')) {
+      this.st.runs.transition(run.id, 'running');
+      this.event(live, 'run.resumed', {});
+    }
     const done = this.st.runs.transition(run.id, status, patch);
     const type = ({
       succeeded: 'run.succeeded',
@@ -1044,7 +1056,7 @@ export class Orchestrator {
       return isTruthy(evaluate(this.parse(ps.when!), this.scope(run, plan, recs), { seed: run.seed }));
     } catch (e) {
       this.startInline(run, ps);
-      this.failStep(run, ps, { code: 'WHEN_EVALUATION_FAILED', message: `Condition could not be evaluated: ${(e as Error).message}`, class: 'contract', retryable: false }, 'when');
+      this.failStep(run, ps, { code: 'WHEN_EVALUATION_FAILED', message: `Condition could not be evaluated: ${(e as Error).message}`, class: 'contract', retryable: false }, 'when', 0, false);
       return false;
     }
   }
