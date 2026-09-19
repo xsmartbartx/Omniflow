@@ -6,7 +6,7 @@ import { createChannelNotifier, createEmailNotifier, createWebhookNotifier } fro
 import { createShellCapabilities } from './adapters/shell/index.ts';
 import { createStorageCapabilities } from './adapters/storage/index.ts';
 import { createUtilCapabilities } from './adapters/util/index.ts';
-import { type CapabilityAdapter } from './contract/types.ts';
+import type { CapabilityAdapter } from './contract/types.ts';
 import { CapabilityRegistry } from './contract/registry.ts';
 
 export { type AdapterConfig, defaultAdapterConfig } from './adapters/config.ts';
