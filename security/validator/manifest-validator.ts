@@ -168,6 +168,13 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         );
       }
     }
+    if (spec.sensitivity === 'secret') {
+      error(
+        [...p, 'sensitivity'],
+        'SECRET_INPUT_FORBIDDEN',
+        "Inputs are stored with the run and cannot be 'secret'. Provide credentials through the Secret Broker and reference them as ${{ secrets.NAME }}.",
+      );
+    }
     if (spec.required === true && spec.default !== undefined) {
       warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
     }
