@@ -578,6 +578,9 @@ export class Orchestrator {
   private onStepResult(runId: string, stepId: string, attempt: number, res: StepResult, d: Driver): void {
     this.slots--;
     d.inflight.delete(stepId);
+    // A stopped orchestrator persists nothing more — exactly like a killed process. The step stays
+    // `running` in durable state and is recovered on the next start.
+    if (this.stopped) return;
     try {
       const run = this.st.runs.getRun(runId);
       const step = this.st.runs.getStep(runId, stepId);
@@ -921,6 +924,7 @@ export class Orchestrator {
   private onCompensationResult(runId: string, stepId: string, res: StepResult, d: Driver): void {
     this.slots--;
     d.inflight.delete(`${stepId}!comp`);
+    if (this.stopped) return;
     try {
       const run = this.st.runs.getRun(runId);
       if (run) {
