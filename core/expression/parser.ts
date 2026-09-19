@@ -118,10 +118,12 @@ function tokenize(src: string): Token[] {
 class Parser {
   private i = 0;
   private depth = 0;
-  constructor(
-    private readonly tokens: Token[],
-    private readonly src: string,
-  ) {}
+  private readonly tokens: Token[];
+  private readonly src: string;
+  constructor(tokens: Token[], src: string) {
+    this.tokens = tokens;
+    this.src = src;
+  }
 
   private peek(): Token {
     return this.tokens[this.i]!;
@@ -257,7 +259,13 @@ class Parser {
     let left = this.parseUnary();
     while (this.isPunct('*') || this.isPunct('/') || this.isPunct('%')) {
       const t = this.next();
-      left = { type: 'binary', op: t.value as BinaryOp, left, right: this.parseUnary(), pos: t.pos };
+      left = {
+        type: 'binary',
+        op: t.value as BinaryOp,
+        left,
+        right: this.parseUnary(),
+        pos: t.pos,
+      };
     }
     return left;
   }

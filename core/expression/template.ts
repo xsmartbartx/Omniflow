@@ -1,5 +1,5 @@
 import { canonicalize } from '../canonical.ts';
-import { type Node, ExpressionError, ExpressionSyntaxError } from './ast.ts';
+import { ExpressionError, ExpressionSyntaxError, type Node } from './ast.ts';
 import { type EvalOptions, evaluate } from './evaluator.ts';
 import { parseExpression } from './parser.ts';
 
@@ -126,7 +126,11 @@ export function renderTemplate(
 }
 
 /** Recursively resolve every `${{ }}` inside strings of a JSON-like value. Object keys are static. */
-export function resolveValue(value: unknown, scope: Record<string, unknown>, options: EvalOptions = {}): unknown {
+export function resolveValue(
+  value: unknown,
+  scope: Record<string, unknown>,
+  options: EvalOptions = {},
+): unknown {
   if (typeof value === 'string') {
     return hasTemplate(value) ? renderTemplate(parseTemplate(value), scope, options) : value;
   }

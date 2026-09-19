@@ -6,19 +6,7 @@
  * pure functions. Evaluation cost is bounded by the size of the expression.
  */
 
-export type BinaryOp =
-  | '+'
-  | '-'
-  | '*'
-  | '/'
-  | '%'
-  | '=='
-  | '!='
-  | '<'
-  | '<='
-  | '>'
-  | '>='
-  | 'in';
+export type BinaryOp = '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | 'in';
 
 export type Node =
   | { type: 'literal'; value: string | number | boolean | null; pos: number }

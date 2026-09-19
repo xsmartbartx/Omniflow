@@ -95,7 +95,7 @@ export interface Rng {
 export function createRng(seed: string): Rng {
   const h = sha256Hex(`rng:${seed}`);
   const s = [0, 1, 2, 3].map((i) => Number.parseInt(h.slice(i * 8, i * 8 + 8), 16) >>> 0);
-  if (s.every((x) => x === 0)) s[0] = 1;
+  if ((s[0]! | s[1]! | s[2]! | s[3]!) === 0) s[0] = 1;
   const rotl = (x: number, k: number) => ((x << k) | (x >>> (32 - k))) >>> 0;
   const nextU32 = (): number => {
     const result = (rotl(Math.imul(s[1]!, 5) >>> 0, 7) * 9) >>> 0;
@@ -119,7 +119,9 @@ export function createRng(seed: string): Rng {
 
 /** RFC-4122-shaped UUID derived deterministically from a seed and labels. */
 export function deterministicUuid(seed: string, ...labels: string[]): string {
-  const h = sha256Hex(`uuid:${seed}:${labels.join(':')}`).slice(0, 32).split('');
+  const h = sha256Hex(`uuid:${seed}:${labels.join(':')}`)
+    .slice(0, 32)
+    .split('');
   h[12] = '4';
   h[16] = '89ab'[Number.parseInt(h[16]!, 16) & 3]!;
   const s = h.join('');

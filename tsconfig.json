@@ -19,8 +19,20 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "core", "schemas", "security", "capabilities", "state", "orchestration",
-    "insight", "authoring", "gateway", "cli", "server", "tests", "scripts/*.ts", "vitest.config.ts"
+    "core",
+    "schemas",
+    "security",
+    "capabilities",
+    "state",
+    "orchestration",
+    "insight",
+    "authoring",
+    "gateway",
+    "cli",
+    "server",
+    "tests",
+    "scripts/*.ts",
+    "vitest.config.ts"
   ],
   "exclude": ["node_modules", "dist", "coverage"]
 }

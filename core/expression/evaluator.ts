@@ -37,7 +37,11 @@ function describeType(v: unknown): string {
  * Evaluate a parsed expression against `scope`. Missing properties read as `null`
  * (safe navigation); referencing a root identifier that is not in scope is an error.
  */
-export function evaluate(node: Node, scope: Record<string, unknown>, options: EvalOptions = {}): unknown {
+export function evaluate(
+  node: Node,
+  scope: Record<string, unknown>,
+  options: EvalOptions = {},
+): unknown {
   let budget = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const fnCtx: FunctionContext = options.seed === undefined ? {} : { seed: options.seed };
 
@@ -68,8 +72,9 @@ export function evaluate(node: Node, scope: Record<string, unknown>, options: Ev
         return null;
       }
       case 'call': {
-        const spec = FUNCTIONS[n.name];
-        if (!spec) throw new ExpressionError('EXPR_UNKNOWN_FUNCTION', `Unknown function '${n.name}'`, n.pos);
+        const spec = Object.hasOwn(FUNCTIONS, n.name) ? FUNCTIONS[n.name] : undefined;
+        if (!spec)
+          throw new ExpressionError('EXPR_UNKNOWN_FUNCTION', `Unknown function '${n.name}'`, n.pos);
         const args = n.args.map(ev);
         const result = spec.fn(args, fnCtx);
         return result === undefined ? null : result;
@@ -142,7 +147,8 @@ function binary(op: string, l: unknown, r: unknown, pos: number): unknown {
     case '+': {
       if (isNum(l) && isNum(r)) return l + r;
       if (isStr(l) && isStr(r)) {
-        if (l.length + r.length > MAX_STRING) throw new ExpressionError('EXPR_BUDGET', 'string too long', pos);
+        if (l.length + r.length > MAX_STRING)
+          throw new ExpressionError('EXPR_BUDGET', 'string too long', pos);
         return l + r;
       }
       throw new ExpressionError(

@@ -28,14 +28,35 @@ const ALLOWED: Record<string, string[]> = {
   insight: ['core', 'schemas', 'security', 'capabilities', 'state'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
   gateway: [
-    'core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring',
+    'core',
+    'schemas',
+    'security',
+    'capabilities',
+    'state',
+    'orchestration',
+    'insight',
+    'authoring',
   ],
   cli: [
-    'core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring',
+    'core',
+    'schemas',
+    'security',
+    'capabilities',
+    'state',
+    'orchestration',
+    'insight',
+    'authoring',
     'gateway',
   ],
   server: [
-    'core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring',
+    'core',
+    'schemas',
+    'security',
+    'capabilities',
+    'state',
+    'orchestration',
+    'insight',
+    'authoring',
     'gateway',
   ],
 };
@@ -54,15 +75,25 @@ const AGENT_FORBIDDEN = [
 /** Modules that must never touch the network directly. */
 const NO_NETWORK_DIRS = ['orchestration/orchestrator'];
 const NETWORK_MODULES = [
-  'node:http', 'node:https', 'node:http2', 'node:net', 'node:tls', 'node:dns', 'node:dgram',
-  'undici', 'fastify', 'pg', 'nodemailer',
+  'node:http',
+  'node:https',
+  'node:http2',
+  'node:net',
+  'node:tls',
+  'node:dns',
+  'node:dgram',
+  'undici',
+  'fastify',
+  'pg',
+  'nodemailer',
 ];
 
 const violations: string[] = [];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === 'coverage' || name.startsWith('.')) continue;
+    if (name === 'node_modules' || name === 'dist' || name === 'coverage' || name.startsWith('.'))
+      continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) walk(full, out);
     else if (full.endsWith('.ts') && !full.endsWith('.d.ts')) out.push(full);
@@ -98,21 +129,33 @@ for (const layer of Object.keys(ALLOWED)) {
     for (const spec of specifiers(source)) {
       const isRelative = spec.startsWith('.');
       if (isRelative) {
-        const target = relative(root, resolve(dirname(file), spec)).split(sep).join('/');
+        const target = relative(root, resolve(dirname(file), spec))
+          .split(sep)
+          .join('/');
         const targetLayer = layerOf(target);
         if (targetLayer !== layer && !(ALLOWED[layer] ?? []).includes(targetLayer)) {
-          violations.push(`${relFile}: layer '${layer}' may not import from '${targetLayer}' (${spec})`);
+          violations.push(
+            `${relFile}: layer '${layer}' may not import from '${targetLayer}' (${spec})`,
+          );
         }
         if (
           AGENT_DIRS.some((d) => relFile.startsWith(`${d}/`)) &&
           AGENT_FORBIDDEN.some((f) => target === f || target.startsWith(`${f}/`))
         ) {
-          violations.push(`${relFile}: agent module may not import execution-plane module '${target}' (ADR-0002 D4)`);
+          violations.push(
+            `${relFile}: agent module may not import execution-plane module '${target}' (ADR-0002 D4)`,
+          );
         }
       } else if (NO_NETWORK_DIRS.some((d) => relFile.startsWith(`${d}/`))) {
         const bare = spec.replace(/^node:/, '');
-        if (NETWORK_MODULES.some((m) => m === spec || m === `node:${bare}` || spec.startsWith(`${m}/`))) {
-          violations.push(`${relFile}: orchestrator may not import network module '${spec}' (ADR-0002 D6)`);
+        if (
+          NETWORK_MODULES.some(
+            (m) => m === spec || m === `node:${bare}` || spec.startsWith(`${m}/`),
+          )
+        ) {
+          violations.push(
+            `${relFile}: orchestrator may not import network module '${spec}' (ADR-0002 D6)`,
+          );
         }
       }
     }
