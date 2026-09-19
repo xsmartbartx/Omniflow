@@ -59,7 +59,8 @@ export function layoutGraph(nodes, edges) {
   for (const [li, l] of layers.entries()) {
     const rowW = l.length * NODE_W + (l.length - 1) * GAP_X;
     const x0 = (width - rowW) / 2;
-    for (const [i, id] of l.entries()) pos.set(id, { x: x0 + i * (NODE_W + GAP_X), y: PAD + li * (NODE_H + GAP_Y), layer: li });
+    for (const [i, id] of l.entries())
+      pos.set(id, { x: x0 + i * (NODE_W + GAP_X), y: PAD + li * (NODE_H + GAP_Y), layer: li });
   }
 
   const laidOut = nodes.map((n) => ({ ...n, ...pos.get(n.id), w: NODE_W, h: NODE_H }));
@@ -75,21 +76,54 @@ export function layoutGraph(nodes, edges) {
       const dy = Math.max(20, (y2 - y1) / 2);
       return { ...e, x1, y1, x2, y2, path: `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}` };
     });
-  return { nodes: laidOut, edges: laidEdges, width, height: PAD * 2 + layers.length * NODE_H + Math.max(0, layers.length - 1) * GAP_Y };
+  return {
+    nodes: laidOut,
+    edges: laidEdges,
+    width,
+    height: PAD * 2 + layers.length * NODE_H + Math.max(0, layers.length - 1) * GAP_Y,
+  };
 }
 
-const KIND_LABEL = { capability: '', branch: 'branch', approval: 'approval', parallel: 'parallel', map: 'for each', wait: 'wait', subworkflow: 'subworkflow', terminate: 'end' };
+const KIND_LABEL = {
+  capability: '',
+  branch: 'branch',
+  approval: 'approval',
+  parallel: 'parallel',
+  map: 'for each',
+  wait: 'wait',
+  subworkflow: 'subworkflow',
+  terminate: 'end',
+};
 
 /** Render a laid-out graph as SVG. `states` maps step id → run status for colouring (optional). */
 export function renderGraph(graph, { states = {}, onSelect } = {}) {
   const { nodes, edges, width, height } = layoutGraph(
     graph.nodes.map((n) => ({ id: n.id, data: n })),
-    [...graph.edges.map((e) => ({ ...e, kind: e.conditional ? 'conditional' : 'flow' })), ...(graph.routes ?? []).map((r) => ({ from: r.from, to: r.to, kind: 'error' }))],
+    [
+      ...graph.edges.map((e) => ({ ...e, kind: e.conditional ? 'conditional' : 'flow' })),
+      ...(graph.routes ?? []).map((r) => ({ from: r.from, to: r.to, kind: 'error' })),
+    ],
   );
   const root = svg(
     'svg',
     { class: 'dag', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Workflow graph' },
-    svg('defs', {}, svg('marker', { id: 'arrow', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, svg('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'dag-arrow' }))),
+    svg(
+      'defs',
+      {},
+      svg(
+        'marker',
+        {
+          id: 'arrow',
+          viewBox: '0 0 10 10',
+          refX: 9,
+          refY: 5,
+          markerWidth: 7,
+          markerHeight: 7,
+          orient: 'auto-start-reverse',
+        },
+        svg('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'dag-arrow' }),
+      ),
+    ),
     edges.map((e) => svg('path', { d: e.path, class: `dag-edge dag-edge-${e.kind}`, 'marker-end': 'url(#arrow)' })),
     nodes.map((n) => {
       const d = n.data;
@@ -98,11 +132,27 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
       const sub = d.capability ?? KIND_LABEL[d.type] ?? d.type;
       const g = svg(
         'g',
-        { class: ['dag-node', `dag-${d.type}`, d.effect ? `dag-effect-${d.effect}` : '', state ? `dag-state-${state}` : '', onSelect ? 'dag-clickable' : ''], transform: `translate(${n.x}, ${n.y})`, tabindex: onSelect ? 0 : undefined, role: onSelect ? 'button' : undefined, 'aria-label': `${title}${state ? `, ${state}` : ''}` },
+        {
+          class: [
+            'dag-node',
+            `dag-${d.type}`,
+            d.effect ? `dag-effect-${d.effect}` : '',
+            state ? `dag-state-${state}` : '',
+            onSelect ? 'dag-clickable' : '',
+          ],
+          transform: `translate(${n.x}, ${n.y})`,
+          tabindex: onSelect ? 0 : undefined,
+          role: onSelect ? 'button' : undefined,
+          'aria-label': `${title}${state ? `, ${state}` : ''}`,
+        },
         svg('title', {}, `${d.id}${d.capability ? ` — ${d.capability}` : ''}${state ? ` — ${state}` : ''}`),
         svg('rect', { width: n.w, height: n.h, rx: d.type === 'branch' ? 26 : 9, class: 'dag-box' }),
         svg('text', { x: n.w / 2, y: 22, class: 'dag-title', 'text-anchor': 'middle' }, clip(title, 24)),
-        svg('text', { x: n.w / 2, y: 40, class: 'dag-sub', 'text-anchor': 'middle' }, clip(`${sub}${d.hasCompensation ? ' · ↺' : ''}`, 28)),
+        svg(
+          'text',
+          { x: n.w / 2, y: 40, class: 'dag-sub', 'text-anchor': 'middle' },
+          clip(`${sub}${d.hasCompensation ? ' · ↺' : ''}`, 28),
+        ),
       );
       if (onSelect) {
         g.addEventListener('click', () => onSelect(d.id));

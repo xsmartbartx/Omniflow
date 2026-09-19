@@ -65,7 +65,13 @@ export function stepView(_plan: Plan | undefined, rec: StepRecord, ps: PlanStep 
     approvalId: rec.approvalId ?? null,
     childRunId: rec.childRunId ?? null,
     waitEvent: rec.waitEvent ?? null,
-    compensation: ps?.compensate ? { status: rec.compensationStatus ?? null, error: rec.compensationError ?? null, capability: ps.compensate.capability.name } : null,
+    compensation: ps?.compensate
+      ? {
+          status: rec.compensationStatus ?? null,
+          error: rec.compensationError ?? null,
+          capability: ps.compensate.capability.name,
+        }
+      : null,
     cost: rec.cost,
   };
 }
@@ -87,5 +93,10 @@ export function planOf(app: Omniflow, run: RunRecord): Plan | undefined {
 }
 
 export function csv(v: unknown): string[] | undefined {
-  return typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+  return typeof v === 'string' && v
+    ? v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
 }

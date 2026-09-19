@@ -79,10 +79,30 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
     egress: { mode: 'none' },
     costModel: { unitsPerInvocation: 1, latencyClass: 'slow' },
     failureModes: [
-      { code: 'SHELL_COMMAND_NOT_ALLOWED', class: 'authorisation', retryable: false, description: 'The executable is not on the allow-list' },
-      { code: 'SHELL_EXIT_NONZERO', class: 'business', retryable: false, description: 'The command exited with an unexpected status' },
-      { code: 'SHELL_EXIT_RETRYABLE', class: 'transient', retryable: true, description: 'The command exited with a status the step declared retryable' },
-      { code: 'SHELL_NOT_FOUND', class: 'contract', retryable: false, description: 'The executable could not be started' },
+      {
+        code: 'SHELL_COMMAND_NOT_ALLOWED',
+        class: 'authorisation',
+        retryable: false,
+        description: 'The executable is not on the allow-list',
+      },
+      {
+        code: 'SHELL_EXIT_NONZERO',
+        class: 'business',
+        retryable: false,
+        description: 'The command exited with an unexpected status',
+      },
+      {
+        code: 'SHELL_EXIT_RETRYABLE',
+        class: 'transient',
+        retryable: true,
+        description: 'The command exited with a status the step declared retryable',
+      },
+      {
+        code: 'SHELL_NOT_FOUND',
+        class: 'contract',
+        retryable: false,
+        description: 'The executable could not be started',
+      },
     ],
     dataClassification: 'confidential',
     dryRun: 'simulate',
@@ -94,17 +114,27 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
     async execute(ctx: CapabilityContext, input: ShellInput): Promise<ShellOutput> {
       const [exe, ...args] = input.argv;
       if (!exe || !isAbsolute(exe) || !allowed.has(normalize(exe))) {
-        throw new CapabilityError('SHELL_COMMAND_NOT_ALLOWED', `'${exe ?? ''}' is not on the shell allow-list (absolute paths only)`, {
-          errorClass: 'authorisation',
+        throw new CapabilityError(
+          'SHELL_COMMAND_NOT_ALLOWED',
+          `'${exe ?? ''}' is not on the shell allow-list (absolute paths only)`,
+          {
+            errorClass: 'authorisation',
+            retryable: false,
+          },
+        );
+      }
+      if (input.argv.some((a) => a.includes('\0')) || input.argv.reduce((n, a) => n + a.length, 0) > MAX_ARGV_TOTAL) {
+        throw new CapabilityError('SHELL_ARGV_INVALID', 'Arguments contain NUL bytes or are too large', {
+          errorClass: 'contract',
           retryable: false,
         });
       }
-      if (input.argv.some((a) => a.includes('\0')) || input.argv.reduce((n, a) => n + a.length, 0) > MAX_ARGV_TOTAL) {
-        throw new CapabilityError('SHELL_ARGV_INVALID', 'Arguments contain NUL bytes or are too large', { errorClass: 'contract', retryable: false });
-      }
       for (const name of Object.keys(input.env ?? {})) {
         if (!ENV_NAME.test(name)) {
-          throw new CapabilityError('SHELL_ENV_INVALID', `Invalid environment variable name '${name}'`, { errorClass: 'contract', retryable: false });
+          throw new CapabilityError('SHELL_ENV_INVALID', `Invalid environment variable name '${name}'`, {
+            errorClass: 'contract',
+            retryable: false,
+          });
         }
       }
 
@@ -123,7 +153,14 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
       const started = Date.now();
       try {
         return await new Promise<ShellOutput>((resolve, reject) => {
-          const child = spawn(exe, args, { cwd: scratch, env, shell: false, detached: true, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+          const child = spawn(exe, args, {
+            cwd: scratch,
+            env,
+            shell: false,
+            detached: true,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true,
+          });
           let out = '';
           let err = '';
           let truncated = false;
@@ -147,7 +184,10 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
             if (cur.length + chunk.length > max) {
               truncated = true;
               const room = Math.max(0, max - cur.length);
-              if (room > 0) (which === 'out' ? (out += chunk.subarray(0, room).toString('utf8')) : (err += chunk.subarray(0, room).toString('utf8')));
+              if (room > 0)
+                which === 'out'
+                  ? (out += chunk.subarray(0, room).toString('utf8'))
+                  : (err += chunk.subarray(0, room).toString('utf8'));
               return;
             }
             if (which === 'out') out += chunk.toString('utf8');
@@ -162,7 +202,12 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
             if (settled) return;
             settled = true;
             ctx.signal.removeEventListener('abort', onAbort);
-            reject(new CapabilityError('SHELL_NOT_FOUND', `Could not start '${exe}': ${e.code ?? e.message}`, { errorClass: 'contract', retryable: false }));
+            reject(
+              new CapabilityError('SHELL_NOT_FOUND', `Could not start '${exe}': ${e.code ?? e.message}`, {
+                errorClass: 'contract',
+                retryable: false,
+              }),
+            );
           });
           child.on('close', (code, signal) => {
             if (settled) return;
@@ -175,11 +220,15 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
             if (!expected.includes(exitCode)) {
               const retryable = input.retryableExit?.includes(exitCode) ?? false;
               return reject(
-                new CapabilityError(retryable ? 'SHELL_EXIT_RETRYABLE' : 'SHELL_EXIT_NONZERO', `'${exe}' exited with status ${exitCode}${err ? `: ${err.trim().slice(0, 500)}` : ''}`, {
-                  errorClass: retryable ? 'transient' : 'business',
-                  retryable,
-                  details: { exitCode, ...(signal ? { signal } : {}) },
-                }),
+                new CapabilityError(
+                  retryable ? 'SHELL_EXIT_RETRYABLE' : 'SHELL_EXIT_NONZERO',
+                  `'${exe}' exited with status ${exitCode}${err ? `: ${err.trim().slice(0, 500)}` : ''}`,
+                  {
+                    errorClass: retryable ? 'transient' : 'business',
+                    retryable,
+                    details: { exitCode, ...(signal ? { signal } : {}) },
+                  },
+                ),
               );
             }
             resolve({ exitCode, stdout: out, stderr: err, truncated, durationMs: Date.now() - started });

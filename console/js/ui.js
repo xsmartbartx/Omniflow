@@ -14,8 +14,10 @@ const ICONS = {
   trigger: 'M13 2L4 14h7l-1 8 9-12h-7z',
   insight: 'M4 20V10 M10 20V4 M16 20v-7 M22 20H2',
   audit: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
-  admin: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M22 21v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8',
-  authoring: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z',
+  admin:
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M22 21v-2a4 4 0 0 0-3-3.9 M16 3.1a4 4 0 0 1 0 7.8',
+  authoring:
+    'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z',
   plus: 'M12 5v14 M5 12h14',
   refresh: 'M21 12a9 9 0 1 1-3-6.7 M21 3v6h-6',
   play: 'M6 4l14 8-14 8z',
@@ -33,11 +35,27 @@ const ICONS = {
 };
 
 export function icon(name, { size = 18 } = {}) {
-  return svg('svg', { class: 'icon', width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, svg('path', { d: ICONS[name] ?? ICONS.workflow }));
+  return svg(
+    'svg',
+    {
+      class: 'icon',
+      width: size,
+      height: size,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': 1.8,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true',
+    },
+    svg('path', { d: ICONS[name] ?? ICONS.workflow }),
+  );
 }
 
 // -------------------------------------------------------------- primitives
-export const badge = (text, toneName = 'neutral', title) => h('span', { class: `badge badge-${toneName}`, title }, text);
+export const badge = (text, toneName = 'neutral', title) =>
+  h('span', { class: `badge badge-${toneName}`, title }, text);
 export const statusBadge = (status, label) => badge(label ?? status, tone(status));
 export const mono = (text) => h('code', { class: 'mono' }, text);
 export const muted = (text) => h('span', { class: 'muted' }, text);
@@ -59,7 +77,15 @@ export function errorBox(err, { title } = {}) {
     { class: 'alert alert-bad', role: 'alert' },
     h('strong', {}, title ?? (e.status === 403 ? 'Not allowed' : 'Something went wrong')),
     h('p', {}, e.message),
-    issues.length ? h('ul', {}, issues.slice(0, 10).map((i) => h('li', {}, i.path ? h('code', {}, i.path) : null, i.path ? ' ' : '', i.message))) : null,
+    issues.length
+      ? h(
+          'ul',
+          {},
+          issues
+            .slice(0, 10)
+            .map((i) => h('li', {}, i.path ? h('code', {}, i.path) : null, i.path ? ' ' : '', i.message)),
+        )
+      : null,
   );
 }
 
@@ -68,8 +94,16 @@ export function notice(kind, ...content) {
 }
 
 /** A button whose async click handler disables it and reports failures as toasts. */
-export function button(label, { kind = 'secondary', onClick, disabled, title, small, icon: ic, type = 'button', busyLabel } = {}) {
-  const el = h('button', { type, class: ['btn', `btn-${kind}`, small ? 'btn-sm' : ''], title, disabled: !!disabled }, ic ? icon(ic, { size: small ? 14 : 16 }) : null, label ? h('span', {}, label) : null);
+export function button(
+  label,
+  { kind = 'secondary', onClick, disabled, title, small, icon: ic, type = 'button', busyLabel } = {},
+) {
+  const el = h(
+    'button',
+    { type, class: ['btn', `btn-${kind}`, small ? 'btn-sm' : ''], title, disabled: !!disabled },
+    ic ? icon(ic, { size: small ? 14 : 16 }) : null,
+    label ? h('span', {}, label) : null,
+  );
   if (onClick) {
     el.addEventListener('click', async (ev) => {
       if (el.disabled) return;
@@ -90,23 +124,58 @@ export function button(label, { kind = 'secondary', onClick, disabled, title, sm
 }
 
 export function card(title, body, { actions, class: cls, flush } = {}) {
-  return h('section', { class: ['card', cls, flush ? 'card-flush' : ''] }, title || actions ? h('header', { class: 'card-head' }, title ? h('h3', {}, title) : h('span'), actions ? h('div', { class: 'card-actions' }, actions) : null) : null, h('div', { class: 'card-body' }, body));
+  return h(
+    'section',
+    { class: ['card', cls, flush ? 'card-flush' : ''] },
+    title || actions
+      ? h(
+          'header',
+          { class: 'card-head' },
+          title ? h('h3', {}, title) : h('span'),
+          actions ? h('div', { class: 'card-actions' }, actions) : null,
+        )
+      : null,
+    h('div', { class: 'card-body' }, body),
+  );
 }
 
 export function pageHeader(title, subtitle, actions) {
-  return h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, title), subtitle ? h('p', { class: 'subtitle' }, subtitle) : null), actions ? h('div', { class: 'page-actions' }, actions) : null);
+  return h(
+    'header',
+    { class: 'page-head' },
+    h('div', {}, h('h1', {}, title), subtitle ? h('p', { class: 'subtitle' }, subtitle) : null),
+    actions ? h('div', { class: 'page-actions' }, actions) : null,
+  );
 }
 
 export function kv(pairs) {
-  return h('dl', { class: 'kv' }, pairs.filter(Boolean).flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v ?? '—')]));
+  return h(
+    'dl',
+    { class: 'kv' },
+    pairs.filter(Boolean).flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v ?? '—')]),
+  );
 }
 
 export function codeBlock(text, { copy = true, label } = {}) {
   const pre = h('pre', { class: 'code' }, h('code', {}, text));
-  return h('div', { class: 'codeblock' }, label ? h('div', { class: 'codeblock-label' }, label) : null, copy ? button('', { kind: 'ghost', small: true, icon: 'copy', title: 'Copy', onClick: async () => {
-    await copyText(text);
-    toast('Copied', 'good');
-  } }) : null, pre);
+  return h(
+    'div',
+    { class: 'codeblock' },
+    label ? h('div', { class: 'codeblock-label' }, label) : null,
+    copy
+      ? button('', {
+          kind: 'ghost',
+          small: true,
+          icon: 'copy',
+          title: 'Copy',
+          onClick: async () => {
+            await copyText(text);
+            toast('Copied', 'good');
+          },
+        })
+      : null,
+    pre,
+  );
 }
 
 export async function copyText(text) {
@@ -122,7 +191,13 @@ export async function copyText(text) {
 }
 
 export function field(label, control, help) {
-  return h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), control, help ? h('span', { class: 'field-help' }, help) : null);
+  return h(
+    'label',
+    { class: 'field' },
+    h('span', { class: 'field-label' }, label),
+    control,
+    help ? h('span', { class: 'field-help' }, help) : null,
+  );
 }
 
 export function input(props = {}) {
@@ -130,7 +205,14 @@ export function input(props = {}) {
 }
 
 export function select(options, value, props = {}) {
-  return h('select', { class: 'input', ...props }, options.map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return h('option', { value: v, selected: v === value }, l); }));
+  return h(
+    'select',
+    { class: 'input', ...props },
+    options.map((o) => {
+      const [v, l] = Array.isArray(o) ? o : [o, o];
+      return h('option', { value: v, selected: v === value }, l);
+    }),
+  );
 }
 
 // ------------------------------------------------------------------ tables
@@ -143,12 +225,24 @@ export function dataTable({ columns, rows, empty = 'Nothing here yet.', onRow, r
     h(
       'table',
       { class: 'table' },
-      h('thead', {}, h('tr', {}, columns.map((c) => h('th', { class: c.class, scope: 'col' }, c.label)))),
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          columns.map((c) => h('th', { class: c.class, scope: 'col' }, c.label)),
+        ),
+      ),
       h(
         'tbody',
         {},
         rows.map((row) => {
-          const tr = h('tr', { class: [onRow ? 'clickable' : '', rowClass?.(row)], tabindex: onRow ? 0 : undefined }, columns.map((c) => h('td', { class: c.class }, c.render(row))));
+          const tr = h(
+            'tr',
+            { class: [onRow ? 'clickable' : '', rowClass?.(row)], tabindex: onRow ? 0 : undefined },
+            columns.map((c) => h('td', { class: c.class }, c.render(row))),
+          );
           if (onRow) {
             tr.addEventListener('click', (ev) => !ev.target.closest('a, button, input, select') && onRow(row));
             tr.addEventListener('keydown', (ev) => ev.key === 'Enter' && onRow(row));
@@ -176,7 +270,22 @@ export function tabs(items, activeId, onChange) {
     }
     onChange?.(id);
   };
-  for (const it of items) bar.append(h('button', { type: 'button', role: 'tab', class: 'tab', dataset: { id: it.id }, 'aria-selected': String(it.id === current), onClick: () => show(it.id) }, it.label, it.count ? h('span', { class: 'tab-count' }, String(it.count)) : null));
+  for (const it of items)
+    bar.append(
+      h(
+        'button',
+        {
+          type: 'button',
+          role: 'tab',
+          class: 'tab',
+          dataset: { id: it.id },
+          'aria-selected': String(it.id === current),
+          onClick: () => show(it.id),
+        },
+        it.label,
+        it.count ? h('span', { class: 'tab-count' }, String(it.count)) : null,
+      ),
+    );
   const root = h('div', { class: 'tabset' }, bar, panel);
   show(current);
   return root;
@@ -202,7 +311,16 @@ export function openDialog({ title, body, actions, wide, onOpen }) {
     };
     dlg.addEventListener('cancel', () => resolve(undefined));
     dlg.addEventListener('close', () => dlg.remove());
-    dlg.append(h('header', { class: 'dialog-head' }, h('h3', {}, title), button('', { kind: 'ghost', small: true, icon: 'x', title: 'Close', onClick: () => close(undefined) })), h('div', { class: 'dialog-body' }, body), actions ? h('footer', { class: 'dialog-foot' }, actions(close)) : null);
+    dlg.append(
+      h(
+        'header',
+        { class: 'dialog-head' },
+        h('h3', {}, title),
+        button('', { kind: 'ghost', small: true, icon: 'x', title: 'Close', onClick: () => close(undefined) }),
+      ),
+      h('div', { class: 'dialog-body' }, body),
+      actions ? h('footer', { class: 'dialog-foot' }, actions(close)) : null,
+    );
     document.body.append(dlg);
     dlg.showModal();
     onOpen?.(dlg, close);
@@ -213,7 +331,10 @@ export function confirmDialog({ title, message, confirmLabel = 'Confirm', danger
   return openDialog({
     title,
     body: h('p', {}, message),
-    actions: (close) => [button('Cancel', { onClick: () => close(false) }), button(confirmLabel, { kind: danger ? 'danger' : 'primary', onClick: () => close(true) })],
+    actions: (close) => [
+      button('Cancel', { onClick: () => close(false) }),
+      button(confirmLabel, { kind: danger ? 'danger' : 'primary', onClick: () => close(true) }),
+    ],
   }).then((v) => v === true);
 }
 
@@ -223,17 +344,46 @@ export function formDialog({ title, intro, fields, submitLabel = 'Save', danger 
     const c = f.options
       ? select(f.options, f.value ?? f.options[0]?.[0] ?? f.options[0], { name: f.name })
       : f.textarea
-        ? h('textarea', { class: 'input mono', name: f.name, rows: f.rows ?? 5, placeholder: f.placeholder, spellcheck: 'false' }, f.value ?? '')
+        ? h(
+            'textarea',
+            { class: 'input mono', name: f.name, rows: f.rows ?? 5, placeholder: f.placeholder, spellcheck: 'false' },
+            f.value ?? '',
+          )
         : f.type === 'checkbox'
           ? h('input', { type: 'checkbox', name: f.name, checked: !!f.value })
-          : input({ name: f.name, type: f.type ?? 'text', placeholder: f.placeholder, value: f.value ?? '', ...(f.type === 'password' ? { autocomplete: 'new-password' } : {}) });
-    return { f, c, node: f.type === 'checkbox' ? h('label', { class: 'check' }, c, h('span', {}, f.label), f.help ? h('span', { class: 'field-help' }, f.help) : null) : field(f.label, c, f.help) };
+          : input({
+              name: f.name,
+              type: f.type ?? 'text',
+              placeholder: f.placeholder,
+              value: f.value ?? '',
+              ...(f.type === 'password' ? { autocomplete: 'new-password' } : {}),
+            });
+    return {
+      f,
+      c,
+      node:
+        f.type === 'checkbox'
+          ? h(
+              'label',
+              { class: 'check' },
+              c,
+              h('span', {}, f.label),
+              f.help ? h('span', { class: 'field-help' }, f.help) : null,
+            )
+          : field(f.label, c, f.help),
+    };
   });
   const errorSlot = h('div');
   return openDialog({
     title,
     wide,
-    body: h('form', { class: 'form', onSubmit: (e) => e.preventDefault() }, intro ? h('p', { class: 'muted' }, intro) : null, controls.map((x) => x.node), errorSlot),
+    body: h(
+      'form',
+      { class: 'form', onSubmit: (e) => e.preventDefault() },
+      intro ? h('p', { class: 'muted' }, intro) : null,
+      controls.map((x) => x.node),
+      errorSlot,
+    ),
     onOpen: () => controls[0]?.c.focus?.(),
     actions: (close) => [
       button('Cancel', { onClick: () => close(null) }),
@@ -243,7 +393,8 @@ export function formDialog({ title, intro, fields, submitLabel = 'Save', danger 
           const values = {};
           for (const { f, c } of controls) {
             const v = f.type === 'checkbox' ? c.checked : c.value;
-            if (f.required && (v === '' || v === undefined)) return clear(errorSlot).append(notice('bad', `${f.label} is required.`));
+            if (f.required && (v === '' || v === undefined))
+              return clear(errorSlot).append(notice('bad', `${f.label} is required.`));
             values[f.name] = v;
           }
           close(values);
@@ -255,5 +406,16 @@ export function formDialog({ title, intro, fields, submitLabel = 'Save', danger 
 
 /** A one-time secret (API key, webhook secret): shown once, easy to copy. */
 export function showSecretDialog({ title, intro, secret, extra }) {
-  return openDialog({ title, wide: true, body: h('div', { class: 'stack' }, notice('warn', intro ?? 'Copy this now. It cannot be shown again.'), codeBlock(secret), extra ?? null), actions: (close) => [button('Done', { kind: 'primary', onClick: () => close(true) })] });
+  return openDialog({
+    title,
+    wide: true,
+    body: h(
+      'div',
+      { class: 'stack' },
+      notice('warn', intro ?? 'Copy this now. It cannot be shown again.'),
+      codeBlock(secret),
+      extra ?? null,
+    ),
+    actions: (close) => [button('Done', { kind: 'primary', onClick: () => close(true) })],
+  });
 }

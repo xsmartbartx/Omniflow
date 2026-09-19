@@ -1,9 +1,11 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { LlmClient } from '../authoring/index.ts';
+import { AuthoringService } from '../authoring/index.ts';
 import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
-import { AuthoringService } from '../authoring/index.ts';
+import type { Omniflow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
@@ -11,13 +13,11 @@ import { CircuitBreakers, StepRuntime } from '../orchestration/runtime/index.ts'
 import { RunService, Scheduler } from '../orchestration/scheduler/index.ts';
 import { TriggerManager } from '../orchestration/triggers/index.ts';
 import type { Principal } from '../schemas/index.ts';
-import { defaultPolicyConfig, parsePolicyDocument, PolicyEngine } from '../security/policy/index.ts';
+import { defaultPolicyConfig, PolicyEngine, parsePolicyDocument } from '../security/policy/index.ts';
 import { createKeyring, SecretBroker } from '../security/secret-broker/index.ts';
 import { openState, type State, stateOptionsFor } from '../state/index.ts';
-import type { LlmClient } from '../authoring/index.ts';
 import type { Config } from './config.ts';
 import { createAnthropicClient } from './llm-client.ts';
-import type { Omniflow } from '../gateway/context.ts';
 
 export type { Omniflow };
 
@@ -42,7 +42,9 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const state = overrides.state ?? openState(stateOptionsFor(config.dataDir, clock));
   const capabilities = overrides.capabilities ?? createDefaultRegistry(config.adapters);
 
-  const policy = new PolicyEngine(defaultPolicyConfig({ environment: config.environment, publishApprovals: config.publishApprovals }));
+  const policy = new PolicyEngine(
+    defaultPolicyConfig({ environment: config.environment, publishApprovals: config.publishApprovals }),
+  );
   const broker = new SecretBroker(state.secrets, createKeyring(config.masterKey, config.previousMasterKeys), clock);
   const breakers = new CircuitBreakers({}, clock, (capability, s) => {
     state.events.append({
@@ -52,17 +54,43 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     });
     (s === 'open' ? log.warn : log.info).call(log, `circuit ${s}`, { capability });
   });
-  const runtime = new StepRuntime({ registry: capabilities, events: state.events, idempotency: state.idempotency, kv: state.kv, broker, breakers, clock, log });
-  const orchestrator = new Orchestrator({ state, executor: runtime, clock, log, config: { maxConcurrentSteps: config.maxConcurrentSteps } });
+  const runtime = new StepRuntime({
+    registry: capabilities,
+    events: state.events,
+    idempotency: state.idempotency,
+    kv: state.kv,
+    broker,
+    breakers,
+    clock,
+    log,
+  });
+  const orchestrator = new Orchestrator({
+    state,
+    executor: runtime,
+    clock,
+    log,
+    config: { maxConcurrentSteps: config.maxConcurrentSteps },
+  });
   const registry = new RegistryService({ state, capabilities, policy, clock });
 
   let scheduler!: Scheduler;
   const runs = new RunService({ state, orchestrator, registry, policy, clock, onQueued: () => scheduler?.pump() });
-  scheduler = new Scheduler({ state, orchestrator, registry, clock, log, config: { maxConcurrentRuns: config.maxConcurrentRuns } });
+  scheduler = new Scheduler({
+    state,
+    orchestrator,
+    registry,
+    clock,
+    log,
+    config: { maxConcurrentRuns: config.maxConcurrentRuns },
+  });
   const triggers = new TriggerManager({ state, runService: runs, orchestrator, broker, registry, clock, log });
   const approvals = new ApprovalService({ state, orchestrator, policy, clock });
   const auth = new Authenticator(state, { sessionTtlHours: config.sessionTtlHours, log });
-  const metrics = createMetrics(state, { version: config.version, environment: config.environment, breakers: () => breakers.snapshot() });
+  const metrics = createMetrics(state, {
+    version: config.version,
+    environment: config.environment,
+    breakers: () => breakers.snapshot(),
+  });
   const analysis = new AnalysisAgent({ state, clock, log });
   const alerts = new AlertManager({
     state,
@@ -72,9 +100,12 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     config: { intervalMs: config.alertIntervalSeconds * 1000 },
     notify: async (alert, event) => {
       const text = formatAlert(alert, event);
-      const results = await Promise.allSettled(config.alertChannels.map((name) => sendToChannel(config.adapters, name, text)));
+      const results = await Promise.allSettled(
+        config.alertChannels.map((name) => sendToChannel(config.adapters, name, text)),
+      );
       for (const [i, r] of results.entries()) {
-        if (r.status === 'rejected') log.error('could not deliver alert', { channel: config.alertChannels[i], key: alert.key, error: r.reason });
+        if (r.status === 'rejected')
+          log.error('could not deliver alert', { channel: config.alertChannels[i], key: alert.key, error: r.reason });
       }
     },
   });
@@ -114,17 +145,29 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       if (config.analysisIntervalHours > 0) {
         // First pass a few minutes after boot (so there is history to read), then on the configured cadence.
         const every = config.analysisIntervalHours * 3_600_000;
-        const first = setTimeout(() => {
-          analysis.runAll();
-          analysisTimer = setInterval(() => analysis.runAll(), every);
-          analysisTimer.unref();
-        }, Math.min(every, 5 * 60_000));
+        const first = setTimeout(
+          () => {
+            analysis.runAll();
+            analysisTimer = setInterval(() => analysis.runAll(), every);
+            analysisTimer.unref();
+          },
+          Math.min(every, 5 * 60_000),
+        );
         first.unref();
         analysisTimer = first;
       }
       if (config.seedExamples) seedExamples(app);
-      state.events.append({ tenant: 'default', type: 'system.started', data: { version: config.version, environment: config.environment, recovered } });
-      log.info('omniflow started', { version: config.version, environment: config.environment, recovered, capabilities: capabilities.latest().length });
+      state.events.append({
+        tenant: 'default',
+        type: 'system.started',
+        data: { version: config.version, environment: config.environment, recovered },
+      });
+      log.info('omniflow started', {
+        version: config.version,
+        environment: config.environment,
+        recovered,
+        capabilities: capabilities.latest().length,
+      });
       return { recovered, ...(bootstrap ? { bootstrap } : {}) };
     },
 
@@ -147,7 +190,9 @@ function loadPolicies(app: Omniflow): void {
   const { policyDir } = app.config;
   if (!existsSync(policyDir)) return;
   const docs = [];
-  for (const file of readdirSync(policyDir).filter((f) => /\.(ya?ml|json)$/.test(f)).sort()) {
+  for (const file of readdirSync(policyDir)
+    .filter((f) => /\.(ya?ml|json)$/.test(f))
+    .sort()) {
     const res = parsePolicyDocument(readFileSync(join(policyDir, file), 'utf8'));
     if (!res.ok || !res.document) {
       throw new Error(`Invalid policy file ${file}: ${res.issues.map((i) => `${i.path} ${i.message}`).join('; ')}`);
@@ -168,7 +213,10 @@ async function bootstrapAdmin(app: Omniflow): Promise<{ email: string; password:
     { id: 'system:bootstrap', type: 'system', name: 'Bootstrap', tenant: 'default', roles: ['admin'] },
     { email: app.config.admin.email, name: 'Administrator', password, roles: ['admin'], mustChangePassword: generated },
   );
-  app.log.warn('created the initial administrator', { email: app.config.admin.email, ...(generated ? { generatedPassword: 'see the value returned by start(); change it at first sign-in' } : {}) });
+  app.log.warn('created the initial administrator', {
+    email: app.config.admin.email,
+    ...(generated ? { generatedPassword: 'see the value returned by start(); change it at first sign-in' } : {}),
+  });
   return { email: app.config.admin.email, password: generated ? password : '(set by OMNIFLOW_ADMIN_PASSWORD)' };
 }
 
@@ -177,15 +225,17 @@ function seedExamples(app: Omniflow): void {
   const dir = app.config.workflowsDir;
   if (!existsSync(dir)) return;
   const admin: Principal = { id: 'system:seed', type: 'system', name: 'Seed', tenant: 'default', roles: ['admin'] };
-  for (const file of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort()) {
+  for (const file of readdirSync(dir)
+    .filter((f) => /\.ya?ml$/.test(f))
+    .sort()) {
     try {
       const text = readFileSync(join(dir, file), 'utf8');
       const r = app.registry.submit(admin, text);
       app.log.info('seeded example workflow', { file, status: r.status });
     } catch (e) {
       const msg = (e as Error).message;
-      if (!/already exists|must be greater/.test(msg)) app.log.warn('could not seed example workflow', { file, error: msg });
+      if (!/already exists|must be greater/.test(msg))
+        app.log.warn('could not seed example workflow', { file, error: msg });
     }
   }
 }
-

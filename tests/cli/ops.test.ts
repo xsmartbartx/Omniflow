@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, truncateSync, writeFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  truncateSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { runCli } from '../../cli/main.ts';
 import { createLogger } from '../../core/index.ts';
@@ -15,14 +24,27 @@ const tmp = () => mkdtempSync(join(tmpdir(), 'omniflow-ops-'));
 async function cli(argv: string[], env: Record<string, string>, cwd = tmpdir()) {
   let out = '';
   let err = '';
-  const code = await runCli(argv, { out: (t) => (out += t), err: (t) => (err += t), readStdin: async () => '' }, { OMNIFLOW_LOG_LEVEL: 'silent', ...env }, cwd);
+  const code = await runCli(
+    argv,
+    { out: (t) => (out += t), err: (t) => (err += t), readStdin: async () => '' },
+    { OMNIFLOW_LOG_LEVEL: 'silent', ...env },
+    cwd,
+  );
   return { code, out, err };
 }
 
 /** A data directory that a real server has run against, then shut down cleanly. */
 async function provision(env: Record<string, string> = {}, secret?: { name: string; value: string }) {
   const dir = tmp();
-  const config = loadConfig({ OMNIFLOW_DATA_DIR: dir, OMNIFLOW_LOG_LEVEL: 'silent', OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple', ...env }, { cwd: dir });
+  const config = loadConfig(
+    {
+      OMNIFLOW_DATA_DIR: dir,
+      OMNIFLOW_LOG_LEVEL: 'silent',
+      OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple',
+      ...env,
+    },
+    { cwd: dir },
+  );
   const app = createOmniflow(config, { log: createLogger({ level: 'silent' }) });
   await app.start();
   if (secret) app.broker.put('default', secret.name, secret.value, 'test');
@@ -35,7 +57,8 @@ describe('admin doctor', () => {
     const dir = await provision();
     const r = await cli(['admin', 'doctor'], { OMNIFLOW_DATA_DIR: dir });
     expect(r.code).toBe(0);
-    for (const c of ['data directory', 'database integrity', 'audit log', 'master key', 'administrators']) expect(r.out).toContain(c);
+    for (const c of ['data directory', 'database integrity', 'audit log', 'master key', 'administrators'])
+      expect(r.out).toContain(c);
     expect(r.out).toContain('Healthy');
     const json = JSON.parse((await cli(['admin', 'doctor', '--json'], { OMNIFLOW_DATA_DIR: dir })).out);
     expect(json).toMatchObject({ ok: true, failed: 0 });
@@ -43,12 +66,22 @@ describe('admin doctor', () => {
 
   it('warns about a production deployment that is not ready for the internet', async () => {
     const dir = await provision();
-    const r = await cli(['admin', 'doctor'], { OMNIFLOW_DATA_DIR: dir, OMNIFLOW_ENV: 'production', OMNIFLOW_PUBLIC_URL: 'http://omniflow.example.com' });
+    const r = await cli(['admin', 'doctor'], {
+      OMNIFLOW_DATA_DIR: dir,
+      OMNIFLOW_ENV: 'production',
+      OMNIFLOW_PUBLIC_URL: 'http://omniflow.example.com',
+    });
     expect(r.code).toBe(0);
     expect(r.out).toContain('HTTPS');
     expect(r.out).toContain('not be marked Secure');
     expect(r.out).toContain('OMNIFLOW_METRICS_TOKEN');
-    const ready = await cli(['admin', 'doctor'], { OMNIFLOW_DATA_DIR: dir, OMNIFLOW_ENV: 'production', OMNIFLOW_PUBLIC_URL: 'https://omniflow.example.com', OMNIFLOW_TRUST_PROXY: 'true', OMNIFLOW_METRICS_TOKEN: 'x'.repeat(20) });
+    const ready = await cli(['admin', 'doctor'], {
+      OMNIFLOW_DATA_DIR: dir,
+      OMNIFLOW_ENV: 'production',
+      OMNIFLOW_PUBLIC_URL: 'https://omniflow.example.com',
+      OMNIFLOW_TRUST_PROXY: 'true',
+      OMNIFLOW_METRICS_TOKEN: 'x'.repeat(20),
+    });
     expect(ready.out).toContain('public URL is https and the proxy is trusted');
   });
 

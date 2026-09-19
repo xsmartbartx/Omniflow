@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AnalysisAgent, ANALYSIS_SOURCE, analyse, DEFAULT_THRESHOLDS, type AnalysisInput, type Finding } from '../../insight/index.ts';
+import {
+  ANALYSIS_SOURCE,
+  AnalysisAgent,
+  type AnalysisInput,
+  analyse,
+  DEFAULT_THRESHOLDS,
+  type Finding,
+} from '../../insight/index.ts';
 import { addRun, bad, compileWf, echo, ok, publish, skipped } from '../helpers/history.ts';
 import { makeState, type TestState } from '../helpers/state.ts';
 
@@ -10,7 +17,8 @@ beforeEach(() => {
   agent = new AnalysisAgent({ state: s, clock: s.clock });
 });
 
-const find = (fs: Finding[], rule: string, stepId?: string) => fs.filter((f) => f.rule === rule && (stepId === undefined || f.stepId === stepId));
+const find = (fs: Finding[], rule: string, stepId?: string) =>
+  fs.filter((f) => f.rule === rule && (stepId === undefined || f.stepId === stepId));
 const times = (n: number, fn: (i: number) => void) => {
   for (let i = 0; i < n; i++) fn(i);
 };
@@ -18,12 +26,21 @@ const times = (n: number, fn: (i: number) => void) => {
 describe('analysis rules over run history', () => {
   it('flags a step whose failures are swallowed, and does not double-report it as failing', () => {
     publish(s, 'sync', [echo('a'), echo('b', 1, { dependsOn: ['a'] })]);
-    times(20, (i) => addRun(s, { workflow: 'sync', steps: { a: i < 14 ? bad('HTTP_503', 'transient', { handled: 'continue' }) : ok(), b: ok() } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'sync',
+        steps: { a: i < 14 ? bad('HTTP_503', 'transient', { handled: 'continue' }) : ok(), b: ok() },
+      }),
+    );
     const f = agent.analyse('default');
     const ignored = find(f, 'ignored-failure', 'a');
     expect(ignored).toHaveLength(1);
     expect(ignored[0]).toMatchObject({ severity: 'medium', workflow: 'sync', key: 'ignored-failure:sync:a' });
-    expect(ignored[0]!.evidence).toMatchObject({ ignoredFailures: 14, runsSeen: 20, topErrors: [{ code: 'HTTP_503', count: 14 }] });
+    expect(ignored[0]!.evidence).toMatchObject({
+      ignoredFailures: 14,
+      runsSeen: 20,
+      topErrors: [{ code: 'HTTP_503', count: 14 }],
+    });
     expect(ignored[0]!.summary).toContain('14 of 20');
     expect(find(f, 'failing-step', 'a')).toHaveLength(0);
     expect(find(f, 'ignored-failure', 'b')).toHaveLength(0);
@@ -31,7 +48,9 @@ describe('analysis rules over run history', () => {
 
   it('a step that (almost) always fails while ignored is high severity', () => {
     publish(s, 'sync', [echo('a')]);
-    times(20, (i) => addRun(s, { workflow: 'sync', steps: { a: i === 0 ? ok() : bad('E', 'transient', { handled: 'continue' }) } }));
+    times(20, (i) =>
+      addRun(s, { workflow: 'sync', steps: { a: i === 0 ? ok() : bad('E', 'transient', { handled: 'continue' }) } }),
+    );
     expect(find(agent.analyse('default'), 'ignored-failure')[0]).toMatchObject({ severity: 'high' });
   });
 
@@ -43,10 +62,19 @@ describe('analysis rules over run history', () => {
 
   it('flags steps that fail often (unhandled) with the dominant error', () => {
     publish(s, 'pay', [echo('charge')]);
-    times(20, (i) => addRun(s, { workflow: 'pay', status: i < 8 ? 'failed' : 'succeeded', steps: { charge: i < 8 ? bad(i < 6 ? 'CARD_DECLINED' : 'TIMEOUT', 'business') : ok() } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'pay',
+        status: i < 8 ? 'failed' : 'succeeded',
+        steps: { charge: i < 8 ? bad(i < 6 ? 'CARD_DECLINED' : 'TIMEOUT', 'business') : ok() },
+      }),
+    );
     const [f] = find(agent.analyse('default'), 'failing-step');
     expect(f).toMatchObject({ severity: 'medium', stepId: 'charge' });
-    expect(f!.evidence.topErrors).toMatchObject([{ code: 'CARD_DECLINED', count: 6 }, { code: 'TIMEOUT', count: 2 }]);
+    expect(f!.evidence.topErrors).toMatchObject([
+      { code: 'CARD_DECLINED', count: 6 },
+      { code: 'TIMEOUT', count: 2 },
+    ]);
     expect(f!.recommendation).toContain('CARD_DECLINED');
   });
 
@@ -68,7 +96,13 @@ describe('analysis rules over run history', () => {
 
     // a second workflow retries business errors — a misclassification
     publish(s, 'mis', [echo('call', 1, { retry: { attempts: 3, retryOn: ['transient', 'business'] } })]);
-    times(20, (i) => addRun(s, { workflow: 'mis', status: 'failed', steps: { call: i < 12 ? bad('OUT_OF_STOCK', 'business', { attempt: 3 }) : ok({ attempt: 1 }) } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'mis',
+        status: 'failed',
+        steps: { call: i < 12 ? bad('OUT_OF_STOCK', 'business', { attempt: 3 }) : ok({ attempt: 1 }) },
+      }),
+    );
     const mis = find(agent.analyse('default'), 'retry-storm').find((f) => f.workflow === 'mis')!;
     expect(mis.severity).toBe('high');
     expect(mis.recommendation).toContain('Remove that class from retryOn');
@@ -86,7 +120,9 @@ describe('analysis rules over run history', () => {
     const dups = find(agent.analyse('default'), 'duplicate-workflows');
     expect(dups).toHaveLength(1);
     expect(dups[0]).toMatchObject({ severity: 'medium', key: 'duplicate-workflows:report-eu:report-us' });
-    expect(dups[0]!.evidence.differingParameters).toEqual(expect.arrayContaining(['util-echo.value', 'util-noop.note']));
+    expect(dups[0]!.evidence.differingParameters).toEqual(
+      expect.arrayContaining(['util-echo.value', 'util-noop.note']),
+    );
     expect(dups[0]!.recommendation).toContain('parameterised');
   });
 
@@ -96,7 +132,9 @@ describe('analysis rules over run history', () => {
       p.steps[0]!.family = 'llm';
     });
     times(10, () => addRun(s, { workflow: 'cheap', steps: { a: ok({ cost: 1 }) }, cost: 1 }));
-    times(10, () => addRun(s, { workflow: 'llm-heavy', steps: { draft: ok({ cost: 9 }), post: ok({ cost: 1 }) }, cost: 10 }));
+    times(10, () =>
+      addRun(s, { workflow: 'llm-heavy', steps: { draft: ok({ cost: 9 }), post: ok({ cost: 1 }) }, cost: 10 }),
+    );
     const f = find(agent.analyse('default'), 'cost-hotspot');
     const wf = f.find((x) => !x.stepId)!;
     expect(wf).toMatchObject({ workflow: 'llm-heavy', title: "'llm-heavy' accounts for 91% of all cost" });
@@ -109,7 +147,18 @@ describe('analysis rules over run history', () => {
     publish(s, 'gate', [echo('a')]);
     const approve = (wf: string, step: string, status: 'approved' | 'denied' | 'timed-out') => {
       const run = addRun(s, { workflow: wf, status: 'running', steps: { a: ok() } });
-      const a = s.approvals.create({ tenant: 'default', runId: run, stepId: step, workflowName: wf, message: 'ok?', approvers: { roles: ['approver'], users: [] }, requestedBy: 'usr_x', expiresAt: new Date(s.clock.now().getTime() + 3_600_000).toISOString(), onTimeout: 'deny', allowSelf: false });
+      const a = s.approvals.create({
+        tenant: 'default',
+        runId: run,
+        stepId: step,
+        workflowName: wf,
+        message: 'ok?',
+        approvers: { roles: ['approver'], users: [] },
+        requestedBy: 'usr_x',
+        expiresAt: new Date(s.clock.now().getTime() + 3_600_000).toISOString(),
+        onTimeout: 'deny',
+        allowSelf: false,
+      });
       s.clock.advance(120_000);
       s.approvals.decide(a.id, status, status === 'timed-out' ? 'system' : 'usr_y');
     };
@@ -126,13 +175,22 @@ describe('analysis rules over run history', () => {
   });
 
   it('reports shell steps past (or nearing) their sunset date', () => {
-    publish(s, 'bridge', [echo('old'), echo('soon', 1, { dependsOn: ['old'] }), echo('later', 1, { dependsOn: ['soon'] })], {}, (p) => {
-      p.steps[0]!.sunset = '2026-05-01';
-      p.steps[1]!.sunset = '2026-06-20';
-      p.steps[2]!.sunset = '2027-01-01';
-    });
+    publish(
+      s,
+      'bridge',
+      [echo('old'), echo('soon', 1, { dependsOn: ['old'] }), echo('later', 1, { dependsOn: ['soon'] })],
+      {},
+      (p) => {
+        p.steps[0]!.sunset = '2026-05-01';
+        p.steps[1]!.sunset = '2026-06-20';
+        p.steps[2]!.sunset = '2027-01-01';
+      },
+    );
     const f = find(agent.analyse('default'), 'shell-sunset');
-    expect(f.map((x) => [x.stepId, x.severity])).toEqual([['old', 'high'], ['soon', 'medium']]);
+    expect(f.map((x) => [x.stepId, x.severity])).toEqual([
+      ['old', 'high'],
+      ['soon', 'medium'],
+    ]);
     expect(f[0]!.title).toContain('31 days past');
     expect(f[1]!.title).toContain('19 days');
   });
@@ -141,7 +199,12 @@ describe('analysis rules over run history', () => {
     publish(s, 'nightly', [echo('a')]);
     times(25, () => {
       const scheduledFor = s.clock.now().toISOString();
-      addRun(s, { workflow: 'nightly', trigger: { type: 'schedule', payload: { scheduledFor } }, queueMs: 180_000, steps: { a: ok() } });
+      addRun(s, {
+        workflow: 'nightly',
+        trigger: { type: 'schedule', payload: { scheduledFor } },
+        queueMs: 180_000,
+        steps: { a: ok() },
+      });
     });
     const f = agent.analyse('default');
     expect(find(f, 'schedule-drift')[0]).toMatchObject({ workflow: 'nightly', severity: 'medium' });
@@ -165,7 +228,9 @@ describe('analysis rules over run history', () => {
 
   it('ignores dry runs and other tenants', () => {
     publish(s, 'sync', [echo('a')]);
-    times(30, () => addRun(s, { workflow: 'sync', dryRun: true, steps: { a: bad('E', 'transient', { handled: 'continue' }) } }));
+    times(30, () =>
+      addRun(s, { workflow: 'sync', dryRun: true, steps: { a: bad('E', 'transient', { handled: 'continue' }) } }),
+    );
     expect(agent.analyse('default')).toEqual([]);
     s.identity.ensureTenant('other', 'Other');
     expect(agent.analyse('other')).toEqual([]);
@@ -173,12 +238,16 @@ describe('analysis rules over run history', () => {
 
   it('is deterministic: the same history yields identical, severity-ordered findings', () => {
     publish(s, 'a-wf', [echo('a')]);
-    times(20, (i) => addRun(s, { workflow: 'a-wf', status: 'failed', steps: { a: i < 10 ? bad('X', 'business') : ok() } }));
+    times(20, (i) =>
+      addRun(s, { workflow: 'a-wf', status: 'failed', steps: { a: i < 10 ? bad('X', 'business') : ok() } }),
+    );
     const one = agent.analyse('default');
     const two = agent.analyse('default');
     expect(two).toEqual(one);
     const order = ['high', 'medium', 'low', 'info'];
-    expect(one.map((f) => order.indexOf(f.severity))).toEqual([...one.map((f) => order.indexOf(f.severity))].sort((a, b) => a - b));
+    expect(one.map((f) => order.indexOf(f.severity))).toEqual(
+      [...one.map((f) => order.indexOf(f.severity))].sort((a, b) => a - b),
+    );
   });
 
   it('rules are pure: compiled plans alone are enough to run them on an empty history', () => {
@@ -187,7 +256,19 @@ describe('analysis rules over run history', () => {
       now: '2026-06-01T00:00:00.000Z',
       today: '2026-06-01',
       windowDays: 14,
-      workflows: [{ name: 'solo', version: '1.0.0', enabled: true, killed: false, activeSince: undefined, plan, runs: { workflow: 'solo', total: 0, succeeded: 0, failed: 0, cancelled: 0, cost: 0 }, steps: new Map(), errors: new Map() }],
+      workflows: [
+        {
+          name: 'solo',
+          version: '1.0.0',
+          enabled: true,
+          killed: false,
+          activeSince: undefined,
+          plan,
+          runs: { workflow: 'solo', total: 0, succeeded: 0, failed: 0, cancelled: 0, cost: 0 },
+          steps: new Map(),
+          errors: new Map(),
+        },
+      ],
       approvals: [],
       timings: [],
     };
@@ -198,19 +279,40 @@ describe('analysis rules over run history', () => {
 describe('the proposal queue', () => {
   const seedProblem = () => {
     publish(s, 'pay', [echo('charge')]);
-    times(20, (i) => addRun(s, { workflow: 'pay', status: i < 8 ? 'failed' : 'succeeded', steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'pay',
+        status: i < 8 ? 'failed' : 'succeeded',
+        steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() },
+      }),
+    );
   };
 
   it('raises each finding once, as a proposal and an audit event, and never writes anywhere else', () => {
     seedProblem();
-    const before = { versions: s.registry.listVersions('default', 'pay').length, settings: s.registry.getSettings('default', 'pay') };
+    const before = {
+      versions: s.registry.listVersions('default', 'pay').length,
+      settings: s.registry.getSettings('default', 'pay'),
+    };
     const r1 = agent.run('default');
     expect(r1.raised).toHaveLength(1);
     const [p] = s.authoring.listProposals('default', 'open');
-    expect(p).toMatchObject({ kind: 'analysis.failing-step', workflowName: 'pay', source: ANALYSIS_SOURCE, status: 'open' });
-    expect(p!.body).toMatchObject({ key: 'failing-step:pay:charge', severity: 'medium', recommendation: expect.stringContaining('CARD_DECLINED') });
+    expect(p).toMatchObject({
+      kind: 'analysis.failing-step',
+      workflowName: 'pay',
+      source: ANALYSIS_SOURCE,
+      status: 'open',
+    });
+    expect(p!.body).toMatchObject({
+      key: 'failing-step:pay:charge',
+      severity: 'medium',
+      recommendation: expect.stringContaining('CARD_DECLINED'),
+    });
     expect(s.events.list({ tenant: 'default', types: ['agent.proposal-created'] })).toHaveLength(1);
-    expect(s.events.list({ tenant: 'default', types: ['insight.analysis-completed'] })[0]!.data).toMatchObject({ findings: 1, proposals: 1 });
+    expect(s.events.list({ tenant: 'default', types: ['insight.analysis-completed'] })[0]!.data).toMatchObject({
+      findings: 1,
+      proposals: 1,
+    });
 
     const r2 = agent.run('default');
     expect(r2.raised).toHaveLength(0);
@@ -230,7 +332,13 @@ describe('the proposal queue', () => {
     expect(agent.run('default').raised).toHaveLength(0);
     s.clock.advance(31 * 86_400_000);
     // (the history is now outside the window, so refresh it)
-    times(20, (i) => addRun(s, { workflow: 'pay', status: i < 8 ? 'failed' : 'succeeded', steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'pay',
+        status: i < 8 ? 'failed' : 'succeeded',
+        steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() },
+      }),
+    );
     expect(agent.run('default').raised).toHaveLength(1);
   });
 
@@ -241,7 +349,13 @@ describe('the proposal queue', () => {
     s.clock.advance(3 * 86_400_000);
     expect(agent.run('default').raised).toHaveLength(0);
     s.clock.advance(12 * 86_400_000);
-    times(20, (i) => addRun(s, { workflow: 'pay', status: i < 8 ? 'failed' : 'succeeded', steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() } }));
+    times(20, (i) =>
+      addRun(s, {
+        workflow: 'pay',
+        status: i < 8 ? 'failed' : 'succeeded',
+        steps: { charge: i < 8 ? bad('CARD_DECLINED', 'business') : ok() },
+      }),
+    );
     expect(agent.run('default').raised).toHaveLength(1);
   });
 
@@ -257,7 +371,13 @@ describe('the proposal queue', () => {
     expect(s.authoring.listProposals('default', 'open')).toHaveLength(0);
     expect(s.authoring.listProposals('default', 'dismissed')[0]).toMatchObject({ decidedBy: ANALYSIS_SOURCE });
 
-    times(30, (i) => addRun(s, { workflow: 'pay', status: i < 20 ? 'failed' : 'succeeded', steps: { charge: i < 20 ? bad('CARD_DECLINED', 'business') : ok() } }));
+    times(30, (i) =>
+      addRun(s, {
+        workflow: 'pay',
+        status: i < 20 ? 'failed' : 'succeeded',
+        steps: { charge: i < 20 ? bad('CARD_DECLINED', 'business') : ok() },
+      }),
+    );
     expect(agent.run('default').raised).toHaveLength(1);
   });
 

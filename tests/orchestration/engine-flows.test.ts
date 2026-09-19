@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { echo, type Engine, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
+import { type Engine, echo, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
 
 let e: Engine;
 afterEach(async () => {
@@ -15,7 +15,10 @@ describe('engine: linear and data flow', () => {
           echo('first', { n: 21, tag: '${{ inputs.tag }}' }),
           echo('second', '${{ steps.first.output.value.n * 2 }}', { dependsOn: ['first'] }),
         ],
-        { inputs: { tag: { type: 'string', default: 'x' } }, outputs: { answer: '${{ steps.second.output.value }}', tag: '${{ steps.first.output.value.tag }}' } },
+        {
+          inputs: { tag: { type: 'string', default: 'x' } },
+          outputs: { answer: '${{ steps.second.output.value }}', tag: '${{ steps.first.output.value.tag }}' },
+        },
       ),
     );
     const run = await e.run('wf', { tag: 'hello' });
@@ -50,8 +53,16 @@ describe('engine: linear and data flow', () => {
 
   it('runs independent steps concurrently and joins them', async () => {
     e = makeEngine();
-    const slow = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: 'capability', uses: 'sim-slow@^1', with: { ms: 150, tag: id }, ...extra });
-    e.publish(wf([slow('a'), slow('b'), slow('c'), echo('join', '${{ steps.a.output.tag }}', { dependsOn: ['a', 'b', 'c'] })]));
+    const slow = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      type: 'capability',
+      uses: 'sim-slow@^1',
+      with: { ms: 150, tag: id },
+      ...extra,
+    });
+    e.publish(
+      wf([slow('a'), slow('b'), slow('c'), echo('join', '${{ steps.a.output.tag }}', { dependsOn: ['a', 'b', 'c'] })]),
+    );
     const t0 = Date.now();
     const run = await e.run('wf');
     const elapsed = Date.now() - t0;
@@ -79,7 +90,15 @@ describe('engine: branching, joins and conditions', () => {
   const branching = () =>
     wf(
       [
-        { id: 'route', type: 'branch', cases: [{ name: 'big', when: 'inputs.n > 10' }, { name: 'mid', when: 'inputs.n > 5' }], default: 'small' },
+        {
+          id: 'route',
+          type: 'branch',
+          cases: [
+            { name: 'big', when: 'inputs.n > 10' },
+            { name: 'mid', when: 'inputs.n > 5' },
+          ],
+          default: 'small',
+        },
         echo('big-arm', 'BIG', { dependsOn: ['route'], when: 'steps.route.output.case == "big"' }),
         echo('mid-arm', 'MID', { dependsOn: ['route'], when: 'steps.route.output.case == "mid"' }),
         echo('small-arm', 'SMALL', { dependsOn: ['route'], when: 'steps.route.output.case == "small"' }),
@@ -92,7 +111,11 @@ describe('engine: branching, joins and conditions', () => {
   it('takes exactly one arm, skips the others, and still runs the join', async () => {
     e = makeEngine();
     e.publish(branching());
-    for (const [n, arm] of [[50, 'big'], [7, 'mid'], [1, 'small']] as const) {
+    for (const [n, arm] of [
+      [50, 'big'],
+      [7, 'mid'],
+      [1, 'small'],
+    ] as const) {
       const run = await e.run('wf', { n });
       expect(run.status, `n=${n}`).toBe('succeeded');
       expect(run.outputs).toEqual({ picked: arm });
@@ -113,7 +136,12 @@ describe('engine: branching, joins and conditions', () => {
     e.publish(branching());
     const run = await e.run('wf', { n: 1 });
     expect(e.step(run.id, 'big-arm')!.skippedReason).toBe('condition-false');
-    expect(e.events(run.id).filter((x) => x.type === 'step.skipped').map((x) => x.data.reason)).toContain('condition-false');
+    expect(
+      e
+        .events(run.id)
+        .filter((x) => x.type === 'step.skipped')
+        .map((x) => x.data.reason),
+    ).toContain('condition-false');
   });
 
   it('fails a step whose condition cannot be evaluated, with a contract error', async () => {
@@ -128,9 +156,16 @@ describe('engine: branching, joins and conditions', () => {
     e = makeEngine();
     const slow = (id: string, ms: number) => ({ id, type: 'capability', uses: 'sim-slow@^1', with: { ms, tag: id } });
     e.publish(
-      wf([slow('fast', 30), slow('slow', 3000), { id: 'race', type: 'parallel', join: 'any', dependsOn: ['fast', 'slow'] }], {
-        outputs: { winner: '${{ keys(steps.race.output.results) }}' },
-      }),
+      wf(
+        [
+          slow('fast', 30),
+          slow('slow', 3000),
+          { id: 'race', type: 'parallel', join: 'any', dependsOn: ['fast', 'slow'] },
+        ],
+        {
+          outputs: { winner: '${{ keys(steps.race.output.results) }}' },
+        },
+      ),
     );
     const t0 = Date.now();
     const run = await e.run('wf');
@@ -142,13 +177,24 @@ describe('engine: branching, joins and conditions', () => {
 
   it('parallel join:all gathers every branch result', async () => {
     e = makeEngine();
-    e.publish(wf([echo('x', 1), echo('y', 2), { id: 'all', type: 'parallel', join: 'all', dependsOn: ['x', 'y'] }], { outputs: { n: '${{ len(steps.all.output.results) }}' } }));
+    e.publish(
+      wf([echo('x', 1), echo('y', 2), { id: 'all', type: 'parallel', join: 'all', dependsOn: ['x', 'y'] }], {
+        outputs: { n: '${{ len(steps.all.output.results) }}' },
+      }),
+    );
     expect((await e.run('wf')).outputs).toEqual({ n: 2 });
   });
 });
 
 describe('engine: error handling (onError)', () => {
-  const failing = (extra: Record<string, unknown> = {}) => ({ id: 'boom', type: 'capability', uses: 'util-fail@^1', with: { message: 'nope' }, retry: { attempts: 1 }, ...extra });
+  const failing = (extra: Record<string, unknown> = {}) => ({
+    id: 'boom',
+    type: 'capability',
+    uses: 'util-fail@^1',
+    with: { message: 'nope' },
+    retry: { attempts: 1 },
+    ...extra,
+  });
 
   it('fails the run by default and skips everything downstream', async () => {
     e = makeEngine();
@@ -163,7 +209,15 @@ describe('engine: error handling (onError)', () => {
 
   it('onError: continue lets the run carry on with the failed step’s output as null', async () => {
     e = makeEngine();
-    e.publish(wf([failing({ onError: 'continue' }), echo('after', '${{ steps.boom.output ?? "recovered" }}', { dependsOn: ['boom'] })], { outputs: { v: '${{ steps.after.output.value }}' } }));
+    e.publish(
+      wf(
+        [
+          failing({ onError: 'continue' }),
+          echo('after', '${{ steps.boom.output ?? "recovered" }}', { dependsOn: ['boom'] }),
+        ],
+        { outputs: { v: '${{ steps.after.output.value }}' } },
+      ),
+    );
     const run = await e.run('wf');
     expect(run.status).toBe('succeeded');
     expect(run.outputs).toEqual({ v: 'recovered' });
@@ -204,7 +258,12 @@ describe('engine: map (bounded fan-out)', () => {
 
   it('maps over a collection with bounded concurrency and preserves order', async () => {
     e = makeEngine();
-    e.publish(wf([mapStep()], { inputs, outputs: { out: '${{ pluck(steps.each.output.results, "value") }}', n: '${{ steps.each.output.count }}' } }));
+    e.publish(
+      wf([mapStep()], {
+        inputs,
+        outputs: { out: '${{ pluck(steps.each.output.results, "value") }}', n: '${{ steps.each.output.count }}' },
+      }),
+    );
     const run = await e.run('wf', { items: [1, 2, 3, 4, 5, 6, 7] });
     expect(run.status).toBe('succeeded');
     expect(run.outputs).toEqual({ out: [10, 20, 30, 40, 50, 60, 70], n: 7 });
@@ -249,10 +308,10 @@ describe('engine: map (bounded fan-out)', () => {
   it('retries a failing item on its own without failing the step', async () => {
     e = makeEngine();
     e.publish(
-      wf(
-        [mapStep({ uses: 'sim-flaky@^1', retry: fastRetry(3), with: { key: 'k${{ item }}', failTimes: 1 } })],
-        { inputs, outputs: { attempts: '${{ pluck(steps.each.output.results, "attempts") }}' } },
-      ),
+      wf([mapStep({ uses: 'sim-flaky@^1', retry: fastRetry(3), with: { key: 'k${{ item }}', failTimes: 1 } })], {
+        inputs,
+        outputs: { attempts: '${{ pluck(steps.each.output.results, "attempts") }}' },
+      }),
     );
     const run = await e.run('wf', { items: [1, 2] });
     expect(run.status).toBe('succeeded');
@@ -294,10 +353,20 @@ describe('engine: wait, terminate, guards, outputs', () => {
   it('waits for an external event, correlated, and delivers its payload', async () => {
     e = makeEngine();
     e.publish(
-      wf([{ id: 'payment', type: 'wait', until: { event: 'payment.settled', correlation: '${{ inputs.order }}' }, timeout: '5s' }], {
-        inputs: { order: { type: 'string', required: true } },
-        outputs: { amount: '${{ steps.payment.output.payload.amount }}' },
-      }),
+      wf(
+        [
+          {
+            id: 'payment',
+            type: 'wait',
+            until: { event: 'payment.settled', correlation: '${{ inputs.order }}' },
+            timeout: '5s',
+          },
+        ],
+        {
+          inputs: { order: { type: 'string', required: true } },
+          outputs: { amount: '${{ steps.payment.output.payload.amount }}' },
+        },
+      ),
     );
     const run = await e.run('wf', { order: 'o-1' }, { wait: false });
     await e.orch.waitForRun(run.id, 2000, (r) => r.status === 'waiting-event');
@@ -319,18 +388,34 @@ describe('engine: wait, terminate, guards, outputs', () => {
   it('terminate ends the run early with an explicit status', async () => {
     e = makeEngine();
     e.publish(
-      wf([
-        echo('a', 1),
-        { id: 'stop', type: 'terminate', status: 'success', dependsOn: ['a'], when: 'inputs.stop' },
-        echo('never', 2, { dependsOn: ['a'], when: '!inputs.stop' }),
-      ], { inputs: { stop: { type: 'boolean', default: true } } }),
+      wf(
+        [
+          echo('a', 1),
+          { id: 'stop', type: 'terminate', status: 'success', dependsOn: ['a'], when: 'inputs.stop' },
+          echo('never', 2, { dependsOn: ['a'], when: '!inputs.stop' }),
+        ],
+        { inputs: { stop: { type: 'boolean', default: true } } },
+      ),
     );
     const run = await e.run('wf');
     expect(run.status).toBe('succeeded');
     expect(e.step(run.id, 'never')!.status).toBe('skipped');
 
     e = makeEngine();
-    e.publish(wf([{ id: 'stop', type: 'terminate', status: 'failure', errorClass: 'contract', message: 'bad ${{ inputs.what }}' }], { inputs: { what: { type: 'string', default: 'input' } } }));
+    e.publish(
+      wf(
+        [
+          {
+            id: 'stop',
+            type: 'terminate',
+            status: 'failure',
+            errorClass: 'contract',
+            message: 'bad ${{ inputs.what }}',
+          },
+        ],
+        { inputs: { what: { type: 'string', default: 'input' } } },
+      ),
+    );
     const failed = await e.run('wf');
     expect(failed.status).toBe('failed');
     expect(failed.error).toMatchObject({ code: 'TERMINATED', class: 'contract', message: 'bad input' });
@@ -338,7 +423,12 @@ describe('engine: wait, terminate, guards, outputs', () => {
 
   it('checks pre-run guards before anything executes', async () => {
     e = makeEngine();
-    e.publish(wf([echo('a', 1)], { inputs: { n: { type: 'integer', required: true } }, guards: { pre: [{ name: 'positive', expr: 'inputs.n > 0', message: 'n must be positive' }] } }));
+    e.publish(
+      wf([echo('a', 1)], {
+        inputs: { n: { type: 'integer', required: true } },
+        guards: { pre: [{ name: 'positive', expr: 'inputs.n > 0', message: 'n must be positive' }] },
+      }),
+    );
     const bad = await e.run('wf', { n: -1 });
     expect(bad.status).toBe('failed');
     expect(bad.error).toMatchObject({ code: 'GUARD_FAILED', message: 'n must be positive' });
@@ -362,7 +452,15 @@ describe('engine: wait, terminate, guards, outputs', () => {
 
   it('keeps large step outputs out of run state, as artifacts referenced by hash', async () => {
     e = makeEngine({ config: { inlineOutputLimit: 500 } });
-    e.publish(wf([{ id: 'big', type: 'capability', uses: 'sim-big@^1', with: { size: 5000 } }, echo('use', '${{ len(steps.big.output.blob) }}', { dependsOn: ['big'] })], { outputs: { n: '${{ steps.use.output.value }}' } }));
+    e.publish(
+      wf(
+        [
+          { id: 'big', type: 'capability', uses: 'sim-big@^1', with: { size: 5000 } },
+          echo('use', '${{ len(steps.big.output.blob) }}', { dependsOn: ['big'] }),
+        ],
+        { outputs: { n: '${{ steps.use.output.value }}' } },
+      ),
+    );
     const run = await e.run('wf');
     expect(run.outputs).toEqual({ n: 5000 });
     const rec = e.step(run.id, 'big')!;

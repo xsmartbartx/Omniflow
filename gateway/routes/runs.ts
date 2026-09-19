@@ -33,7 +33,9 @@ export function runRoutes(): RouteDef[] {
           ...(query.since ? { since: query.since } : {}),
         };
         return {
-          items: app.state.runs.listRuns({ ...filter, limit: query.limit ?? 50, offset: query.offset ?? 0 }).map(runSummary),
+          items: app.state.runs
+            .listRuns({ ...filter, limit: query.limit ?? 50, offset: query.offset ?? 0 })
+            .map(runSummary),
           total: app.state.runs.countRuns(filter),
           byStatus: app.state.runs.countByStatus(principal.tenant),
         };
@@ -54,7 +56,14 @@ export function runRoutes(): RouteDef[] {
           ? plan.steps.map((ps) => stepView(plan, recs.find((r) => r.stepId === ps.id)!, ps))
           : recs.map((r) => stepView(undefined as never, r, undefined));
         return {
-          run: { ...runSummary(run), inputs: maskInputs(plan, run.inputs), outputs: run.outputs ?? null, planHash: run.planHash, seed: run.seed, contextNow: run.contextNow },
+          run: {
+            ...runSummary(run),
+            inputs: maskInputs(plan, run.inputs),
+            outputs: run.outputs ?? null,
+            planHash: run.planHash,
+            seed: run.seed,
+            contextNow: run.contextNow,
+          },
           steps,
           plan: plan ? { workflow: plan.workflow, analysis: plan.analysis, inputs: plan.inputs } : null,
           approvals: app.state.approvals.list({ tenant: principal.tenant, runId: run.id }),
@@ -75,10 +84,18 @@ export function runRoutes(): RouteDef[] {
         const rec = app.state.runs.getStep(run.id, params.step);
         if (!rec) throw new NotFoundError('Step', params.step);
         const ps = planOf(app, run)?.steps.find((s) => s.id === params.step);
-        if ((ps?.sensitivity === 'confidential' || ps?.sensitivity === 'secret') && !principal.roles.some((r) => r === 'admin' || r === 'operator')) {
-          throw new ForbiddenError('This step handles confidential data; only operators and admins may read its output');
+        if (
+          (ps?.sensitivity === 'confidential' || ps?.sensitivity === 'secret') &&
+          !principal.roles.some((r) => r === 'admin' || r === 'operator')
+        ) {
+          throw new ForbiddenError(
+            'This step handles confidential data; only operators and admins may read its output',
+          );
         }
-        return { output: rec.outputRef ? app.state.artifacts.getJson(run.tenant, rec.outputRef) : (rec.output ?? null), outputRef: rec.outputRef ?? null };
+        return {
+          output: rec.outputRef ? app.state.artifacts.getJson(run.tenant, rec.outputRef) : (rec.output ?? null),
+          outputRef: rec.outputRef ?? null,
+        };
       },
     },
     {
@@ -87,10 +104,23 @@ export function runRoutes(): RouteDef[] {
       summary: 'The audit events of a run (sanitised, hash-chained)',
       tag: 'Runs',
       action: 'run.read',
-      schema: { params: runParam, querystring: obj({ afterSeq: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 5000, default: 500 } }) },
+      schema: {
+        params: runParam,
+        querystring: obj({
+          afterSeq: { type: 'integer', minimum: 0 },
+          limit: { type: 'integer', minimum: 1, maximum: 5000, default: 500 },
+        }),
+      },
       handler: ({ app, principal, params, query }) => {
         const run = mustRun(app, principal, params.id);
-        return { items: app.state.events.list({ tenant: principal.tenant, runId: run.id, ...(query.afterSeq ? { afterSeq: query.afterSeq } : {}), limit: query.limit ?? 500 }) };
+        return {
+          items: app.state.events.list({
+            tenant: principal.tenant,
+            runId: run.id,
+            ...(query.afterSeq ? { afterSeq: query.afterSeq } : {}),
+            limit: query.limit ?? 500,
+          }),
+        };
       },
     },
     {
@@ -120,7 +150,11 @@ export function runRoutes(): RouteDef[] {
           if (closed || e.seq <= last) return;
           last = e.seq;
           raw.write(`id: ${e.seq}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
-          if (['run.succeeded', 'run.failed', 'run.cancelled', 'run.rolled-back', 'run.compensation-failed'].includes(e.type)) {
+          if (
+            ['run.succeeded', 'run.failed', 'run.cancelled', 'run.rolled-back', 'run.compensation-failed'].includes(
+              e.type,
+            )
+          ) {
             setTimeout(() => end(), 250);
           }
         };
@@ -142,7 +176,8 @@ export function runRoutes(): RouteDef[] {
           off();
           clearInterval(hb);
         });
-        for (const e of app.state.events.list({ tenant: principal.tenant, runId: run.id, afterSeq: last, limit: 5000 })) send(e);
+        for (const e of app.state.events.list({ tenant: principal.tenant, runId: run.id, afterSeq: last, limit: 5000 }))
+          send(e);
         replaying = false;
         for (const e of queue) send(e);
         if (isTerminalRun(app.state.runs.getRun(run.id)!.status)) setTimeout(() => end(), 250);
@@ -167,7 +202,9 @@ export function runRoutes(): RouteDef[] {
       schema: { params: runParam },
       handler: ({ app, principal, params }) => {
         const r = app.runs.retry(principal, params.id);
-        return r.status === 'skipped' ? { status: 'skipped', reason: r.reason } : { status: r.status, run: runSummary(r.run) };
+        return r.status === 'skipped'
+          ? { status: 'skipped', reason: r.reason }
+          : { status: r.status, run: runSummary(r.run) };
       },
     },
 
@@ -180,10 +217,16 @@ export function runRoutes(): RouteDef[] {
       action: 'workflow.read',
       schema: { querystring: obj({ status: { enum: ['pending', 'approved', 'denied', 'timed-out'] }, limit: limitQ }) },
       handler: ({ app, principal, query }) => ({
-        items: app.approvals.list(principal, { ...(query.status ? { status: query.status } : {}), limit: query.limit ?? 100 }).map((a) => ({
-          ...a,
-          canDecide: a.status === 'pending' && app.policy.can(principal, 'approval.decide') && app.approvals.canDecide(principal, a) && (a.allowSelf || a.requestedBy !== principal.id),
-        })),
+        items: app.approvals
+          .list(principal, { ...(query.status ? { status: query.status } : {}), limit: query.limit ?? 100 })
+          .map((a) => ({
+            ...a,
+            canDecide:
+              a.status === 'pending' &&
+              app.policy.can(principal, 'approval.decide') &&
+              app.approvals.canDecide(principal, a) &&
+              (a.allowSelf || a.requestedBy !== principal.id),
+          })),
       }),
     },
     {
@@ -192,8 +235,14 @@ export function runRoutes(): RouteDef[] {
       summary: 'Approve or deny a request',
       tag: 'Approvals',
       action: 'approval.decide',
-      schema: { params: obj({ id }, ['id']), body: obj({ decision: { enum: ['approved', 'denied'] }, comment: { type: 'string', maxLength: 1000 } }, ['decision']) },
-      handler: ({ app, principal, params, body }) => app.approvals.decide(principal, params.id, body.decision, body.comment),
+      schema: {
+        params: obj({ id }, ['id']),
+        body: obj({ decision: { enum: ['approved', 'denied'] }, comment: { type: 'string', maxLength: 1000 } }, [
+          'decision',
+        ]),
+      },
+      handler: ({ app, principal, params, body }) =>
+        app.approvals.decide(principal, params.id, body.decision, body.comment),
     },
   ];
 }

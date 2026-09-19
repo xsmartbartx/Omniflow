@@ -21,8 +21,22 @@ export interface Overview {
   queue: { depth: number; oldestWaitMs: number | null };
   cost: { total: number };
   hourly: Array<{ hour: string; succeeded: number; failed: number; other: number }>;
-  workflows: Array<{ name: string; runs: number; succeeded: number; failed: number; successRate: number | null; p95Ms: number | null; cost: number }>;
-  failingSteps: Array<{ workflow: string; stepId: string; failed: number; executions: number; topError: string | null }>;
+  workflows: Array<{
+    name: string;
+    runs: number;
+    succeeded: number;
+    failed: number;
+    successRate: number | null;
+    p95Ms: number | null;
+    cost: number;
+  }>;
+  failingSteps: Array<{
+    workflow: string;
+    stepId: string;
+    failed: number;
+    executions: number;
+    topError: string | null;
+  }>;
 }
 
 const FINISHED = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed']);
@@ -49,7 +63,10 @@ export function buildOverview(state: State, tenant: string, opts: { hours?: numb
   const failed = wf.reduce((n, w) => n + w.failed, 0);
   const total = wf.reduce((n, w) => n + w.total, 0);
   const counts = state.runs.countByStatus(tenant);
-  const active = ['running', 'waiting-approval', 'waiting-event', 'compensating'].reduce((n, s) => n + (counts[s] ?? 0), 0);
+  const active = ['running', 'waiting-approval', 'waiting-event', 'compensating'].reduce(
+    (n, s) => n + (counts[s] ?? 0),
+    0,
+  );
   const approvals = state.analytics.approvalStats(tenant, since);
   const decisions = approvals.flatMap((a) => (a.medianDecisionMs === null ? [] : [a.medianDecisionMs]));
   const queue = state.analytics.queue(tenant);
@@ -83,7 +100,10 @@ export function buildOverview(state: State, tenant: string, opts: { hours?: numb
     latencyMs: { p50: percentile(all, 50) ?? null, p95: percentile(all, 95) ?? null },
     manualInterventionRate: seenRuns === 0 ? null : ratio(withApproval, seenRuns),
     approvals: { pending: state.approvals.pendingCount(tenant), medianDecisionMs: percentile(decisions, 50) ?? null },
-    queue: { depth: queue.depth, oldestWaitMs: queue.oldestCreatedAt ? now.getTime() - Date.parse(queue.oldestCreatedAt) : null },
+    queue: {
+      depth: queue.depth,
+      oldestWaitMs: queue.oldestCreatedAt ? now.getTime() - Date.parse(queue.oldestCreatedAt) : null,
+    },
     cost: { total: wf.reduce((n, w) => n + w.cost, 0) },
     hourly: state.analytics.runsByHour(tenant, Math.min(hours, 72)),
     workflows: wf

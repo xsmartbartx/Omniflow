@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { collapse, diffLines, stats } from '../../console/js/diff.js';
-import { ago, coerceInput, duration, number, percent, shortHash, tone, truncate, until } from '../../console/js/format.js';
+import {
+  ago,
+  coerceInput,
+  duration,
+  number,
+  percent,
+  shortHash,
+  tone,
+  truncate,
+  until,
+} from '../../console/js/format.js';
 import { layoutGraph, NODE_H, NODE_W } from '../../console/js/graph.js';
 import { markdownToAst, parseInline } from '../../console/js/markdown.js';
 import { href, matchRoute } from '../../console/js/router.js';
@@ -53,7 +63,12 @@ describe('format', () => {
 });
 
 describe('router', () => {
-  const routes = [{ path: '/dashboard' }, { path: '/workflows/:name' }, { path: '/runs/:id' }, { path: '/editor/:draft' }];
+  const routes = [
+    { path: '/dashboard' },
+    { path: '/workflows/:name' },
+    { path: '/runs/:id' },
+    { path: '/editor/:draft' },
+  ];
   it('matches static and parameterised routes, decoding params and reading the query', () => {
     expect(matchRoute(routes, '#/dashboard').route.path).toBe('/dashboard');
     const m = matchRoute(routes, '#/workflows/order%20flow?tab=runs&x=1');
@@ -73,8 +88,41 @@ describe('router', () => {
 
 describe('markdown', () => {
   it('parses the subset the docs generator emits', () => {
-    const ast = markdownToAst(['# Title', '', 'Some **bold** and `code` and _it_.', '', '- one', '- two', '', '1. a', '2. b', '', '| A | B |', '|---|---|', '| 1 | 2 \\| 3 |', '', '```mermaid', 'flowchart TD', '```', '', '> quote', '', '---'].join('\n'));
-    expect(ast.map((b: { t: string }) => b.t)).toEqual(['heading', 'p', 'list', 'list', 'table', 'code', 'quote', 'rule']);
+    const ast = markdownToAst(
+      [
+        '# Title',
+        '',
+        'Some **bold** and `code` and _it_.',
+        '',
+        '- one',
+        '- two',
+        '',
+        '1. a',
+        '2. b',
+        '',
+        '| A | B |',
+        '|---|---|',
+        '| 1 | 2 \\| 3 |',
+        '',
+        '```mermaid',
+        'flowchart TD',
+        '```',
+        '',
+        '> quote',
+        '',
+        '---',
+      ].join('\n'),
+    );
+    expect(ast.map((b: { t: string }) => b.t)).toEqual([
+      'heading',
+      'p',
+      'list',
+      'list',
+      'table',
+      'code',
+      'quote',
+      'rule',
+    ]);
     expect(ast[0]).toMatchObject({ level: 1 });
     expect(ast[2]).toMatchObject({ ordered: false });
     expect(ast[3]).toMatchObject({ ordered: true });
@@ -98,7 +146,13 @@ describe('markdown', () => {
 
 describe('graph layout', () => {
   const nodes = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id }));
-  const edges = [['a', 'b'], ['a', 'c'], ['b', 'd'], ['c', 'd'], ['d', 'e']].map(([from, to]) => ({ from, to }));
+  const edges = [
+    ['a', 'b'],
+    ['a', 'c'],
+    ['b', 'd'],
+    ['c', 'd'],
+    ['d', 'e'],
+  ].map(([from, to]) => ({ from, to }));
 
   it('layers by longest path and never overlaps nodes', () => {
     const g = layoutGraph(nodes, edges);
@@ -119,13 +173,29 @@ describe('graph layout', () => {
 
   it('is deterministic, tolerates cycles and unknown edge ends, and handles the empty graph', () => {
     expect(layoutGraph(nodes, edges)).toEqual(layoutGraph(nodes, edges));
-    const cyclic = layoutGraph([{ id: 'a' }, { id: 'b' }], [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }, { from: 'a', to: 'ghost' }, { from: 'a', to: 'a' }]);
+    const cyclic = layoutGraph(
+      [{ id: 'a' }, { id: 'b' }],
+      [
+        { from: 'a', to: 'b' },
+        { from: 'b', to: 'a' },
+        { from: 'a', to: 'ghost' },
+        { from: 'a', to: 'a' },
+      ],
+    );
     expect(cyclic.nodes).toHaveLength(2);
     expect(layoutGraph([], []).nodes).toEqual([]);
   });
 
   it('keeps siblings ordered under their parents (few crossings)', () => {
-    const g = layoutGraph(['r', 'l1', 'l2', 'x', 'y'].map((id) => ({ id })), [['r', 'l1'], ['r', 'l2'], ['l1', 'x'], ['l2', 'y']].map(([from, to]) => ({ from, to })));
+    const g = layoutGraph(
+      ['r', 'l1', 'l2', 'x', 'y'].map((id) => ({ id })),
+      [
+        ['r', 'l1'],
+        ['r', 'l2'],
+        ['l1', 'x'],
+        ['l2', 'y'],
+      ].map(([from, to]) => ({ from, to })),
+    );
     const x = Object.fromEntries(g.nodes.map((n: { id: string; x: number }) => [n.id, n.x]));
     expect(x.x < x.y).toBe(x.l1 < x.l2);
   });
@@ -134,7 +204,12 @@ describe('graph layout', () => {
 describe('diff', () => {
   it('finds added, removed and unchanged lines', () => {
     const ops = diffLines('a\nb\nc', 'a\nc\nd');
-    expect(ops.map((o: { op: string; text: string }) => `${o.op}:${o.text}`)).toEqual(['same:a', 'del:b', 'same:c', 'add:d']);
+    expect(ops.map((o: { op: string; text: string }) => `${o.op}:${o.text}`)).toEqual([
+      'same:a',
+      'del:b',
+      'same:c',
+      'add:d',
+    ]);
     expect(stats(ops)).toEqual({ added: 1, removed: 1 });
     expect(diffLines('same', 'same').every((o: { op: string }) => o.op === 'same')).toBe(true);
     expect(diffLines('', 'x').some((o: { op: string; text: string }) => o.op === 'add' && o.text === 'x')).toBe(true);

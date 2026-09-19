@@ -1,7 +1,6 @@
 import type { AuthoringService } from '../authoring/index.ts';
-import type { CapabilityRegistry } from '../capabilities/index.ts';
-import type { AdapterConfig } from '../capabilities/index.ts';
-import type { Clock, LogLevel, Logger } from '../core/index.ts';
+import type { AdapterConfig, CapabilityRegistry } from '../capabilities/index.ts';
+import type { Clock, Logger, LogLevel } from '../core/index.ts';
 import type { AlertManager, AnalysisAgent, MetricsRegistry } from '../insight/index.ts';
 import type { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import type { RegistryService } from '../orchestration/registry/index.ts';

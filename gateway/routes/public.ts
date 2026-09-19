@@ -76,7 +76,16 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       tag: 'Auth',
       public: true,
       limit: 'login',
-      schema: { body: obj({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 }, tenant: { type: 'string', maxLength: 64 } }, ['email', 'password']) },
+      schema: {
+        body: obj(
+          {
+            email: { type: 'string', maxLength: 254 },
+            password: { type: 'string', maxLength: 256 },
+            tenant: { type: 'string', maxLength: 64 },
+          },
+          ['email', 'password'],
+        ),
+      },
       handler: async ({ req, reply, app, body }) => {
         const res = await app.auth.login(body.email, body.password, {
           ...(body.tenant ? { tenant: body.tenant } : {}),
@@ -108,7 +117,17 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         const user = principal.type === 'user' ? app.state.identity.getUser(principal.id) : undefined;
         return {
           principal,
-          ...(user ? { user: { id: user.id, email: user.email, name: user.name, roles: user.roles, mustChangePassword: user.mustChangePassword } } : {}),
+          ...(user
+            ? {
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  roles: user.roles,
+                  mustChangePassword: user.mustChangePassword,
+                },
+              }
+            : {}),
           environment: app.config.environment,
           can: Object.fromEntries(ACTIONS.map((a) => [a, app.policy.can(principal, a)])),
         };
@@ -119,7 +138,12 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       url: '/v1/auth/password',
       summary: 'Change your password (signs out every other session)',
       tag: 'Auth',
-      schema: { body: obj({ current: { type: 'string', maxLength: 256 }, next: { type: 'string', maxLength: 256 } }, ['current', 'next']) },
+      schema: {
+        body: obj({ current: { type: 'string', maxLength: 256 }, next: { type: 'string', maxLength: 256 } }, [
+          'current',
+          'next',
+        ]),
+      },
       handler: async ({ app, principal, body }) => {
         if (principal.type !== 'user') throw new ForbiddenError('Only people have passwords');
         await app.auth.changePassword(principal.id, body.current, body.next);
@@ -150,7 +174,9 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
             delivery: header(req.headers['x-omniflow-delivery']),
           },
         });
-        return result.status === 'skipped' ? { status: 'skipped', reason: result.reason } : { status: result.status, runId: result.run.id };
+        return result.status === 'skipped'
+          ? { status: 'skipped', reason: result.reason }
+          : { status: result.status, runId: result.run.id };
       },
     },
   ];
@@ -158,4 +184,4 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
 
 const header = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
-export { ValidationError, redact };
+export { redact, ValidationError };

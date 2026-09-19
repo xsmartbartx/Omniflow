@@ -1,4 +1,9 @@
-import { createDefaultRegistry, CapabilityError, defineCapability, type CapabilityRegistry } from '../../capabilities/index.ts';
+import {
+  CapabilityError,
+  type CapabilityRegistry,
+  createDefaultRegistry,
+  defineCapability,
+} from '../../capabilities/index.ts';
 import { contentHash, systemClock } from '../../core/index.ts';
 import { compile } from '../../orchestration/compiler/index.ts';
 import { Orchestrator, type OrchestratorConfig } from '../../orchestration/orchestrator/index.ts';
@@ -71,8 +76,18 @@ export function simCapabilities(world: World) {
         name: 'sim-effect',
         effect: 'effectful',
         dryRun: 'simulate',
-        inputSchema: { type: 'object', required: ['label'], properties: { label: { type: 'string' }, hangMs: { type: 'integer' } }, additionalProperties: false },
-        outputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } }, additionalProperties: false },
+        inputSchema: {
+          type: 'object',
+          required: ['label'],
+          properties: { label: { type: 'string' }, hangMs: { type: 'integer' } },
+          additionalProperties: false,
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string' } },
+          additionalProperties: false,
+        },
         compensation: 'sim-undo@^1',
       },
       execute: async (ctx, i: { label: string; hangMs?: number }) => {
@@ -93,11 +108,17 @@ export function simCapabilities(world: World) {
         name: 'sim-undo',
         effect: 'effectful',
         dryRun: 'simulate',
-        inputSchema: { type: 'object', required: ['label'], properties: { label: { type: 'string' } }, additionalProperties: false },
+        inputSchema: {
+          type: 'object',
+          required: ['label'],
+          properties: { label: { type: 'string' } },
+          additionalProperties: false,
+        },
         failureModes: [{ code: 'UNDO_FAILED', class: 'business', retryable: false }],
       },
       execute: async (_ctx, i: { label: string }) => {
-        if (world.failUndo.has(i.label)) throw new CapabilityError('UNDO_FAILED', `cannot undo ${i.label}`, { errorClass: 'business' });
+        if (world.failUndo.has(i.label))
+          throw new CapabilityError('UNDO_FAILED', `cannot undo ${i.label}`, { errorClass: 'business' });
         world.compensations.push(i.label);
         return { undone: i.label };
       },
@@ -118,7 +139,10 @@ export function simCapabilities(world: World) {
       execute: async (_ctx, i: { key: string; failTimes: number; errorClass?: string }) => {
         const n = (world.attempts.get(i.key) ?? 0) + 1;
         world.attempts.set(i.key, n);
-        if (n <= i.failTimes) throw new CapabilityError('FLAKY', `attempt ${n} failed`, { errorClass: (i.errorClass as never) ?? 'transient' });
+        if (n <= i.failTimes)
+          throw new CapabilityError('FLAKY', `attempt ${n} failed`, {
+            errorClass: (i.errorClass as never) ?? 'transient',
+          });
         return { attempts: n };
       },
     }),
@@ -127,8 +151,17 @@ export function simCapabilities(world: World) {
         ...base,
         name: 'sim-slow',
         effect: 'idempotent',
-        inputSchema: { type: 'object', required: ['ms'], properties: { ms: { type: 'integer' }, tag: { type: 'string' } }, additionalProperties: false },
-        outputSchema: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, tag: { type: 'string' } } },
+        inputSchema: {
+          type: 'object',
+          required: ['ms'],
+          properties: { ms: { type: 'integer' }, tag: { type: 'string' } },
+          additionalProperties: false,
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['ok'],
+          properties: { ok: { type: 'boolean' }, tag: { type: 'string' } },
+        },
       },
       execute: async (ctx, i: { ms: number; tag?: string }) => {
         world.concurrent++;
@@ -146,7 +179,12 @@ export function simCapabilities(world: World) {
         ...base,
         name: 'sim-secret',
         effect: 'idempotent',
-        inputSchema: { type: 'object', required: ['token'], properties: { token: { type: 'string' }, leak: { type: 'boolean' }, echo: { type: 'boolean' } }, additionalProperties: false },
+        inputSchema: {
+          type: 'object',
+          required: ['token'],
+          properties: { token: { type: 'string' }, leak: { type: 'boolean' }, echo: { type: 'boolean' } },
+          additionalProperties: false,
+        },
         outputSchema: { type: 'object' },
       },
       execute: async (_ctx, i: { token: string; leak?: boolean; echo?: boolean }) => {
@@ -201,7 +239,13 @@ export const echo = (id: string, value: unknown, extra: Record<string, unknown> 
 });
 
 /** A retry policy tuned for fast tests. */
-export const fastRetry = (attempts = 3) => ({ attempts, backoff: 'fixed', initialDelay: '10ms', maxDelay: '50ms', jitter: 0 });
+export const fastRetry = (attempts = 3) => ({
+  attempts,
+  backoff: 'fixed',
+  initialDelay: '10ms',
+  maxDelay: '50ms',
+  jitter: 0,
+});
 
 export interface Engine {
   state: TestState;
@@ -213,7 +257,11 @@ export interface Engine {
   keyring: ReturnType<typeof createKeyring>;
   publish(manifest: unknown): { plan: Plan; hash: string };
   /** Create and start a run of a published workflow, then wait for it to settle. */
-  run(name: string, inputs?: Record<string, unknown>, opts?: { dryRun?: boolean; wait?: boolean; seed?: string }): Promise<RunRecord>;
+  run(
+    name: string,
+    inputs?: Record<string, unknown>,
+    opts?: { dryRun?: boolean; wait?: boolean; seed?: string },
+  ): Promise<RunRecord>;
   submit(name: string, inputs?: Record<string, unknown>, opts?: { dryRun?: boolean; seed?: string }): RunRecord;
   events(runId: string): EventRecord[];
   types(runId: string, prefix?: string): string[];
@@ -236,8 +284,21 @@ export function makeEngine(opts: EngineOptions = {}): Engine {
   const keyring = opts.keyring ?? createKeyring(generateMasterKey());
   const broker = new SecretBroker(state.secrets, keyring, systemClock);
   const breakers = new CircuitBreakers({ failureThreshold: 3, cooldownMs: 100 }, systemClock);
-  const runtime = new StepRuntime({ registry, events: state.events, idempotency: state.idempotency, kv: state.kv, broker, breakers, clock: systemClock });
-  const orch = new Orchestrator({ state, executor: runtime, clock: systemClock, config: { tickMs: 20, ...opts.config } });
+  const runtime = new StepRuntime({
+    registry,
+    events: state.events,
+    idempotency: state.idempotency,
+    kv: state.kv,
+    broker,
+    breakers,
+    clock: systemClock,
+  });
+  const orch = new Orchestrator({
+    state,
+    executor: runtime,
+    clock: systemClock,
+    config: { tickMs: 20, ...opts.config },
+  });
   orch.start();
 
   const swResolver = {
@@ -267,7 +328,12 @@ export function makeEngine(opts: EngineOptions = {}): Engine {
     breakers,
     keyring,
     publish(manifest) {
-      const r = compile(manifest, { environment: 'production', capabilities: registry, subworkflows: swResolver, today: '2026-09-19' });
+      const r = compile(manifest, {
+        environment: 'production',
+        capabilities: registry,
+        subworkflows: swResolver,
+        today: '2026-09-19',
+      });
       if (!r.ok || !r.plan || !r.hash) throw new Error(`compile failed: ${JSON.stringify(r.errors)}`);
       state.registry.insertVersion({
         tenant: 'default',
@@ -307,7 +373,11 @@ export function makeEngine(opts: EngineOptions = {}): Engine {
       return orch.waitForRun(run.id, 10_000);
     },
     events: (runId) => state.events.list({ tenant: 'default', runId, limit: 5000 }),
-    types: (runId, prefix) => engine.events(runId).map((e) => e.type).filter((t) => !prefix || t.startsWith(prefix)),
+    types: (runId, prefix) =>
+      engine
+        .events(runId)
+        .map((e) => e.type)
+        .filter((t) => !prefix || t.startsWith(prefix)),
     step: (runId, stepId) => state.runs.getStep(runId, stepId),
     restart() {
       return makeEngine({ ...opts, state, world, keyring, ...(opts.config ? { config: opts.config } : {}) });

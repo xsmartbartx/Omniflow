@@ -21,7 +21,13 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   canary: { minRuns: 5, maxFailureRate: 0.3 },
 };
 
-const SYSTEM_PRINCIPAL = (tenant: string): Principal => ({ id: 'system:scheduler', type: 'system', name: 'Scheduler', tenant, roles: ['admin'] });
+const SYSTEM_PRINCIPAL = (tenant: string): Principal => ({
+  id: 'system:scheduler',
+  type: 'system',
+  name: 'Scheduler',
+  tenant,
+  roles: ['admin'],
+});
 
 /**
  * Scheduler (architecture §5.1 #9): decides *when* and *whether* a queued run starts — global and
@@ -40,7 +46,14 @@ export class Scheduler {
   private pumping = false;
   private housekeeping = 0;
 
-  constructor(deps: { state: State; orchestrator: Orchestrator; registry?: RegistryService; config?: Partial<SchedulerConfig>; clock?: Clock; log?: Logger }) {
+  constructor(deps: {
+    state: State;
+    orchestrator: Orchestrator;
+    registry?: RegistryService;
+    config?: Partial<SchedulerConfig>;
+    clock?: Clock;
+    log?: Logger;
+  }) {
     this.st = deps.state;
     this.orch = deps.orchestrator;
     this.registry = deps.registry;
@@ -93,7 +106,11 @@ export class Scheduler {
         const settings = this.st.registry.getSettings(run.tenant, run.workflowName);
         if (settings?.killed || settings?.enabled === false) {
           // Queued behind a limit while an operator pulled the plug: do not start it.
-          this.orch.cancelRun(run.id, { id: 'system:scheduler', name: 'Scheduler' }, settings.killed ? 'workflow killed while queued' : 'workflow disabled while queued');
+          this.orch.cancelRun(
+            run.id,
+            { id: 'system:scheduler', name: 'Scheduler' },
+            settings.killed ? 'workflow killed while queued' : 'workflow disabled while queued',
+          );
           continue;
         }
         const tenantActive = perTenant.get(run.tenant) ?? this.st.runs.activeCount(run.tenant);
@@ -128,11 +145,20 @@ export class Scheduler {
         if (!s.canaryVersion || s.canaryPercent <= 0) continue;
         const runs = this.st.runs
           .listRuns({ tenant: tenant.id, workflow: wf.name, limit: 100 })
-          .filter((r) => r.workflowVersion === s.canaryVersion && r.canary && ['succeeded', 'failed', 'rolled-back', 'compensation-failed'].includes(r.status));
+          .filter(
+            (r) =>
+              r.workflowVersion === s.canaryVersion &&
+              r.canary &&
+              ['succeeded', 'failed', 'rolled-back', 'compensation-failed'].includes(r.status),
+          );
         if (runs.length < this.cfg.canary.minRuns) continue;
         const failed = runs.filter((r) => r.status !== 'succeeded').length;
         if (failed / runs.length > this.cfg.canary.maxFailureRate) {
-          this.registry.rollbackCanary(SYSTEM_PRINCIPAL(tenant.id), wf.name, `automatic rollback: ${failed}/${runs.length} canary runs failed`);
+          this.registry.rollbackCanary(
+            SYSTEM_PRINCIPAL(tenant.id),
+            wf.name,
+            `automatic rollback: ${failed}/${runs.length} canary runs failed`,
+          );
           rolledBack.push(`${tenant.id}/${wf.name}`);
         }
       }

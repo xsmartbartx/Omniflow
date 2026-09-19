@@ -1,4 +1,4 @@
-import { systemClock, ManualClock } from '../../core/index.ts';
+import { ManualClock, systemClock } from '../../core/index.ts';
 import { ApprovalService, Orchestrator } from '../../orchestration/orchestrator/index.ts';
 import { RegistryService, type SubmitResult } from '../../orchestration/registry/index.ts';
 import { CircuitBreakers, StepRuntime } from '../../orchestration/runtime/index.ts';
@@ -11,7 +11,13 @@ import type { RunRecord } from '../../state/index.ts';
 import { newWorld, registryWithSims, type World } from './engine.ts';
 import { makeState, type TestState } from './state.ts';
 
-export const user = (id: string, roles: Role[], tenant = 'default'): Principal => ({ id, type: 'user', name: id, tenant, roles });
+export const user = (id: string, roles: Role[], tenant = 'default'): Principal => ({
+  id,
+  type: 'user',
+  name: id,
+  tenant,
+  roles,
+});
 
 export interface Platform {
   state: TestState;
@@ -31,14 +37,31 @@ export interface Platform {
   stop(): Promise<void>;
 }
 
-export function makePlatform(opts: { environment?: EnvironmentName; policy?: Partial<PolicyConfig>; scheduler?: Partial<SchedulerConfig>; world?: World } = {}): Platform {
+export function makePlatform(
+  opts: {
+    environment?: EnvironmentName;
+    policy?: Partial<PolicyConfig>;
+    scheduler?: Partial<SchedulerConfig>;
+    world?: World;
+  } = {},
+): Platform {
   const state = makeState({ clock: systemClock });
   const world = opts.world ?? newWorld();
   const caps = registryWithSims(world);
-  const policy = new PolicyEngine(defaultPolicyConfig({ environment: opts.environment ?? 'production', ...opts.policy }));
+  const policy = new PolicyEngine(
+    defaultPolicyConfig({ environment: opts.environment ?? 'production', ...opts.policy }),
+  );
   const registry = new RegistryService({ state, capabilities: caps, policy, clock: systemClock });
   const broker = new SecretBroker(state.secrets, createKeyring(generateMasterKey()), systemClock);
-  const runtime = new StepRuntime({ registry: caps, events: state.events, idempotency: state.idempotency, kv: state.kv, broker, breakers: new CircuitBreakers({}, systemClock), clock: systemClock });
+  const runtime = new StepRuntime({
+    registry: caps,
+    events: state.events,
+    idempotency: state.idempotency,
+    kv: state.kv,
+    broker,
+    breakers: new CircuitBreakers({}, systemClock),
+    clock: systemClock,
+  });
   const orch = new Orchestrator({ state, executor: runtime, clock: systemClock, config: { tickMs: 20 } });
   orch.start();
 
@@ -48,7 +71,14 @@ export function makePlatform(opts: { environment?: EnvironmentName; policy?: Par
   scheduler.start();
 
   const triggerClock = new ManualClock(new Date());
-  const triggers = new TriggerManager({ state, runService: runs, orchestrator: orch, broker, registry, clock: triggerClock });
+  const triggers = new TriggerManager({
+    state,
+    runService: runs,
+    orchestrator: orch,
+    broker,
+    registry,
+    clock: triggerClock,
+  });
   triggers.start(3_600_000); // never auto-ticks; tests call runDue()
   const approvals = new ApprovalService({ state, orchestrator: orch, policy });
 

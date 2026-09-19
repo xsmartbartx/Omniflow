@@ -19,7 +19,11 @@ const runOf = async (c: Client, name: string, inputs: Record<string, unknown> = 
   return r.body.run.id as string;
 };
 const finished = async (c: Client, id: string) => {
-  await until(async () => ['succeeded', 'failed', 'cancelled', 'rolled-back', 'compensation-failed'].includes((await c.get(`/v1/runs/${id}`)).body.run.status));
+  await until(async () =>
+    ['succeeded', 'failed', 'cancelled', 'rolled-back', 'compensation-failed'].includes(
+      (await c.get(`/v1/runs/${id}`)).body.run.status,
+    ),
+  );
   return (await c.get(`/v1/runs/${id}`)).body;
 };
 
@@ -88,7 +92,10 @@ describe('authentication', () => {
 
   it('gives one generic failure for a wrong password and an unknown user', async () => {
     const wrong = await api.anon.post('/v1/auth/login', { email: ADMIN.email, password: 'definitely-wrong-password' });
-    const unknown = await api.anon.post('/v1/auth/login', { email: 'nobody@example.com', password: 'definitely-wrong-password' });
+    const unknown = await api.anon.post('/v1/auth/login', {
+      email: 'nobody@example.com',
+      password: 'definitely-wrong-password',
+    });
     expect(wrong.status).toBe(401);
     expect(unknown.status).toBe(401);
     expect(wrong.body.error.message).toBe(unknown.body.error.message);
@@ -98,9 +105,20 @@ describe('authentication', () => {
     const a = await makeApi();
     try {
       const a1 = await a.login();
-      await a1.post('/v1/users', { email: 'lock@example.com', password: 'a-long-enough-passphrase', roles: ['viewer'] });
-      for (let i = 0; i < 5; i++) expect((await a.anon.post('/v1/auth/login', { email: 'lock@example.com', password: `wrong-password-${i}xx` })).status).toBe(401);
-      const locked = await a.anon.post('/v1/auth/login', { email: 'lock@example.com', password: 'a-long-enough-passphrase' });
+      await a1.post('/v1/users', {
+        email: 'lock@example.com',
+        password: 'a-long-enough-passphrase',
+        roles: ['viewer'],
+      });
+      for (let i = 0; i < 5; i++)
+        expect(
+          (await a.anon.post('/v1/auth/login', { email: 'lock@example.com', password: `wrong-password-${i}xx` }))
+            .status,
+        ).toBe(401);
+      const locked = await a.anon.post('/v1/auth/login', {
+        email: 'lock@example.com',
+        password: 'a-long-enough-passphrase',
+      });
       expect(locked.status).toBe(401);
       expect(locked.body.error.message).toMatch(/temporarily locked/);
     } finally {
@@ -112,7 +130,8 @@ describe('authentication', () => {
     const a = await makeApi();
     try {
       let last = 0;
-      for (let i = 0; i < 14; i++) last = (await a.anon.post('/v1/auth/login', { email: 'x@example.com', password: 'wrong-password-xx' })).status;
+      for (let i = 0; i < 14; i++)
+        last = (await a.anon.post('/v1/auth/login', { email: 'x@example.com', password: 'wrong-password-xx' })).status;
       expect(last).toBe(429);
     } finally {
       await a.stop();
@@ -131,10 +150,17 @@ describe('authentication', () => {
       const s1 = await a.login();
       const s2 = await a.login();
       expect((await s1.post('/v1/auth/password', { current: ADMIN.password, next: 'short' })).status).toBe(400);
-      expect((await s1.post('/v1/auth/password', { current: 'wrong-current-password', next: 'a-new-long-passphrase-1' })).status).toBe(401);
-      expect((await s1.post('/v1/auth/password', { current: ADMIN.password, next: 'a-new-long-passphrase-1' })).status).toBe(200);
+      expect(
+        (await s1.post('/v1/auth/password', { current: 'wrong-current-password', next: 'a-new-long-passphrase-1' }))
+          .status,
+      ).toBe(401);
+      expect(
+        (await s1.post('/v1/auth/password', { current: ADMIN.password, next: 'a-new-long-passphrase-1' })).status,
+      ).toBe(200);
       expect((await s2.get('/v1/auth/me')).status).toBe(401);
-      expect((await a.anon.post('/v1/auth/login', { email: ADMIN.email, password: 'a-new-long-passphrase-1' })).status).toBe(200);
+      expect(
+        (await a.anon.post('/v1/auth/login', { email: ADMIN.email, password: 'a-new-long-passphrase-1' })).status,
+      ).toBe(200);
     } finally {
       await a.stop();
     }
@@ -143,7 +169,9 @@ describe('authentication', () => {
   it('authenticates API keys, and refuses malformed, unknown and revoked ones', async () => {
     const viewer = await api.key(['viewer']);
     expect((await viewer.get('/v1/workflows')).status).toBe(200);
-    expect((await api.anon.get('/v1/workflows', { authorization: 'Bearer omf_deadbeef0000_' + 'A'.repeat(43) })).status).toBe(401);
+    expect(
+      (await api.anon.get('/v1/workflows', { authorization: 'Bearer omf_deadbeef0000_' + 'A'.repeat(43) })).status,
+    ).toBe(401);
     expect((await api.anon.get('/v1/workflows', { authorization: 'Bearer nonsense' })).status).toBe(401);
 
     const created = await admin.post('/v1/api-keys', { name: 'ci', roles: ['operator'] });
@@ -194,15 +222,25 @@ describe('request validation at the boundary', () => {
     expect(unknown.status).toBe(400);
     expect(unknown.body.error.details.issues[0].message).toContain("Unknown property 'extra'");
     expect((await admin.post('/v1/workflows/validate', { manifest: 42 })).status).toBe(400);
-    expect((await admin.post('/v1/workflows/validate', {})).body.error.details.issues[0].message).toContain("Missing required property 'manifest'");
+    expect((await admin.post('/v1/workflows/validate', {})).body.error.details.issues[0].message).toContain(
+      "Missing required property 'manifest'",
+    );
     const bad = await admin.request('POST', '/v1/workflows/validate', { raw: '{not json' });
     expect(bad.status).toBe(400);
     expect(bad.text).not.toMatch(/SyntaxError|at \S+ \(/);
   });
 
   it('refuses oversized bodies and prototype-pollution payloads', async () => {
-    expect((await admin.request('POST', '/v1/workflows/validate', { raw: JSON.stringify({ manifest: 'x'.repeat(1_200_000) }) })).status).toBe(413);
-    const polluted = await admin.request('POST', '/v1/events', { raw: '{"type":"a","payload":{"__proto__":{"admin":true}}}' });
+    expect(
+      (
+        await admin.request('POST', '/v1/workflows/validate', {
+          raw: JSON.stringify({ manifest: 'x'.repeat(1_200_000) }),
+        })
+      ).status,
+    ).toBe(413);
+    const polluted = await admin.request('POST', '/v1/events', {
+      raw: '{"type":"a","payload":{"__proto__":{"admin":true}}}',
+    });
     expect(polluted.status).toBe(400);
     expect(({} as any).admin).toBeUndefined();
   });
@@ -215,17 +253,31 @@ describe('request validation at the boundary', () => {
 
 describe('workflow lifecycle over HTTP', () => {
   const manifest = () =>
-    yamlWf('order-report', [echoStep('first', { n: '${{ inputs.n }}' }), echoStep('second', '${{ steps.first.output.value.n * 2 }}', { dependsOn: ['first'] })], {
-      inputs: { n: { type: 'integer', default: 21 } },
-      outputs: { doubled: '${{ steps.second.output.value }}' },
-    });
+    yamlWf(
+      'order-report',
+      [
+        echoStep('first', { n: '${{ inputs.n }}' }),
+        echoStep('second', '${{ steps.first.output.value.n * 2 }}', { dependsOn: ['first'] }),
+      ],
+      {
+        inputs: { n: { type: 'integer', default: 21 } },
+        outputs: { doubled: '${{ steps.second.output.value }}' },
+      },
+    );
 
   it('validates without saving, reporting positioned errors and the risk review', async () => {
     const ok = (await admin.post('/v1/workflows/validate', { manifest: manifest() })).body;
-    expect(ok).toMatchObject({ ok: true, workflow: { name: 'order-report' }, risk: { level: 'low' }, policy: { effect: 'allow' } });
+    expect(ok).toMatchObject({
+      ok: true,
+      workflow: { name: 'order-report' },
+      risk: { level: 'low' },
+      policy: { effect: 'allow' },
+    });
     expect(ok.planHash).toMatch(/^sha256:/);
 
-    const bad = (await admin.post('/v1/workflows/validate', { manifest: manifest().replace('util-echo@^1', 'util-ecko@^1') })).body;
+    const bad = (
+      await admin.post('/v1/workflows/validate', { manifest: manifest().replace('util-echo@^1', 'util-ecko@^1') })
+    ).body;
     expect(bad.ok).toBe(false);
     expect(bad.errors[0]).toMatchObject({ code: 'UNKNOWN_CAPABILITY' });
     expect(bad.errors[0].message).toContain("did you mean 'util-echo'");
@@ -256,7 +308,10 @@ describe('workflow lifecycle over HTTP', () => {
     const id = await runOf(admin, 'order-report', { n: 5 });
     const done = await finished(admin, id);
     expect(done.run).toMatchObject({ status: 'succeeded', inputs: { n: 5 }, outputs: { doubled: 10 } });
-    expect(done.steps.map((s: any) => [s.id, s.status, s.attempt])).toEqual([['first', 'succeeded', 1], ['second', 'succeeded', 1]]);
+    expect(done.steps.map((s: any) => [s.id, s.status, s.attempt])).toEqual([
+      ['first', 'succeeded', 1],
+      ['second', 'succeeded', 1],
+    ]);
     expect(done.plan.workflow.name).toBe('order-report');
   });
 
@@ -272,17 +327,27 @@ describe('workflow lifecycle over HTTP', () => {
     const id = await runOf(admin, 'order-report');
     await finished(admin, id);
     const events = (await admin.get(`/v1/runs/${id}/events`)).body.items;
-    expect(events.map((e: any) => e.type)).toEqual(expect.arrayContaining(['run.queued', 'run.started', 'step.succeeded', 'run.succeeded']));
+    expect(events.map((e: any) => e.type)).toEqual(
+      expect.arrayContaining(['run.queued', 'run.started', 'step.succeeded', 'run.succeeded']),
+    );
     expect(events[0].hash).toMatch(/^sha256:/);
 
-    const res = await api.server.inject({ method: 'GET', url: `/v1/runs/${id}/stream`, headers: { cookie: admin.cookie! } });
+    const res = await api.server.inject({
+      method: 'GET',
+      url: `/v1/runs/${id}/stream`,
+      headers: { cookie: admin.cookie! },
+    });
     expect(String(res.headers['content-type'])).toContain('text/event-stream');
     expect(res.body).toContain('event: run.queued');
     expect(res.body).toContain('event: run.succeeded');
     expect(res.body.match(/^id: \d+$/gm)!.length).toBe(events.length);
     // resuming after the last event delivers nothing new
     const last = events.at(-1).seq;
-    const resumed = await api.server.inject({ method: 'GET', url: `/v1/runs/${id}/stream`, headers: { cookie: admin.cookie!, 'last-event-id': String(last) } });
+    const resumed = await api.server.inject({
+      method: 'GET',
+      url: `/v1/runs/${id}/stream`,
+      headers: { cookie: admin.cookie!, 'last-event-id': String(last) },
+    });
     expect(resumed.body).not.toContain('event: run.queued');
   });
 
@@ -310,14 +375,25 @@ describe('workflow lifecycle over HTTP', () => {
 
 describe('change control over HTTP (four-eyes)', () => {
   const effectful = (name: string) =>
-    yamlWf(name, [{ id: 'save', type: 'capability', uses: 'file-write@^1', with: { path: `${name}.txt`, content: 'hello' }, idempotencyKey: `k-${name}` }]);
+    yamlWf(name, [
+      {
+        id: 'save',
+        type: 'capability',
+        uses: 'file-write@^1',
+        with: { path: `${name}.txt`, content: 'hello' },
+        idempotencyKey: `k-${name}`,
+      },
+    ]);
 
   it('turns a risky publish into a change request that a different person approves', async () => {
     const author = await api.key(['author']);
     const approver = await api.key(['approver']);
     const res = await publish(author, effectful('risky-wf'));
     expect(res.status).toBe(202);
-    expect(res.body).toMatchObject({ status: 'pending-approval', decision: { effect: 'require-approval', reasonCode: 'PROD_EFFECTFUL_NEEDS_APPROVAL' } });
+    expect(res.body).toMatchObject({
+      status: 'pending-approval',
+      decision: { effect: 'require-approval', reasonCode: 'PROD_EFFECTFUL_NEEDS_APPROVAL' },
+    });
     const id = res.body.change.id;
     expect((await admin.get('/v1/workflows/risky-wf')).status).toBe(404); // not published yet
 
@@ -346,7 +422,13 @@ describe('change control over HTTP (four-eyes)', () => {
 
 describe('approvals over HTTP', () => {
   it('routes an approval step to a different person and resumes the run', async () => {
-    await publish(admin, yamlWf('gated-wf', [{ id: 'gate', type: 'approval', message: 'Ship it?', timeout: '1h', onTimeout: 'deny' }, echoStep('after', 'shipped', { dependsOn: ['gate'] })]));
+    await publish(
+      admin,
+      yamlWf('gated-wf', [
+        { id: 'gate', type: 'approval', message: 'Ship it?', timeout: '1h', onTimeout: 'deny' },
+        echoStep('after', 'shipped', { dependsOn: ['gate'] }),
+      ]),
+    );
     const runner = await api.key(['operator']);
     const approver = await api.key(['approver']);
     const id = await runOf(runner, 'gated-wf');
@@ -382,7 +464,13 @@ describe('secrets, capabilities and controls', () => {
     const caps = (await admin.get('/v1/capabilities')).body.items;
     const names = caps.map((c: any) => c.name);
     expect(names).toEqual(expect.arrayContaining(['http-get', 'util-echo', 'file-write']));
-    expect(caps.find((c: any) => c.name === 'file-write')).toMatchObject({ effect: 'effectful', dryRun: 'simulate', family: 'storage', killed: null, circuit: 'closed' });
+    expect(caps.find((c: any) => c.name === 'file-write')).toMatchObject({
+      effect: 'effectful',
+      dryRun: 'simulate',
+      family: 'storage',
+      killed: null,
+      circuit: 'closed',
+    });
 
     await publish(admin, yamlWf('needs-echo', [echoStep('a', 1)]));
     expect((await admin.post('/v1/capabilities/util-echo/kill', { reason: 'drill' })).status).toBe(200);
@@ -407,7 +495,10 @@ describe('secrets, capabilities and controls', () => {
 
   it('manages canaries and rollbacks', async () => {
     await publish(admin, yamlWf('rolling', [echoStep('a', 1)], {}, '1.0.0'));
-    const v2 = await admin.post('/v1/workflows', { manifest: yamlWf('rolling', [echoStep('a', 2)], {}, '1.1.0'), canaryPercent: 50 });
+    const v2 = await admin.post('/v1/workflows', {
+      manifest: yamlWf('rolling', [echoStep('a', 2)], {}, '1.1.0'),
+      canaryPercent: 50,
+    });
     expect(v2.status).toBe(201);
     let detail = (await admin.get('/v1/workflows/rolling')).body;
     expect(detail.settings).toMatchObject({ stableVersion: '1.0.0', canaryVersion: '1.1.0', canaryPercent: 50 });
@@ -421,16 +512,49 @@ describe('secrets, capabilities and controls', () => {
 
 describe('administration and tenancy', () => {
   it('manages users under a password policy and protects against self-lockout', async () => {
-    expect((await admin.post('/v1/users', { email: 'weak@example.com', password: 'short', roles: ['viewer'] })).status).toBe(400);
-    expect((await admin.post('/v1/users', { email: 'not-an-email', password: 'a-long-enough-passphrase', roles: ['viewer'] })).status).toBe(400);
-    expect((await admin.post('/v1/users', { email: 'u@example.com', password: 'a-long-enough-passphrase', roles: ['superuser'] })).status).toBe(400);
-    const created = await admin.post('/v1/users', { email: 'Ada@Example.com', password: 'a-long-enough-passphrase', roles: ['author'] });
+    expect(
+      (await admin.post('/v1/users', { email: 'weak@example.com', password: 'short', roles: ['viewer'] })).status,
+    ).toBe(400);
+    expect(
+      (
+        await admin.post('/v1/users', {
+          email: 'not-an-email',
+          password: 'a-long-enough-passphrase',
+          roles: ['viewer'],
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await admin.post('/v1/users', {
+          email: 'u@example.com',
+          password: 'a-long-enough-passphrase',
+          roles: ['superuser'],
+        })
+      ).status,
+    ).toBe(400);
+    const created = await admin.post('/v1/users', {
+      email: 'Ada@Example.com',
+      password: 'a-long-enough-passphrase',
+      roles: ['author'],
+    });
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ email: 'ada@example.com', roles: ['author'], mustChangePassword: true });
     expect(created.body.passwordHash).toBeUndefined();
-    expect((await admin.post('/v1/users', { email: 'ada@example.com', password: 'a-long-enough-passphrase', roles: ['author'] })).status).toBe(409);
+    expect(
+      (
+        await admin.post('/v1/users', {
+          email: 'ada@example.com',
+          password: 'a-long-enough-passphrase',
+          roles: ['author'],
+        })
+      ).status,
+    ).toBe(409);
     expect((await admin.patch(`/v1/users/${created.body.id}`, { disabled: true })).status).toBe(200);
-    expect((await api.anon.post('/v1/auth/login', { email: 'ada@example.com', password: 'a-long-enough-passphrase' })).status).toBe(401);
+    expect(
+      (await api.anon.post('/v1/auth/login', { email: 'ada@example.com', password: 'a-long-enough-passphrase' }))
+        .status,
+    ).toBe(401);
     const me = (await admin.get('/v1/auth/me')).body.principal.id;
     expect((await admin.patch(`/v1/users/${me}`, { disabled: true })).status).toBe(409);
     expect((await admin.patch(`/v1/users/${me}`, { roles: ['viewer'] })).status).toBe(409);
@@ -439,7 +563,12 @@ describe('administration and tenancy', () => {
   it('isolates tenants completely', async () => {
     expect((await admin.post('/v1/tenants', { id: 'acme', name: 'Acme Corp' })).status).toBe(201);
     expect((await (await api.key(['admin'])).post('/v1/tenants', { id: 'x1', name: 'X' })).status).toBe(201);
-    const created = await admin.post('/v1/users', { email: 'root@acme.test', password: 'a-long-enough-passphrase', roles: ['admin'], tenant: 'acme' });
+    const created = await admin.post('/v1/users', {
+      email: 'root@acme.test',
+      password: 'a-long-enough-passphrase',
+      roles: ['admin'],
+      tenant: 'acme',
+    });
     expect(created.status).toBe(201);
     const acme = await api.login('root@acme.test', 'a-long-enough-passphrase');
     expect(acme.cookie).toBeDefined();
@@ -465,7 +594,10 @@ describe('administration and tenancy', () => {
     expect((await admin.get('/v1/audit/verify')).body).toMatchObject({ ok: true });
     const exp = await api.server.inject({ method: 'GET', url: '/v1/audit/export', headers: { cookie: admin.cookie! } });
     expect(String(exp.headers['content-type'])).toContain('application/x-ndjson');
-    const lines = exp.body.trim().split('\n').map((l) => JSON.parse(l));
+    const lines = exp.body
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
     expect(lines[0]._meta.chain.ok).toBe(true);
     expect(lines.length).toBeGreaterThan(50);
     expect(lines[1].hash).toMatch(/^sha256:/);
@@ -476,7 +608,10 @@ describe('triggers over HTTP', () => {
   it('accepts a correctly signed webhook and rejects everything else uniformly', async () => {
     await publish(
       admin,
-      yamlWf('hooked-wf', [echoStep('a', '${{ inputs.order }}')], { inputs: { order: { type: 'string', required: true } }, triggers: [{ type: 'webhook', name: 'incoming', inputs: { order: '${{ event.payload.id }}' } }] }),
+      yamlWf('hooked-wf', [echoStep('a', '${{ inputs.order }}')], {
+        inputs: { order: { type: 'string', required: true } },
+        triggers: [{ type: 'webhook', name: 'incoming', inputs: { order: '${{ event.payload.id }}' } }],
+      }),
     );
     const rot = await admin.post('/v1/workflows/hooked-wf/triggers/incoming/rotate-secret');
     expect(rot.status).toBe(200);
@@ -488,7 +623,12 @@ describe('triggers over HTTP', () => {
     const send = (over: Record<string, string> = {}, payload = body) =>
       api.anon.request('POST', '/v1/hooks/default/hooked-wf/incoming', {
         raw: payload,
-        headers: { 'x-omniflow-timestamp': String(ts), 'x-omniflow-signature': signWebhook(rot.body.secret, ts, payload), 'x-omniflow-delivery': `d-${Math.random()}`, ...over },
+        headers: {
+          'x-omniflow-timestamp': String(ts),
+          'x-omniflow-signature': signWebhook(rot.body.secret, ts, payload),
+          'x-omniflow-delivery': `d-${Math.random()}`,
+          ...over,
+        },
       });
     const ok = await send();
     expect(ok.status).toBe(202);
@@ -498,11 +638,32 @@ describe('triggers over HTTP', () => {
     expect((await send({ 'x-omniflow-signature': 'v1=00' })).status).toBe(401);
     expect((await send({ 'x-omniflow-delivery': 'fixed' })).status).toBe(202);
     expect((await send({ 'x-omniflow-delivery': 'fixed' })).status).toBe(401); // replay
-    expect((await send({ 'x-omniflow-signature': signWebhook(rot.body.secret, ts, body) }, JSON.stringify({ id: 'tampered' }))).status).toBe(401); // signed body differs from the delivered one
+    expect(
+      (
+        await send(
+          { 'x-omniflow-signature': signWebhook(rot.body.secret, ts, body) },
+          JSON.stringify({ id: 'tampered' }),
+        )
+      ).status,
+    ).toBe(401); // signed body differs from the delivered one
   });
 
   it('publishes events that resume waiting steps', async () => {
-    await publish(admin, yamlWf('waiting-wf', [{ id: 'w', type: 'wait', until: { event: 'payment.settled', correlation: '${{ inputs.o }}' }, timeout: '30s' }], { inputs: { o: { type: 'string', required: true } } }));
+    await publish(
+      admin,
+      yamlWf(
+        'waiting-wf',
+        [
+          {
+            id: 'w',
+            type: 'wait',
+            until: { event: 'payment.settled', correlation: '${{ inputs.o }}' },
+            timeout: '30s',
+          },
+        ],
+        { inputs: { o: { type: 'string', required: true } } },
+      ),
+    );
     const id = await runOf(admin, 'waiting-wf', { o: 'o-1' });
     await until(async () => (await admin.get(`/v1/runs/${id}`)).body.run.status === 'waiting-event');
     const ev = await admin.post('/v1/events', { type: 'payment.settled', payload: { amount: 5 }, correlation: 'o-1' });
@@ -516,7 +677,9 @@ describe('confidential data handling', () => {
   it('hides confidential inputs and outputs from listings and restricts direct output access', async () => {
     await publish(
       admin,
-      yamlWf('pii-wf', [{ ...echoStep('id', { ssn: '${{ inputs.ssn }}' }), sensitivity: 'confidential' }], { inputs: { ssn: { type: 'string', required: true, sensitivity: 'confidential' } } }),
+      yamlWf('pii-wf', [{ ...echoStep('id', { ssn: '${{ inputs.ssn }}' }), sensitivity: 'confidential' }], {
+        inputs: { ssn: { type: 'string', required: true, sensitivity: 'confidential' } },
+      }),
     );
     const id = await runOf(admin, 'pii-wf', { ssn: '123-45-6789' });
     const detail = await finished(admin, id);

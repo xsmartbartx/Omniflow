@@ -97,18 +97,32 @@ export class RunService {
         tenant,
         type: 'policy.decision',
         actor: { type: principal.type, id: principal.id, name: principal.name },
-        data: { action: 'workflow.run', effect: 'deny', reasonCode: decision.reasonCode, reason: decision.reason, workflow: req.workflow },
+        data: {
+          action: 'workflow.run',
+          effect: 'deny',
+          reasonCode: decision.reasonCode,
+          reason: decision.reason,
+          workflow: req.workflow,
+        },
       });
       throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: req.workflow });
     }
-    if (!settings.enabled) throw new ConflictError(`Workflow '${req.workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
-    if (settings.killed) throw new ConflictError(`Workflow '${req.workflow}' is stopped by its kill switch${settings.killReason ? `: ${settings.killReason}` : ''}`, { code: 'WORKFLOW_KILLED' });
+    if (!settings.enabled)
+      throw new ConflictError(`Workflow '${req.workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
+    if (settings.killed)
+      throw new ConflictError(
+        `Workflow '${req.workflow}' is stopped by its kill switch${settings.killReason ? `: ${settings.killReason}` : ''}`,
+        { code: 'WORKFLOW_KILLED' },
+      );
     if (version.status === 'frozen') throw new ConflictError(`${req.workflow}@${version.version} is frozen`);
 
     // ---- validate inputs against the plan's schema; defaults are applied here, once
     const checked = validateValue<Record<string, unknown>>(plan.inputSchema, req.inputs ?? {});
     if (!checked.ok) {
-      throw new ValidationError(`Invalid inputs for ${req.workflow}`, checked.issues.map((i) => ({ ...i, path: i.path ? `inputs.${i.path}` : 'inputs' })));
+      throw new ValidationError(
+        `Invalid inputs for ${req.workflow}`,
+        checked.issues.map((i) => ({ ...i, path: i.path ? `inputs.${i.path}` : 'inputs' })),
+      );
     }
     const inputs = checked.value;
 
@@ -136,9 +150,15 @@ export class RunService {
 
     // ---- concurrency policy: `skip` drops the run rather than queueing behind the limit
     if (plan.policy.concurrencyPolicy === 'skip') {
-      const busy = this.st.runs.activeCount(tenant, req.workflow) + this.st.runs.countRuns({ tenant, workflow: req.workflow, status: ['queued'] });
+      const busy =
+        this.st.runs.activeCount(tenant, req.workflow) +
+        this.st.runs.countRuns({ tenant, workflow: req.workflow, status: ['queued'] });
       if (busy >= plan.policy.concurrency) {
-        this.st.events.append({ tenant, type: 'run.skipped', data: { workflow: req.workflow, reason: 'concurrency-limit', limit: plan.policy.concurrency } });
+        this.st.events.append({
+          tenant,
+          type: 'run.skipped',
+          data: { workflow: req.workflow, reason: 'concurrency-limit', limit: plan.policy.concurrency },
+        });
         return { status: 'skipped', reason: `Concurrency limit of ${plan.policy.concurrency} reached (policy: skip)` };
       }
     }
@@ -147,8 +167,15 @@ export class RunService {
     if (plan.policy.maxDailyCost !== undefined) {
       const spent = this.st.runs.dailyCost(tenant, req.workflow);
       if (spent + plan.analysis.estimatedCost > plan.policy.maxDailyCost) {
-        this.st.events.append({ tenant, type: 'run.skipped', data: { workflow: req.workflow, reason: 'daily-cost-ceiling', spent, ceiling: plan.policy.maxDailyCost } });
-        throw new PolicyDeniedError('DAILY_COST_CEILING', `Daily cost ceiling of ${plan.policy.maxDailyCost} would be exceeded (spent ${spent}, this run ≈ ${plan.analysis.estimatedCost})`);
+        this.st.events.append({
+          tenant,
+          type: 'run.skipped',
+          data: { workflow: req.workflow, reason: 'daily-cost-ceiling', spent, ceiling: plan.policy.maxDailyCost },
+        });
+        throw new PolicyDeniedError(
+          'DAILY_COST_CEILING',
+          `Daily cost ceiling of ${plan.policy.maxDailyCost} would be exceeded (spent ${spent}, this run ≈ ${plan.analysis.estimatedCost})`,
+        );
       }
     }
 
@@ -172,7 +199,11 @@ export class RunService {
   /** Cancel a run on behalf of a principal. */
   cancel(principal: Principal, runId: string, reason?: string): RunRecord {
     const run = this.mustGet(principal, runId);
-    const d = this.policy.decide({ principal, action: 'run.cancel', resource: { tenant: run.tenant, workflow: run.workflowName } });
+    const d = this.policy.decide({
+      principal,
+      action: 'run.cancel',
+      resource: { tenant: run.tenant, workflow: run.workflowName },
+    });
     if (d.effect !== 'allow') throw new PolicyDeniedError(d.reasonCode, d.reason);
     return this.orch.cancelRun(runId, { id: principal.id, name: principal.name }, reason);
   }
@@ -180,7 +211,11 @@ export class RunService {
   /** Re-run a finished run with the same inputs and the exact same plan. */
   retry(principal: Principal, runId: string): TriggerResult {
     const run = this.mustGet(principal, runId);
-    const d = this.policy.decide({ principal, action: 'run.retry', resource: { tenant: run.tenant, workflow: run.workflowName } });
+    const d = this.policy.decide({
+      principal,
+      action: 'run.retry',
+      resource: { tenant: run.tenant, workflow: run.workflowName },
+    });
     if (d.effect !== 'allow') throw new PolicyDeniedError(d.reasonCode, d.reason);
     if (!isTerminalRun(run.status)) throw new ConflictError('Only a finished run can be retried');
     return this.trigger({

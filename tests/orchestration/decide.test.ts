@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { backoffDelayMs, classifyPending, compensationQueue, shouldRetry, unhandledFailures } from '../../orchestration/orchestrator/index.ts';
+import {
+  backoffDelayMs,
+  classifyPending,
+  compensationQueue,
+  shouldRetry,
+  unhandledFailures,
+} from '../../orchestration/orchestrator/index.ts';
 import type { Plan, PlanRetry, PlanStep } from '../../schemas/index.ts';
 import type { StepRecord, StepStatus } from '../../state/index.ts';
 
@@ -29,10 +35,21 @@ const ids = (steps: PlanStep[]) => steps.map((s) => s.id);
 describe('classifyPending', () => {
   it('runs roots immediately and releases dependents as dependencies succeed', () => {
     const p = plan([step('a'), step('b', ['a']), step('c', ['a']), step('d', ['b', 'c'])]);
-    expect(ids(classifyPending(p, recs([rec('a', 'pending'), rec('b', 'pending'), rec('c', 'pending'), rec('d', 'pending')])).runnable)).toEqual(['a']);
-    const after = classifyPending(p, recs([rec('a', 'succeeded'), rec('b', 'pending'), rec('c', 'pending'), rec('d', 'pending')]));
+    expect(
+      ids(
+        classifyPending(p, recs([rec('a', 'pending'), rec('b', 'pending'), rec('c', 'pending'), rec('d', 'pending')]))
+          .runnable,
+      ),
+    ).toEqual(['a']);
+    const after = classifyPending(
+      p,
+      recs([rec('a', 'succeeded'), rec('b', 'pending'), rec('c', 'pending'), rec('d', 'pending')]),
+    );
     expect(ids(after.runnable)).toEqual(['b', 'c']); // independent steps become ready together
-    const join = classifyPending(p, recs([rec('a', 'succeeded'), rec('b', 'succeeded'), rec('c', 'running'), rec('d', 'pending')]));
+    const join = classifyPending(
+      p,
+      recs([rec('a', 'succeeded'), rec('b', 'succeeded'), rec('c', 'running'), rec('d', 'pending')]),
+    );
     expect(join.runnable).toEqual([]); // d waits for c
   });
 
@@ -43,10 +60,16 @@ describe('classifyPending', () => {
 
   it('skips a step when every dependency was skipped, but not when one succeeded (branch join)', () => {
     const p = plan([step('arm-a'), step('arm-b'), step('after-a', ['arm-a']), step('join', ['arm-a', 'arm-b'])]);
-    const c = classifyPending(p, recs([rec('arm-a', 'skipped'), rec('arm-b', 'succeeded'), rec('after-a', 'pending'), rec('join', 'pending')]));
+    const c = classifyPending(
+      p,
+      recs([rec('arm-a', 'skipped'), rec('arm-b', 'succeeded'), rec('after-a', 'pending'), rec('join', 'pending')]),
+    );
     expect(c.skips.map((s) => [s.step.id, s.reason])).toEqual([['after-a', 'upstream-skipped']]);
     expect(ids(c.runnable)).toEqual(['join']);
-    const none = classifyPending(p, recs([rec('arm-a', 'skipped'), rec('arm-b', 'skipped'), rec('after-a', 'pending'), rec('join', 'pending')]));
+    const none = classifyPending(
+      p,
+      recs([rec('arm-a', 'skipped'), rec('arm-b', 'skipped'), rec('after-a', 'pending'), rec('join', 'pending')]),
+    );
     expect(none.skips.map((s) => s.step.id).sort()).toEqual(['after-a', 'join']);
   });
 
@@ -57,24 +80,40 @@ describe('classifyPending', () => {
   });
 
   it('lets onError:continue proceed and routeTo release only its target', () => {
-    const p = plan([
-      step('a', [], { onError: { routeTo: 'cleanup' } }),
-      step('cleanup', ['a']),
-      step('other', ['a']),
-    ]);
-    const c = classifyPending(p, recs([rec('a', 'failed', { handled: 'route' }), rec('cleanup', 'pending'), rec('other', 'pending')]));
+    const p = plan([step('a', [], { onError: { routeTo: 'cleanup' } }), step('cleanup', ['a']), step('other', ['a'])]);
+    const c = classifyPending(
+      p,
+      recs([rec('a', 'failed', { handled: 'route' }), rec('cleanup', 'pending'), rec('other', 'pending')]),
+    );
     expect(ids(c.runnable)).toEqual(['cleanup']);
     expect(c.skips.map((s) => s.step.id)).toEqual(['other']);
 
     const cont = plan([step('a', [], { onError: 'continue' }), step('b', ['a'])]);
-    expect(ids(classifyPending(cont, recs([rec('a', 'failed', { handled: 'continue' }), rec('b', 'pending')])).runnable)).toEqual(['b']);
+    expect(
+      ids(classifyPending(cont, recs([rec('a', 'failed', { handled: 'continue' }), rec('b', 'pending')])).runnable),
+    ).toEqual(['b']);
   });
 
   it('treats parallel join:any as ready on the first success, and all-terminal otherwise', () => {
     const p = plan([step('x'), step('y'), step('join', ['x', 'y'], { type: 'parallel', join: 'any' })]);
-    expect(ids(classifyPending(p, recs([rec('x', 'succeeded'), rec('y', 'running'), rec('join', 'pending')])).runnable)).toEqual(['join']);
-    expect(classifyPending(p, recs([rec('x', 'running'), rec('y', 'running'), rec('join', 'pending')])).runnable).toEqual([]);
-    expect(ids(classifyPending(p, recs([rec('x', 'failed', { handled: 'continue' }), rec('y', 'failed', { handled: 'continue' }), rec('join', 'pending')])).runnable)).toEqual(['join']);
+    expect(
+      ids(classifyPending(p, recs([rec('x', 'succeeded'), rec('y', 'running'), rec('join', 'pending')])).runnable),
+    ).toEqual(['join']);
+    expect(
+      classifyPending(p, recs([rec('x', 'running'), rec('y', 'running'), rec('join', 'pending')])).runnable,
+    ).toEqual([]);
+    expect(
+      ids(
+        classifyPending(
+          p,
+          recs([
+            rec('x', 'failed', { handled: 'continue' }),
+            rec('y', 'failed', { handled: 'continue' }),
+            rec('join', 'pending'),
+          ]),
+        ).runnable,
+      ),
+    ).toEqual(['join']);
   });
 
   it('is pure: identical input gives identical output', () => {
@@ -108,7 +147,14 @@ describe('failure bookkeeping', () => {
 });
 
 describe('retry policy', () => {
-  const retry: PlanRetry = { attempts: 3, backoff: 'exponential', initialDelayMs: 1000, maxDelayMs: 8000, jitter: 0, retryOn: ['transient', 'systemic'] };
+  const retry: PlanRetry = {
+    attempts: 3,
+    backoff: 'exponential',
+    initialDelayMs: 1000,
+    maxDelayMs: 8000,
+    jitter: 0,
+    retryOn: ['transient', 'systemic'],
+  };
 
   it('grows exponentially, caps at maxDelay, and supports fixed back-off', () => {
     expect([1, 2, 3, 4, 5].map((a) => backoffDelayMs(retry, a, 0.5))).toEqual([1000, 2000, 4000, 8000, 8000]);
@@ -127,7 +173,10 @@ describe('retry policy', () => {
   it('retries transient and systemic failures until attempts are exhausted', () => {
     expect(shouldRetry(retry, 1, { class: 'transient', retryable: true }).retry).toBe(true);
     expect(shouldRetry(retry, 2, { class: 'systemic', retryable: true }).retry).toBe(true);
-    expect(shouldRetry(retry, 3, { class: 'transient', retryable: true })).toMatchObject({ retry: false, reason: 'attempts exhausted' });
+    expect(shouldRetry(retry, 3, { class: 'transient', retryable: true })).toMatchObject({
+      retry: false,
+      reason: 'attempts exhausted',
+    });
   });
 
   it('never retries authorisation, business or catastrophic failures', () => {
@@ -142,7 +191,9 @@ describe('retry policy', () => {
   });
 
   it('honours retryOn and the error’s own retryable flag', () => {
-    expect(shouldRetry({ ...retry, retryOn: ['transient'] }, 1, { class: 'systemic', retryable: true }).retry).toBe(false);
+    expect(shouldRetry({ ...retry, retryOn: ['transient'] }, 1, { class: 'systemic', retryable: true }).retry).toBe(
+      false,
+    );
     expect(shouldRetry(retry, 1, { class: 'transient', retryable: false }).retry).toBe(false);
     expect(shouldRetry(undefined, 1, { class: 'transient', retryable: true }).retry).toBe(false);
   });

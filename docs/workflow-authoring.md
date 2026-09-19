@@ -237,8 +237,11 @@ an `idempotencyKey`. OmniFlow records the key *before* it acts and passes it dow
 crash-recovery or a duplicate delivery never repeats the effect. Make keys meaningful and stable:
 
 ```yaml
-idempotencyKey: "charge-${{ inputs.orderId }}"        # good: same order → same charge
-idempotencyKey: "${{ run.id }}"                       # only right if a new run should act again
+idempotencyKey: "charge-${{ inputs.orderId }}"        # good: the same order always maps to the same charge
+```
+
+```yaml
+idempotencyKey: "${{ run.id }}"                       # only right if every new run should act again
 ```
 
 ## Compensation (undoing work)

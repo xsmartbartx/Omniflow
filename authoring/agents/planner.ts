@@ -1,6 +1,6 @@
 import type { Issue } from '../../core/index.ts';
-import { detectInjection, frameAsData } from '../../security/pentest/index.ts';
 import type { CapabilityDeclaration } from '../../schemas/index.ts';
+import { detectInjection, frameAsData } from '../../security/pentest/index.ts';
 import type { LlmClient } from '../llm.ts';
 import { capabilityCatalogue, plannerSystemPrompt } from './prompt.ts';
 
@@ -15,7 +15,12 @@ export interface ValidationOutcome {
   ok: boolean;
   errors: Issue[];
   warnings: Issue[];
-  risk?: { score: number; level: string; blocking: boolean; findings: Array<{ ruleId: string; severity: string; blocking: boolean; message: string; stepId?: string }> };
+  risk?: {
+    score: number;
+    level: string;
+    blocking: boolean;
+    findings: Array<{ ruleId: string; severity: string; blocking: boolean; message: string; stepId?: string }>;
+  };
 }
 
 export interface PlannerDeps {
@@ -70,13 +75,21 @@ export class Planner {
 
   async plan(req: PlanRequest, signal?: AbortSignal): Promise<PlanResult> {
     const system = plannerSystemPrompt(capabilityCatalogue(this.capabilities()));
-    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: this.brief(req) }];
-    const injectionSignals = (req.untrusted ?? []).flatMap((u) => detectInjection(u.content).map((m) => `${u.label}: ${m.pattern}`));
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+      { role: 'user', content: this.brief(req) },
+    ];
+    const injectionSignals = (req.untrusted ?? []).flatMap((u) =>
+      detectInjection(u.content).map((m) => `${u.label}: ${m.pattern}`),
+    );
     const usage = { inputTokens: 0, outputTokens: 0 };
     let model = this.llm.model;
 
     let last: { manifest?: string; rationale: string; openQuestions: string[] } = { rationale: '', openQuestions: [] };
-    let validation: ValidationOutcome = { ok: false, errors: [{ path: '', code: 'NO_MANIFEST', message: 'The model did not produce a manifest' }], warnings: [] };
+    let validation: ValidationOutcome = {
+      ok: false,
+      errors: [{ path: '', code: 'NO_MANIFEST', message: 'The model did not produce a manifest' }],
+      warnings: [],
+    };
 
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       const res = await this.llm.complete({ system, messages, maxTokens: 8_000 }, signal);
@@ -87,15 +100,36 @@ export class Planner {
       messages.push({ role: 'assistant', content: res.text });
 
       if (!parsed.manifest) {
-        validation = { ok: false, errors: [{ path: '', code: 'NO_MANIFEST', message: 'The reply contained no ```yaml block' }], warnings: [] };
-        messages.push({ role: 'user', content: 'Your reply did not contain a manifest. Reply again in the required format, with the complete manifest in a ```yaml block.' });
+        validation = {
+          ok: false,
+          errors: [{ path: '', code: 'NO_MANIFEST', message: 'The reply contained no ```yaml block' }],
+          warnings: [],
+        };
+        messages.push({
+          role: 'user',
+          content:
+            'Your reply did not contain a manifest. Reply again in the required format, with the complete manifest in a ```yaml block.',
+        });
         continue;
       }
-      last = { manifest: parsed.manifest, rationale: parsed.rationale || last.rationale, openQuestions: parsed.openQuestions };
+      last = {
+        manifest: parsed.manifest,
+        rationale: parsed.rationale || last.rationale,
+        openQuestions: parsed.openQuestions,
+      };
       validation = this.validate(parsed.manifest, req.tenant);
       const blocking = validation.risk?.findings.filter((f) => f.blocking) ?? [];
       if (validation.ok && blocking.length === 0) {
-        return { ok: true, ...last, manifest: parsed.manifest, attempts: attempt, validation, usage, model, injectionSignals };
+        return {
+          ok: true,
+          ...last,
+          manifest: parsed.manifest,
+          attempts: attempt,
+          validation,
+          usage,
+          model,
+          injectionSignals,
+        };
       }
       messages.push({ role: 'user', content: repairMessage(validation, blocking) });
     }
@@ -105,7 +139,11 @@ export class Planner {
 
   private brief(req: PlanRequest): string {
     const parts: string[] = [];
-    parts.push(req.baseManifest ? 'Revise the existing workflow below according to the request. Keep everything that is not affected, and bump metadata.version (semver, patch or minor as appropriate).' : 'Create a new workflow for the request below.');
+    parts.push(
+      req.baseManifest
+        ? 'Revise the existing workflow below according to the request. Keep everything that is not affected, and bump metadata.version (semver, patch or minor as appropriate).'
+        : 'Create a new workflow for the request below.',
+    );
     parts.push(`Request:\n${req.intent.slice(0, MAX_INTENT)}`);
     if (req.baseManifest) parts.push(`Existing manifest:\n\`\`\`yaml\n${req.baseManifest}\n\`\`\``);
     let budget = MAX_UNTRUSTED;
@@ -121,15 +159,19 @@ export class Planner {
 
 function repairMessage(v: ValidationOutcome, blocking: NonNullable<ValidationOutcome['risk']>['findings']): string {
   const lines: string[] = [];
-  for (const e of v.errors.slice(0, 20)) lines.push(`- [${e.code}] ${e.path ? `${e.path}: ` : ''}${e.message}${e.line ? ` (line ${e.line})` : ''}`);
-  for (const f of blocking.slice(0, 10)) lines.push(`- [risk:${f.ruleId}] ${f.message}${f.stepId ? ` (step ${f.stepId})` : ''}`);
+  for (const e of v.errors.slice(0, 20))
+    lines.push(`- [${e.code}] ${e.path ? `${e.path}: ` : ''}${e.message}${e.line ? ` (line ${e.line})` : ''}`);
+  for (const f of blocking.slice(0, 10))
+    lines.push(`- [risk:${f.ruleId}] ${f.message}${f.stepId ? ` (step ${f.stepId})` : ''}`);
   return `The validator rejected that manifest:\n${lines.join('\n')}\n\nFix these problems and reply again in the same format with the COMPLETE corrected manifest. Do not remove functionality to make errors go away, and do not invent capabilities.`;
 }
 
 /** Pull the sections out of a model reply. Tolerant of missing tags and of prose around the fenced block. */
 export function parseReply(text: string): { rationale: string; openQuestions: string[]; manifest?: string } {
   const tag = (name: string) => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'i').exec(text)?.[1]?.trim() ?? '';
-  const fences = [...text.matchAll(/```([\w-]*)[ \t]*\n([\s\S]*?)```/g)].filter((m) => /^(ya?ml)?$/i.test(m[1]!)).map((m) => m[2]!.trim());
+  const fences = [...text.matchAll(/```([\w-]*)[ \t]*\n([\s\S]*?)```/g)]
+    .filter((m) => /^(ya?ml)?$/i.test(m[1]!))
+    .map((m) => m[2]!.trim());
   // the manifest is the (last) YAML block that looks like one
   const manifest = [...fences].reverse().find((f) => /^\s*apiVersion:/m.test(f));
   const questions = tag('questions')

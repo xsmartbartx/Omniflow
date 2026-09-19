@@ -30,7 +30,8 @@ export function verifyWebhook(opts: {
   if (!timestamp || !signature) return { ok: false, reason: 'missing-headers' };
   if (!/^\d{9,11}$/.test(timestamp)) return { ok: false, reason: 'bad-timestamp' };
   const tsMs = Number(timestamp) * 1000;
-  if (Math.abs(nowMs - tsMs) > (opts.toleranceMs ?? WEBHOOK_TOLERANCE_MS)) return { ok: false, reason: 'stale-timestamp' };
+  if (Math.abs(nowMs - tsMs) > (opts.toleranceMs ?? WEBHOOK_TOLERANCE_MS))
+    return { ok: false, reason: 'stale-timestamp' };
 
   const expected = signWebhook(secret, Number(timestamp), rawBody);
   const a = Buffer.from(expected);

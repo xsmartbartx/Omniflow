@@ -15,9 +15,23 @@ function bodyFor(format: ChatFormat, text: string, payload?: unknown): string {
 
 function classifyStatus(status: number): CapabilityError | null {
   if (status >= 200 && status < 300) return null;
-  if (status === 429 || status >= 500) return new CapabilityError('NOTIFY_UNAVAILABLE', `The notification service responded ${status}`, { errorClass: 'transient', retryable: true, details: { status } });
-  if (status === 401 || status === 403 || status === 404) return new CapabilityError('NOTIFY_REJECTED', `The notification endpoint rejected the request (${status}); check the webhook URL`, { errorClass: 'authorisation', retryable: false, details: { status } });
-  return new CapabilityError('NOTIFY_FAILED', `The notification service responded ${status}`, { errorClass: 'business', retryable: false, details: { status } });
+  if (status === 429 || status >= 500)
+    return new CapabilityError('NOTIFY_UNAVAILABLE', `The notification service responded ${status}`, {
+      errorClass: 'transient',
+      retryable: true,
+      details: { status },
+    });
+  if (status === 401 || status === 403 || status === 404)
+    return new CapabilityError(
+      'NOTIFY_REJECTED',
+      `The notification endpoint rejected the request (${status}); check the webhook URL`,
+      { errorClass: 'authorisation', retryable: false, details: { status } },
+    );
+  return new CapabilityError('NOTIFY_FAILED', `The notification service responded ${status}`, {
+    errorClass: 'business',
+    retryable: false,
+    details: { status },
+  });
 }
 
 function hostPort(url: string): string {
@@ -32,9 +46,19 @@ export function parseChannel(def: string): { format: ChatFormat; url: string } {
 }
 
 /** Send a chat/webhook message to an operator-configured channel. Used by `notify-channel` and by alerting. */
-export async function sendToChannel(config: AdapterConfig, channel: string, text: string, signal: AbortSignal = AbortSignal.timeout(15_000)): Promise<void> {
+export async function sendToChannel(
+  config: AdapterConfig,
+  channel: string,
+  text: string,
+  signal: AbortSignal = AbortSignal.timeout(15_000),
+): Promise<void> {
   const def = config.channels[channel];
-  if (!def) throw new CapabilityError('NOTIFY_UNKNOWN_CHANNEL', `Channel '${channel}' is not configured (available: ${Object.keys(config.channels).join(', ') || 'none'})`, { errorClass: 'contract', retryable: false });
+  if (!def)
+    throw new CapabilityError(
+      'NOTIFY_UNKNOWN_CHANNEL',
+      `Channel '${channel}' is not configured (available: ${Object.keys(config.channels).join(', ') || 'none'})`,
+      { errorClass: 'contract', retryable: false },
+    );
   const { format, url } = parseChannel(def);
   const res = await safeRequest({
     method: 'POST',
@@ -69,7 +93,8 @@ export function createWebhookNotifier(config: AdapterConfig): CapabilityAdapter[
       name: 'notify-webhook',
       version: '1.0.0',
       family: 'notification',
-      description: 'Post a message to a chat or generic webhook URL (Slack, Teams, Discord or raw JSON). The destination host must be in the step’s egress allow-list.',
+      description:
+        'Post a message to a chat or generic webhook URL (Slack, Teams, Discord or raw JSON). The destination host must be in the step’s egress allow-list.',
       inputSchema: {
         type: 'object',
         required: ['url'],
@@ -81,7 +106,12 @@ export function createWebhookNotifier(config: AdapterConfig): CapabilityAdapter[
           format: { enum: ['slack', 'teams', 'discord', 'generic'], default: 'slack' },
         },
       },
-      outputSchema: { type: 'object', required: ['status', 'ok'], properties: { status: { type: 'integer' }, ok: { type: 'boolean' } }, additionalProperties: false },
+      outputSchema: {
+        type: 'object',
+        required: ['status', 'ok'],
+        properties: { status: { type: 'integer' }, ok: { type: 'boolean' } },
+        additionalProperties: false,
+      },
       effect: 'effectful',
       scopes: ['network:http'],
       egress: { mode: 'step' },
@@ -92,11 +122,19 @@ export function createWebhookNotifier(config: AdapterConfig): CapabilityAdapter[
     } as CapabilityDeclaration,
     simulate: () => ({ status: 200, ok: true }),
     async execute(ctx, input: { url: string; text?: string; payload?: unknown; format?: ChatFormat }) {
-      if (ctx.egress.length === 0) throw new CapabilityError('EGRESS_DENIED', "This step must declare 'egress' hosts", { errorClass: 'authorisation', retryable: false });
+      if (ctx.egress.length === 0)
+        throw new CapabilityError('EGRESS_DENIED', "This step must declare 'egress' hosts", {
+          errorClass: 'authorisation',
+          retryable: false,
+        });
       const res = await safeRequest({
         method: 'POST',
         url: input.url,
-        headers: { 'content-type': 'application/json', 'user-agent': config.http.userAgent, ...(ctx.idempotencyKey ? { 'idempotency-key': ctx.idempotencyKey } : {}) },
+        headers: {
+          'content-type': 'application/json',
+          'user-agent': config.http.userAgent,
+          ...(ctx.idempotencyKey ? { 'idempotency-key': ctx.idempotencyKey } : {}),
+        },
         body: bodyFor(input.format ?? 'slack', input.text ?? '', input.payload),
         signal: ctx.signal,
         allowedHosts: ctx.egress,
@@ -125,9 +163,18 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
         type: 'object',
         required: ['channel', 'text'],
         additionalProperties: false,
-        properties: { channel: { type: 'string', minLength: 1, maxLength: 64 }, text: { type: 'string', minLength: 1, maxLength: 10_000 }, severity: { enum: ['info', 'warning', 'error'], default: 'info' } },
+        properties: {
+          channel: { type: 'string', minLength: 1, maxLength: 64 },
+          text: { type: 'string', minLength: 1, maxLength: 10_000 },
+          severity: { enum: ['info', 'warning', 'error'], default: 'info' },
+        },
       },
-      outputSchema: { type: 'object', required: ['sent'], properties: { sent: { type: 'boolean' } }, additionalProperties: false },
+      outputSchema: {
+        type: 'object',
+        required: ['sent'],
+        properties: { sent: { type: 'boolean' } },
+        additionalProperties: false,
+      },
       effect: 'effectful',
       scopes: ['network:http'],
       egress: { mode: 'none' },
@@ -150,7 +197,8 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
   const smtp = config.email.smtpUrl;
   if (!smtp) return [];
   // `json:` is a development sink: messages are built but not sent, and returned in the output.
-  const transport = smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
+  const transport =
+    smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
   const email: CapabilityAdapter = {
     declaration: {
       name: 'notify-email',
@@ -172,7 +220,11 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
       outputSchema: {
         type: 'object',
         required: ['messageId', 'accepted', 'rejected'],
-        properties: { messageId: { type: 'string' }, accepted: { type: 'array', items: { type: 'string' } }, rejected: { type: 'array', items: { type: 'string' } } },
+        properties: {
+          messageId: { type: 'string' },
+          accepted: { type: 'array', items: { type: 'string' } },
+          rejected: { type: 'array', items: { type: 'string' } },
+        },
         additionalProperties: false,
       },
       effect: 'effectful',
@@ -183,10 +235,16 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
       dataClassification: 'confidential',
       dryRun: 'simulate',
     } as CapabilityDeclaration,
-    simulate: (_ctx, input: { to: string[] }) => ({ messageId: '<dry-run@omniflow.local>', accepted: input.to, rejected: [] }),
+    simulate: (_ctx, input: { to: string[] }) => ({
+      messageId: '<dry-run@omniflow.local>',
+      accepted: input.to,
+      rejected: [],
+    }),
     async execute(ctx, input: { to: string[]; subject: string; text?: string; html?: string; replyTo?: string }) {
       // A stable Message-ID derived from the idempotency key lets receiving systems collapse duplicates.
-      const messageId = ctx.idempotencyKey ? `<${createHash('sha256').update(ctx.idempotencyKey).digest('hex').slice(0, 32)}@omniflow.local>` : undefined;
+      const messageId = ctx.idempotencyKey
+        ? `<${createHash('sha256').update(ctx.idempotencyKey).digest('hex').slice(0, 32)}@omniflow.local>`
+        : undefined;
       try {
         const info = await transport.sendMail({
           from: config.email.from ?? 'omniflow@localhost',
@@ -196,19 +254,37 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
           ...(input.html ? { html: input.html } : {}),
           ...(input.replyTo ? { replyTo: input.replyTo } : {}),
           ...(messageId ? { messageId } : {}),
-          headers: { 'X-OmniFlow-Run': ctx.runId, ...(ctx.idempotencyKey ? { 'X-OmniFlow-Idempotency-Key': ctx.idempotencyKey } : {}) },
+          headers: {
+            'X-OmniFlow-Run': ctx.runId,
+            ...(ctx.idempotencyKey ? { 'X-OmniFlow-Idempotency-Key': ctx.idempotencyKey } : {}),
+          },
         });
-        return { messageId: String(info.messageId ?? messageId ?? ''), accepted: (info.accepted ?? input.to).map(String), rejected: (info.rejected ?? []).map(String) };
+        return {
+          messageId: String(info.messageId ?? messageId ?? ''),
+          accepted: (info.accepted ?? input.to).map(String),
+          rejected: (info.rejected ?? []).map(String),
+        };
       } catch (e) {
         const err = e as { responseCode?: number; code?: string; message?: string };
         const code = err.responseCode ?? 0;
-        if (code >= 500 || (code >= 400 && code < 500) || ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS'].includes(err.code ?? '')) {
-          throw new CapabilityError(code >= 500 ? 'EMAIL_REJECTED' : 'EMAIL_UNAVAILABLE', `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`, {
-            errorClass: code >= 500 ? 'business' : 'transient',
-            retryable: code < 500,
-          });
+        if (
+          code >= 500 ||
+          (code >= 400 && code < 500) ||
+          ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS'].includes(err.code ?? '')
+        ) {
+          throw new CapabilityError(
+            code >= 500 ? 'EMAIL_REJECTED' : 'EMAIL_UNAVAILABLE',
+            `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`,
+            {
+              errorClass: code >= 500 ? 'business' : 'transient',
+              retryable: code < 500,
+            },
+          );
         }
-        throw new CapabilityError('EMAIL_UNAVAILABLE', `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`, { errorClass: 'transient', retryable: true });
+        throw new CapabilityError('EMAIL_UNAVAILABLE', `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`, {
+          errorClass: 'transient',
+          retryable: true,
+        });
       }
     },
   };

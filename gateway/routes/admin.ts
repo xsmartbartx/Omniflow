@@ -16,7 +16,12 @@ export function adminRoutes(): RouteDef[] {
       tag: 'Capabilities',
       action: 'workflow.read',
       handler: ({ app, principal }) => {
-        const flags = new Map(app.state.kv.listCapabilityFlags(principal.tenant).filter((f) => f.killed).map((f) => [f.name, f]));
+        const flags = new Map(
+          app.state.kv
+            .listCapabilityFlags(principal.tenant)
+            .filter((f) => f.killed)
+            .map((f) => [f.name, f]),
+        );
         const breakers = app.breakers.snapshot();
         return {
           items: app.capabilities.list().map((c) => ({
@@ -24,7 +29,12 @@ export function adminRoutes(): RouteDef[] {
             hash: c.hash,
             owner: c.registration.owner,
             source: c.registration.source,
-            killed: flags.has(c.declaration.name) ? { reason: flags.get(c.declaration.name)!.reason ?? null, scope: flags.get(c.declaration.name)!.tenant === GLOBAL_TENANT ? 'platform' : 'tenant' } : null,
+            killed: flags.has(c.declaration.name)
+              ? {
+                  reason: flags.get(c.declaration.name)!.reason ?? null,
+                  scope: flags.get(c.declaration.name)!.tenant === GLOBAL_TENANT ? 'platform' : 'tenant',
+                }
+              : null,
             circuit: breakers[c.declaration.name]?.state ?? 'closed',
           })),
         };
@@ -34,14 +44,20 @@ export function adminRoutes(): RouteDef[] {
       (op): RouteDef => ({
         method: 'POST',
         url: `/v1/capabilities/:name/${op}`,
-        summary: op === 'kill' ? 'Kill switch: steps using this capability fail fast' : 'Lift the capability kill switch',
+        summary:
+          op === 'kill' ? 'Kill switch: steps using this capability fail fast' : 'Lift the capability kill switch',
         tag: 'Capabilities',
         action: 'capability.manage',
         schema: { params: obj({ name }, ['name']), body: obj({ reason: { type: 'string', maxLength: 500 } }) },
         handler: ({ app, principal, params, body }) => {
           if (!app.capabilities.has(params.name)) throw new NotFoundError('Capability', params.name);
           app.state.kv.setCapabilityKilled(principal.tenant, params.name, op === 'kill', principal.id, body?.reason);
-          app.state.events.append({ tenant: principal.tenant, type: op === 'kill' ? 'capability.killed' : 'capability.revived', actor: { type: principal.type, id: principal.id, name: principal.name }, data: { capability: params.name, ...(body?.reason ? { reason: body.reason } : {}) } });
+          app.state.events.append({
+            tenant: principal.tenant,
+            type: op === 'kill' ? 'capability.killed' : 'capability.revived',
+            actor: { type: principal.type, id: principal.id, name: principal.name },
+            data: { capability: params.name, ...(body?.reason ? { reason: body.reason } : {}) },
+          });
           return { ok: true };
         },
       }),
@@ -62,10 +78,24 @@ export function adminRoutes(): RouteDef[] {
       summary: 'Create or replace a secret. The value is encrypted at rest and cannot be read back.',
       tag: 'Secrets',
       action: 'secret.write',
-      schema: { params: obj({ name: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' } }, ['name']), body: obj({ value: { type: 'string', minLength: 1, maxLength: 65536 }, description: { type: 'string', maxLength: 300 } }, ['value']) },
+      schema: {
+        params: obj({ name: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' } }, ['name']),
+        body: obj(
+          {
+            value: { type: 'string', minLength: 1, maxLength: 65536 },
+            description: { type: 'string', maxLength: 300 },
+          },
+          ['value'],
+        ),
+      },
       handler: ({ app, principal, params, body }) => {
         app.broker.put(principal.tenant, params.name, body.value, principal.id, body.description);
-        app.state.events.append({ tenant: principal.tenant, type: 'secret.written', actor: { type: principal.type, id: principal.id, name: principal.name }, data: { name: params.name } });
+        app.state.events.append({
+          tenant: principal.tenant,
+          type: 'secret.written',
+          actor: { type: principal.type, id: principal.id, name: principal.name },
+          data: { name: params.name },
+        });
         return { ok: true, name: params.name };
       },
     },
@@ -78,7 +108,12 @@ export function adminRoutes(): RouteDef[] {
       schema: { params: obj({ name: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' } }, ['name']) },
       handler: ({ app, principal, params }) => {
         if (!app.broker.delete(principal.tenant, params.name)) throw new NotFoundError('Secret', params.name);
-        app.state.events.append({ tenant: principal.tenant, type: 'secret.deleted', actor: { type: principal.type, id: principal.id, name: principal.name }, data: { name: params.name } });
+        app.state.events.append({
+          tenant: principal.tenant,
+          type: 'secret.deleted',
+          actor: { type: principal.type, id: principal.id, name: principal.name },
+          data: { name: params.name },
+        });
         return { ok: true };
       },
     },
@@ -90,7 +125,10 @@ export function adminRoutes(): RouteDef[] {
       summary: 'Registered triggers (schedules, webhooks, events, completions)',
       tag: 'Triggers',
       action: 'workflow.read',
-      handler: ({ app, principal }) => ({ items: app.state.triggers.list(principal.tenant), hookUrl: `${app.config.publicUrl}/v1/hooks/${principal.tenant}` }),
+      handler: ({ app, principal }) => ({
+        items: app.state.triggers.list(principal.tenant),
+        hookUrl: `${app.config.publicUrl}/v1/hooks/${principal.tenant}`,
+      }),
     },
     {
       method: 'POST',
@@ -104,7 +142,8 @@ export function adminRoutes(): RouteDef[] {
         return {
           secret: r.secret,
           url: `${app.config.publicUrl}/v1/hooks/${principal.tenant}/${params.name}/${params.trigger}`,
-          signing: 'Send X-OmniFlow-Timestamp (unix seconds) and X-OmniFlow-Signature: v1=HMAC_SHA256(secret, "<timestamp>.<raw body>") as hex. Optionally send X-OmniFlow-Delivery with a unique id.',
+          signing:
+            'Send X-OmniFlow-Timestamp (unix seconds) and X-OmniFlow-Signature: v1=HMAC_SHA256(secret, "<timestamp>.<raw body>") as hex. Optionally send X-OmniFlow-Delivery with a unique id.',
         };
       },
     },
@@ -115,8 +154,18 @@ export function adminRoutes(): RouteDef[] {
       tag: 'Triggers',
       action: 'event.publish',
       status: 202,
-      schema: { body: obj({ type: { type: 'string', minLength: 1, maxLength: 200 }, payload: {}, correlation: { type: 'string', maxLength: 200 } }, ['type']) },
-      handler: ({ app, principal, body }) => app.triggers.publishEvent(principal.tenant, body.type, body.payload ?? {}, body.correlation),
+      schema: {
+        body: obj(
+          {
+            type: { type: 'string', minLength: 1, maxLength: 200 },
+            payload: {},
+            correlation: { type: 'string', maxLength: 200 },
+          },
+          ['type'],
+        ),
+      },
+      handler: ({ app, principal, body }) =>
+        app.triggers.publishEvent(principal.tenant, body.type, body.payload ?? {}, body.correlation),
     },
 
     // ------------------------------------------------------- users & API keys
@@ -126,7 +175,9 @@ export function adminRoutes(): RouteDef[] {
       summary: 'Users in your tenant',
       tag: 'Administration',
       action: 'user.manage',
-      handler: ({ app, principal }) => ({ items: app.state.identity.listUsers(principal.tenant).map(({ passwordHash: _p, ...u }) => u) }),
+      handler: ({ app, principal }) => ({
+        items: app.state.identity.listUsers(principal.tenant).map(({ passwordHash: _p, ...u }) => u),
+      }),
     },
     {
       method: 'POST',
@@ -135,7 +186,18 @@ export function adminRoutes(): RouteDef[] {
       tag: 'Administration',
       action: 'user.manage',
       status: 201,
-      schema: { body: obj({ email: { type: 'string', format: 'email', maxLength: 254 }, name: { type: 'string', maxLength: 100 }, password: { type: 'string', maxLength: 256 }, roles, tenant: { type: 'string', maxLength: 64 } }, ['email', 'password', 'roles']) },
+      schema: {
+        body: obj(
+          {
+            email: { type: 'string', format: 'email', maxLength: 254 },
+            name: { type: 'string', maxLength: 100 },
+            password: { type: 'string', maxLength: 256 },
+            roles,
+            tenant: { type: 'string', maxLength: 64 },
+          },
+          ['email', 'password', 'roles'],
+        ),
+      },
       handler: async ({ app, principal, body }) => {
         const { passwordHash: _p, ...u } = await app.auth.createUser(principal, { ...body, mustChangePassword: true });
         return u;
@@ -147,7 +209,10 @@ export function adminRoutes(): RouteDef[] {
       summary: 'Update a user (name, roles, disabled)',
       tag: 'Administration',
       action: 'user.manage',
-      schema: { params: obj({ id }, ['id']), body: obj({ name: { type: 'string', maxLength: 100 }, roles, disabled: { type: 'boolean' } }) },
+      schema: {
+        params: obj({ id }, ['id']),
+        body: obj({ name: { type: 'string', maxLength: 100 }, roles, disabled: { type: 'boolean' } }),
+      },
       handler: ({ app, principal, params, body }) => {
         const { passwordHash: _p, ...u } = app.auth.updateUser(principal, params.id, body ?? {});
         return u;
@@ -159,7 +224,9 @@ export function adminRoutes(): RouteDef[] {
       summary: 'API keys in your tenant (never the secret)',
       tag: 'Administration',
       action: 'apikey.manage',
-      handler: ({ app, principal }) => ({ items: app.state.identity.listApiKeys(principal.tenant).map(({ keyHash: _h, ...k }) => k) }),
+      handler: ({ app, principal }) => ({
+        items: app.state.identity.listApiKeys(principal.tenant).map(({ keyHash: _h, ...k }) => k),
+      }),
     },
     {
       method: 'POST',
@@ -168,7 +235,16 @@ export function adminRoutes(): RouteDef[] {
       tag: 'Administration',
       action: 'apikey.manage',
       status: 201,
-      schema: { body: obj({ name: { type: 'string', minLength: 1, maxLength: 100 }, roles, expiresAt: { type: 'string', format: 'date-time' } }, ['name', 'roles']) },
+      schema: {
+        body: obj(
+          {
+            name: { type: 'string', minLength: 1, maxLength: 100 },
+            roles,
+            expiresAt: { type: 'string', format: 'date-time' },
+          },
+          ['name', 'roles'],
+        ),
+      },
       handler: ({ app, principal, body }) => {
         const { key, record } = app.auth.createApiKey(principal, body);
         const { keyHash: _h, ...rest } = record;
@@ -202,7 +278,15 @@ export function adminRoutes(): RouteDef[] {
       tag: 'Administration',
       action: 'tenant.manage',
       status: 201,
-      schema: { body: obj({ id: { type: 'string', pattern: '^[a-z][a-z0-9-]{1,40}$' }, name: { type: 'string', minLength: 1, maxLength: 100 } }, ['id', 'name']) },
+      schema: {
+        body: obj(
+          {
+            id: { type: 'string', pattern: '^[a-z][a-z0-9-]{1,40}$' },
+            name: { type: 'string', minLength: 1, maxLength: 100 },
+          },
+          ['id', 'name'],
+        ),
+      },
       handler: ({ app, body }) => app.state.identity.createTenant(body.id, body.name),
     },
     {
@@ -211,7 +295,12 @@ export function adminRoutes(): RouteDef[] {
       summary: 'Notification channels configured by the operator (names only)',
       tag: 'Administration',
       action: 'workflow.read',
-      handler: ({ app }) => ({ items: Object.entries(app.config.adapters.channels).map(([n, def]) => ({ name: n, format: /^(slack|teams|discord|generic):/i.exec(def)?.[1]?.toLowerCase() ?? 'slack' })) }),
+      handler: ({ app }) => ({
+        items: Object.entries(app.config.adapters.channels).map(([n, def]) => ({
+          name: n,
+          format: /^(slack|teams|discord|generic):/i.exec(def)?.[1]?.toLowerCase() ?? 'slack',
+        })),
+      }),
     },
 
     // ------------------------------------------------------------------ audit
@@ -221,7 +310,16 @@ export function adminRoutes(): RouteDef[] {
       summary: 'The audit log',
       tag: 'Audit',
       action: 'audit.read',
-      schema: { querystring: obj({ type: { type: 'string', maxLength: 300 }, runId: { type: 'string', maxLength: 64 }, afterSeq: { type: 'integer', minimum: 0 }, beforeSeq: { type: 'integer', minimum: 0 }, order: { enum: ['asc', 'desc'] }, limit: { type: 'integer', minimum: 1, maximum: 1000, default: 100 } }) },
+      schema: {
+        querystring: obj({
+          type: { type: 'string', maxLength: 300 },
+          runId: { type: 'string', maxLength: 64 },
+          afterSeq: { type: 'integer', minimum: 0 },
+          beforeSeq: { type: 'integer', minimum: 0 },
+          order: { enum: ['asc', 'desc'] },
+          limit: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+        }),
+      },
       handler: ({ app, principal, query }) => ({
         items: app.state.events.list({
           tenant: principal.tenant,
@@ -251,11 +349,22 @@ export function adminRoutes(): RouteDef[] {
       action: 'audit.read',
       raw: true,
       handler: ({ app, principal, reply }) => {
-        app.state.events.append({ tenant: principal.tenant, type: 'audit.export', actor: { type: principal.type, id: principal.id, name: principal.name }, data: { by: principal.name } });
+        app.state.events.append({
+          tenant: principal.tenant,
+          type: 'audit.export',
+          actor: { type: principal.type, id: principal.id, name: principal.name },
+          data: { by: principal.name },
+        });
         const verification = app.state.events.verify(principal.tenant);
         reply.hijack();
-        reply.raw.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'content-disposition': `attachment; filename="omniflow-audit-${principal.tenant}.ndjson"`, 'cache-control': 'no-store' });
-        reply.raw.write(`${JSON.stringify({ _meta: { tenant: principal.tenant, exportedAt: new Date().toISOString(), chain: verification } })}\n`);
+        reply.raw.writeHead(200, {
+          'content-type': 'application/x-ndjson; charset=utf-8',
+          'content-disposition': `attachment; filename="omniflow-audit-${principal.tenant}.ndjson"`,
+          'cache-control': 'no-store',
+        });
+        reply.raw.write(
+          `${JSON.stringify({ _meta: { tenant: principal.tenant, exportedAt: new Date().toISOString(), chain: verification } })}\n`,
+        );
         let after = 0;
         for (;;) {
           const batch = app.state.events.list({ tenant: principal.tenant, afterSeq: after, limit: 1000 });

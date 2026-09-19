@@ -1,5 +1,5 @@
-import { ApiClient } from './client.ts';
 import { flag, type ParsedArgs, UsageError } from './args.ts';
+import { ApiClient } from './client.ts';
 import type { Style } from './format.ts';
 
 export type Env = Record<string, string | undefined>;

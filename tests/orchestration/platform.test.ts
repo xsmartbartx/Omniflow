@@ -13,18 +13,30 @@ const pure = (name = 'wf', version = '1.0.0', extra: Record<string, unknown> = {
   return m;
 };
 const effectful = (name = 'pay', version = '1.0.0') => {
-  const m = wf([{ id: 'charge', type: 'capability', uses: 'sim-effect@^1', with: { label: 'c' }, idempotencyKey: 'k' }], {}, name);
+  const m = wf(
+    [{ id: 'charge', type: 'capability', uses: 'sim-effect@^1', with: { label: 'c' }, idempotencyKey: 'k' }],
+    {},
+    name,
+  );
   m.metadata.version = version;
   return m;
 };
 const slow = (name: string, ms: number, extra: Record<string, unknown> = {}) =>
-  wf([{ id: 's', type: 'capability', uses: 'sim-slow@^1', with: { ms } }], { inputs: { n: { type: 'integer', default: 0 } }, ...extra }, name);
+  wf(
+    [{ id: 's', type: 'capability', uses: 'sim-slow@^1', with: { ms } }],
+    { inputs: { n: { type: 'integer', default: 0 } }, ...extra },
+    name,
+  );
 const asPublished = (r: ReturnType<Platform['publish']>) => {
   expect(r.status).toBe('published');
   return r as Extract<typeof r, { status: 'published' }>;
 };
-const trig = (who: Platform['users']['admin'], workflow: string, inputs: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) =>
-  p.runs.trigger({ principal: who, workflow, inputs, trigger: { type: 'manual' }, ...extra });
+const trig = (
+  who: Platform['users']['admin'],
+  workflow: string,
+  inputs: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {},
+) => p.runs.trigger({ principal: who, workflow, inputs, trigger: { type: 'manual' }, ...extra });
 
 describe('publishing and change control', () => {
   it('publishes a low-risk workflow immediately, recording lineage, risk and findings', () => {
@@ -32,7 +44,11 @@ describe('publishing and change control', () => {
     const r = asPublished(p.publish(p.users.author, pure()));
     expect(r.version).toMatchObject({ name: 'wf', version: '1.0.0', status: 'published', publishedBy: 'usr_author' });
     expect(r.risk.level).toBe('low');
-    expect(p.state.registry.getSettings('default', 'wf')).toMatchObject({ stableVersion: '1.0.0', enabled: true, killed: false });
+    expect(p.state.registry.getSettings('default', 'wf')).toMatchObject({
+      stableVersion: '1.0.0',
+      enabled: true,
+      killed: false,
+    });
     expect(p.state.events.list({ tenant: 'default', types: ['workflow.published'] })).toHaveLength(1);
 
     const v2 = asPublished(p.publish(p.users.author, pure('wf', '1.1.0')));
@@ -92,15 +108,25 @@ describe('publishing and change control', () => {
     expect(p.state.registry.getVersion('default', 'pay', '1.0.0')).toBeUndefined();
 
     // the requester cannot approve their own change
-    expect(() => p.registry.approveChange(p.users.admin, r.change.id)).toThrow(/cannot be approved by the person who requested it/);
+    expect(() => p.registry.approveChange(p.users.admin, r.change.id)).toThrow(
+      /cannot be approved by the person who requested it/,
+    );
     // a role without the permission cannot either
     expect(() => p.registry.approveChange(p.users.author, r.change.id)).toThrow(/do not permit/);
 
     const done = p.registry.approveChange(p.users.approver, r.change.id, 'reviewed the idempotency key');
     expect(done.change.status).toBe('published');
     expect(done.published).toMatchObject({ name: 'pay', version: '1.0.0', publishedBy: 'usr_admin' });
-    expect((done.published!.approval as any).approvals[0]).toMatchObject({ by: 'usr_approver', comment: 'reviewed the idempotency key' });
-    expect(p.state.events.list({ tenant: 'default', types: ['workflow.change-requested', 'workflow.change-approved', 'workflow.published'] })).toHaveLength(3);
+    expect((done.published!.approval as any).approvals[0]).toMatchObject({
+      by: 'usr_approver',
+      comment: 'reviewed the idempotency key',
+    });
+    expect(
+      p.state.events.list({
+        tenant: 'default',
+        types: ['workflow.change-requested', 'workflow.change-approved', 'workflow.published'],
+      }),
+    ).toHaveLength(3);
   });
 
   it('can require several distinct approvers', () => {
@@ -140,7 +166,15 @@ describe('publishing and change control', () => {
         apiVersion: 'omniflow.dev/v1',
         kind: 'Policy',
         metadata: { name: 'house' },
-        rules: [{ id: 'no-crit', effect: 'deny', actions: ['workflow.publish'], when: 'workflow.criticality == "critical"', reason: 'freeze on critical workflows' }],
+        rules: [
+          {
+            id: 'no-crit',
+            effect: 'deny',
+            actions: ['workflow.publish'],
+            when: 'workflow.criticality == "critical"',
+            reason: 'freeze on critical workflows',
+          },
+        ],
       }).document!,
     ]);
     const m = pure();
@@ -154,16 +188,25 @@ describe('rollout: activation, canary and rollback', () => {
     p = makePlatform();
     asPublished(p.publish(p.users.author, pure('wf', '1.0.0')));
     asPublished(p.publish(p.users.author, pure('wf', '2.0.0'), { canaryPercent: 30 }));
-    expect(p.state.registry.getSettings('default', 'wf')).toMatchObject({ stableVersion: '1.0.0', canaryVersion: '2.0.0', canaryPercent: 30 });
+    expect(p.state.registry.getSettings('default', 'wf')).toMatchObject({
+      stableVersion: '1.0.0',
+      canaryVersion: '2.0.0',
+      canaryPercent: 30,
+    });
 
     const picks = Array.from({ length: 400 }, (_, i) => p.registry.resolveActive('default', 'wf', `key-${i}`));
     const canary = picks.filter((x) => x.canary).length;
     expect(canary).toBeGreaterThan(80);
     expect(canary).toBeLessThan(160); // ≈ 30 % of 400
     // the choice is deterministic per key
-    expect(p.registry.resolveActive('default', 'wf', 'key-7').version.version).toBe(p.registry.resolveActive('default', 'wf', 'key-7').version.version);
+    expect(p.registry.resolveActive('default', 'wf', 'key-7').version.version).toBe(
+      p.registry.resolveActive('default', 'wf', 'key-7').version.version,
+    );
 
-    expect(p.registry.promoteCanary(p.users.operator, 'wf')).toMatchObject({ stableVersion: '2.0.0', canaryPercent: 0 });
+    expect(p.registry.promoteCanary(p.users.operator, 'wf')).toMatchObject({
+      stableVersion: '2.0.0',
+      canaryPercent: 0,
+    });
     p.registry.setCanary(p.users.operator, 'wf', '1.0.0', 50);
     expect(p.registry.rollbackCanary(p.users.operator, 'wf').canaryPercent).toBe(0);
   });
@@ -194,14 +237,25 @@ describe('rollout: activation, canary and rollback', () => {
     }
     expect(p.scheduler.evaluateCanaries()).toEqual(['default/wf']);
     expect(p.state.registry.getSettings('default', 'wf')).toMatchObject({ canaryPercent: 0, stableVersion: '1.0.0' });
-    expect(p.state.events.list({ tenant: 'default', types: ['workflow.rollout-changed'] }).some((e) => String(e.data.reason).includes('automatic rollback'))).toBe(true);
+    expect(
+      p.state.events
+        .list({ tenant: 'default', types: ['workflow.rollout-changed'] })
+        .some((e) => String(e.data.reason).includes('automatic rollback')),
+    ).toBe(true);
   });
 });
 
 describe('run admission: validation, authorisation and controls', () => {
   it('validates inputs, applies defaults, and reports errors by path', () => {
     p = makePlatform();
-    asPublished(p.publish(p.users.author, pure('wf', '1.0.0', { inputs: { n: { type: 'integer', required: true, minimum: 1 }, tag: { type: 'string', default: 'x' } } })));
+    asPublished(
+      p.publish(
+        p.users.author,
+        pure('wf', '1.0.0', {
+          inputs: { n: { type: 'integer', required: true, minimum: 1 }, tag: { type: 'string', default: 'x' } },
+        }),
+      ),
+    );
     try {
       trig(p.users.operator, 'wf', { n: 0, extra: true });
       expect.unreachable();
@@ -220,7 +274,11 @@ describe('run admission: validation, authorisation and controls', () => {
     expect(() => trig(p.users.operator, 'ghost')).toThrow(/not found/);
     p.state.identity.ensureTenant('acme', 'Acme');
     expect(() => trig(user('usr_acme', ['operator'], 'acme'), 'wf')).toThrow(/not found/); // other tenants cannot even see it
-    expect(p.state.events.list({ tenant: 'default', types: ['policy.decision'] }).some((e) => e.data.action === 'workflow.run')).toBe(true);
+    expect(
+      p.state.events
+        .list({ tenant: 'default', types: ['policy.decision'] })
+        .some((e) => e.data.action === 'workflow.run'),
+    ).toBe(true);
   });
 
   it('honours the kill switch and disable, and cancels runs queued behind them', async () => {
@@ -241,7 +299,15 @@ describe('run admission: validation, authorisation and controls', () => {
 
   it('deduplicates within a window and skips beyond a concurrency limit when so configured', async () => {
     p = makePlatform();
-    asPublished(p.publish(p.users.author, slow('dd', 30, { inputs: { order: { type: 'string', required: true } }, policy: { dedupWindow: '1h', dedupKey: 'order-${{ inputs.order }}' } })));
+    asPublished(
+      p.publish(
+        p.users.author,
+        slow('dd', 30, {
+          inputs: { order: { type: 'string', required: true } },
+          policy: { dedupWindow: '1h', dedupKey: 'order-${{ inputs.order }}' },
+        }),
+      ),
+    );
     const a = trig(p.users.operator, 'dd', { order: 'o1' });
     const b = trig(p.users.operator, 'dd', { order: 'o1' });
     const c = trig(p.users.operator, 'dd', { order: 'o2' });
@@ -287,7 +353,11 @@ describe('run admission: validation, authorisation and controls', () => {
     asPublished(p.publish(p.users.author, slow('costly', 10, { policy: { maxDailyCost: 2 } })));
     for (let i = 0; i < 2; i++) await p.wait((trig(p.users.operator, 'costly') as any).run);
     expect(() => trig(p.users.operator, 'costly')).toThrow(/Daily cost ceiling/);
-    expect(p.state.events.list({ tenant: 'default', types: ['run.skipped'] }).some((e) => e.data.reason === 'daily-cost-ceiling')).toBe(true);
+    expect(
+      p.state.events
+        .list({ tenant: 'default', types: ['run.skipped'] })
+        .some((e) => e.data.reason === 'daily-cost-ceiling'),
+    ).toBe(true);
   });
 
   it('retries a finished run on the exact same plan, and cancels via the service with RBAC', async () => {
@@ -314,7 +384,20 @@ describe('run admission: validation, authorisation and controls', () => {
 
 describe('approvals: who may decide', () => {
   const gated = (roles?: string[]) =>
-    wf([{ id: 'gate', type: 'approval', message: 'ok?', timeout: '1h', onTimeout: 'deny', ...(roles ? { approvers: { roles } } : {}) }], {}, 'gated');
+    wf(
+      [
+        {
+          id: 'gate',
+          type: 'approval',
+          message: 'ok?',
+          timeout: '1h',
+          onTimeout: 'deny',
+          ...(roles ? { approvers: { roles } } : {}),
+        },
+      ],
+      {},
+      'gated',
+    );
   const pending = () => p.approvals.list(p.users.admin, { status: 'pending' })[0]!;
 
   it('lets an eligible approver decide, records who, and resumes the run', async () => {
@@ -327,7 +410,9 @@ describe('approvals: who may decide', () => {
     const decided = p.approvals.decide(p.users.approver, pending().id, 'approved', 'fine');
     expect(decided).toMatchObject({ status: 'approved', decidedBy: 'usr_approver' });
     expect((await p.wait(run)).status).toBe('succeeded');
-    expect(p.state.events.list({ tenant: 'default', types: ['approval.decided'] })[0]!.actor).toMatchObject({ id: 'usr_approver' });
+    expect(p.state.events.list({ tenant: 'default', types: ['approval.decided'] })[0]!.actor).toMatchObject({
+      id: 'usr_approver',
+    });
     expect(() => p.approvals.decide(p.users.approver2, decided.id, 'denied')).toThrow(/already approved/);
   });
 

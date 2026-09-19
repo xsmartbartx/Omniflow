@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { byteLength, deepClone, evaluate, ExpressionError, FUNCTION_NAMES, FUNCTIONS, getPath, isPlainObject, jsonSize, parseExpression } from '../../core/index.ts';
+import {
+  byteLength,
+  deepClone,
+  ExpressionError,
+  evaluate,
+  FUNCTION_NAMES,
+  FUNCTIONS,
+  getPath,
+  isPlainObject,
+  jsonSize,
+  parseExpression,
+} from '../../core/index.ts';
 
 const call = (name: string, ...args: unknown[]) => FUNCTIONS[name]!.fn(args, { seed: 'run_seed' });
 const ev = (src: string, scope: Record<string, unknown> = {}, opts = {}) => evaluate(parseExpression(src), scope, opts);
@@ -134,11 +145,49 @@ describe('every whitelisted function: type errors are values, not crashes', () =
 
   it('the language has exactly the documented functions, each with sane arity', () => {
     expect([...FUNCTION_NAMES].sort()).toEqual(
-      ['abs', 'ceil', 'contains', 'date', 'dateAdd', 'endsWith', 'epochMs', 'first', 'floor', 'fromJson', 'hash', 'isNull', 'join', 'keys', 'last', 'len', 'lower', 'max', 'min', 'pluck', 'replace', 'round', 'slice', 'sort', 'split', 'startsWith', 'sum', 'toJson', 'toNumber', 'toString', 'trim', 'unique', 'upper', 'uuid', 'values'].sort(),
+      [
+        'abs',
+        'ceil',
+        'contains',
+        'date',
+        'dateAdd',
+        'endsWith',
+        'epochMs',
+        'first',
+        'floor',
+        'fromJson',
+        'hash',
+        'isNull',
+        'join',
+        'keys',
+        'last',
+        'len',
+        'lower',
+        'max',
+        'min',
+        'pluck',
+        'replace',
+        'round',
+        'slice',
+        'sort',
+        'split',
+        'startsWith',
+        'sum',
+        'toJson',
+        'toNumber',
+        'toString',
+        'trim',
+        'unique',
+        'upper',
+        'uuid',
+        'values',
+      ].sort(),
     );
-    for (const [name, spec] of Object.entries(FUNCTIONS)) expect(spec.min <= spec.max && spec.min >= 0, name).toBe(true);
+    for (const [name, spec] of Object.entries(FUNCTIONS))
+      expect(spec.min <= spec.max && spec.min >= 0, name).toBe(true);
     // nothing in the whitelist is an escape hatch
-    for (const name of FUNCTION_NAMES) expect(['eval', 'constructor', 'require', 'import', 'process', 'Function']).not.toContain(name);
+    for (const name of FUNCTION_NAMES)
+      expect(['eval', 'constructor', 'require', 'import', 'process', 'Function']).not.toContain(name);
   });
 });
 
@@ -151,7 +200,15 @@ describe('functions through the evaluator (arity, purity, budgets)', () => {
   });
 
   it('composes: a realistic expression', () => {
-    const scope = { inputs: { orders: [{ id: 'a', total: 20.5 }, { id: 'b', total: 1000 }, { id: 'c', total: 9.5 }] } };
+    const scope = {
+      inputs: {
+        orders: [
+          { id: 'a', total: 20.5 },
+          { id: 'b', total: 1000 },
+          { id: 'c', total: 9.5 },
+        ],
+      },
+    };
     expect(ev("round(sum(pluck(inputs.orders, 'total')) / len(inputs.orders), 1)", scope)).toBe(343.3);
     expect(ev("join(sort(pluck(inputs.orders, 'id')), '|')", scope)).toBe('a|b|c');
     expect(ev("max(pluck(inputs.orders, 'total')) >= 1000 ? 'review' : 'auto'", scope)).toBe('review');

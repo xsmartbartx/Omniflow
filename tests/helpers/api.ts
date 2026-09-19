@@ -26,7 +26,11 @@ export interface Api {
 }
 
 export interface Client {
-  request(method: string, url: string, opts?: { body?: unknown; raw?: string; headers?: Record<string, string>; noCsrf?: boolean }): Promise<{ status: number; body: any; headers: Record<string, any>; text: string }>;
+  request(
+    method: string,
+    url: string,
+    opts?: { body?: unknown; raw?: string; headers?: Record<string, string>; noCsrf?: boolean },
+  ): Promise<{ status: number; body: any; headers: Record<string, any>; text: string }>;
   get(url: string, headers?: Record<string, string>): ReturnType<Client['request']>;
   post(url: string, body?: unknown, headers?: Record<string, string>): ReturnType<Client['request']>;
   put(url: string, body?: unknown): ReturnType<Client['request']>;
@@ -69,7 +73,12 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
       if (o.raw !== undefined) payload = o.raw;
       else if (o.body !== undefined) payload = JSON.stringify(o.body);
       if (payload !== undefined) headers['content-type'] ??= 'application/json';
-      const res = await server.inject({ method: method as never, url, headers, ...(payload !== undefined ? { payload } : {}) });
+      const res = await server.inject({
+        method: method as never,
+        url,
+        headers,
+        ...(payload !== undefined ? { payload } : {}),
+      });
       let body: any;
       try {
         body = res.body ? JSON.parse(res.body) : null;
@@ -81,7 +90,8 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
     return {
       request,
       get: (url, headers) => request('GET', url, headers ? { headers } : {}),
-      post: (url, body, headers) => request('POST', url, { ...(body !== undefined ? { body } : {}), ...(headers ? { headers } : {}) }),
+      post: (url, body, headers) =>
+        request('POST', url, { ...(body !== undefined ? { body } : {}), ...(headers ? { headers } : {}) }),
       put: (url, body) => request('PUT', url, { body }),
       patch: (url, body) => request('PATCH', url, { body }),
       del: (url) => request('DELETE', url),
@@ -130,7 +140,13 @@ export const yamlWf = (name: string, steps: unknown[], extra: Record<string, unk
     ...extra,
   });
 
-export const echoStep = (id: string, value: unknown, extra: Record<string, unknown> = {}) => ({ id, type: 'capability', uses: 'util-echo@^1', with: { value }, ...extra });
+export const echoStep = (id: string, value: unknown, extra: Record<string, unknown> = {}) => ({
+  id,
+  type: 'capability',
+  uses: 'util-echo@^1',
+  with: { value },
+  ...extra,
+});
 
 export async function until(fn: () => boolean | Promise<boolean>, ms = 8000): Promise<void> {
   const t0 = Date.now();

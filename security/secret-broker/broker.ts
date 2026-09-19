@@ -13,10 +13,22 @@ import type { Lease } from '../../schemas/capability.ts';
 export interface SecretStorePort {
   put(tenant: string, name: string, cipher: string, keyId: string, by: string, description?: string): void;
   get(tenant: string, name: string): { cipher: string; keyId: string; version: number } | undefined;
-  list(tenant: string): Array<{ name: string; keyId: string; version: number; description?: string; updatedAt: string; createdBy: string }>;
+  list(
+    tenant: string,
+  ): Array<{
+    name: string;
+    keyId: string;
+    version: number;
+    description?: string;
+    updatedAt: string;
+    createdBy: string;
+  }>;
   all(): Array<{ tenant: string; name: string; cipher: string; keyId: string; createdBy: string }>;
   delete(tenant: string, name: string): boolean;
-  recordLease(l: { tenant: string; runId?: string; stepId?: string; names: string[]; ttlMs: number }): { id: string; expiresAt: string };
+  recordLease(l: { tenant: string; runId?: string; stepId?: string; names: string[]; ttlMs: number }): {
+    id: string;
+    expiresAt: string;
+  };
   revokeLease(id: string): void;
 }
 
@@ -35,10 +47,14 @@ function decodeKey(material: string): Buffer {
   if (/^[0-9a-fA-F]{64}$/.test(trimmed)) buf = Buffer.from(trimmed, 'hex');
   else buf = Buffer.from(trimmed, 'base64');
   if (buf.length !== 32) {
-    throw new OmniflowError('INVALID_MASTER_KEY', 'The master key must be exactly 32 bytes (64 hex characters or base64).', {
-      errorClass: 'catastrophic',
-      retryable: false,
-    });
+    throw new OmniflowError(
+      'INVALID_MASTER_KEY',
+      'The master key must be exactly 32 bytes (64 hex characters or base64).',
+      {
+        errorClass: 'catastrophic',
+        retryable: false,
+      },
+    );
   }
   return buf;
 }
@@ -66,7 +82,12 @@ export function generateMasterKey(): string {
  * AES-256-GCM. The ciphertext is bound to `tenant/name` as additional authenticated data, so a
  * row cannot be moved to another secret or tenant without failing authentication.
  */
-export function encryptSecret(keyring: Keyring, tenant: string, name: string, plaintext: string): { cipher: string; keyId: string } {
+export function encryptSecret(
+  keyring: Keyring,
+  tenant: string,
+  name: string,
+  plaintext: string,
+): { cipher: string; keyId: string } {
   const key = keyring.keys.get(keyring.primaryId)!;
   const iv = randomBytes(12);
   const c = createCipheriv('aes-256-gcm', key, iv);
@@ -82,15 +103,22 @@ export function encryptSecret(keyring: Keyring, tenant: string, name: string, pl
 export function decryptSecret(keyring: Keyring, tenant: string, name: string, cipher: string): string {
   const parts = cipher.split(':');
   if (parts.length !== 5 || parts[0] !== 'v1') {
-    throw new OmniflowError('SECRET_CORRUPT', `Secret '${name}' has an unrecognised format`, { errorClass: 'catastrophic', retryable: false });
+    throw new OmniflowError('SECRET_CORRUPT', `Secret '${name}' has an unrecognised format`, {
+      errorClass: 'catastrophic',
+      retryable: false,
+    });
   }
   const [, keyId, iv, tag, ct] = parts as [string, string, string, string, string];
   const key = keyring.keys.get(keyId);
   if (!key) {
-    throw new OmniflowError('SECRET_KEY_MISSING', `Secret '${name}' was encrypted with key ${keyId}, which is not in the keyring`, {
-      errorClass: 'catastrophic',
-      retryable: false,
-    });
+    throw new OmniflowError(
+      'SECRET_KEY_MISSING',
+      `Secret '${name}' was encrypted with key ${keyId}, which is not in the keyring`,
+      {
+        errorClass: 'catastrophic',
+        retryable: false,
+      },
+    );
   }
   try {
     const d = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));
@@ -135,7 +163,13 @@ class LeaseImpl implements ActiveLease {
   private readonly expiresMs: number;
   private readonly onRevoke: (id: string) => void;
 
-  constructor(id: string, secrets: Map<string, string>, expiresAt: string, clock: Clock, onRevoke: (id: string) => void) {
+  constructor(
+    id: string,
+    secrets: Map<string, string>,
+    expiresAt: string,
+    clock: Clock,
+    onRevoke: (id: string) => void,
+  ) {
     this.id = id;
     this.secrets = secrets;
     this.names = [...secrets.keys()].sort();
@@ -151,11 +185,17 @@ class LeaseImpl implements ActiveLease {
 
   private live(): Map<string, string> {
     if (this.secrets === null) {
-      throw new OmniflowError('LEASE_REVOKED', 'Secret lease has been revoked', { errorClass: 'authorisation', retryable: false });
+      throw new OmniflowError('LEASE_REVOKED', 'Secret lease has been revoked', {
+        errorClass: 'authorisation',
+        retryable: false,
+      });
     }
     if (this.clock.now().getTime() > this.expiresMs) {
       this.revoke();
-      throw new OmniflowError('LEASE_EXPIRED', 'Secret lease has expired', { errorClass: 'authorisation', retryable: false });
+      throw new OmniflowError('LEASE_EXPIRED', 'Secret lease has expired', {
+        errorClass: 'authorisation',
+        retryable: false,
+      });
     }
     return this.secrets;
   }
@@ -168,7 +208,10 @@ class LeaseImpl implements ActiveLease {
     const s = this.live();
     const v = s.get(name);
     if (v === undefined) {
-      throw new OmniflowError('SECRET_NOT_GRANTED', `Secret '${name}' was not granted to this step`, { errorClass: 'authorisation', retryable: false });
+      throw new OmniflowError('SECRET_NOT_GRANTED', `Secret '${name}' was not granted to this step`, {
+        errorClass: 'authorisation',
+        retryable: false,
+      });
     }
     return v;
   }
@@ -203,14 +246,22 @@ export class SecretBroker {
   put(tenant: string, name: string, value: string, by: string, description?: string): void {
     if (!SECRET_NAME.test(name)) {
       throw new ValidationError(`Invalid secret name '${name}'`, [
-        { path: 'name', code: 'INVALID_SECRET_NAME', message: 'Names start with a letter and contain only letters, digits and underscores (max 64).' },
+        {
+          path: 'name',
+          code: 'INVALID_SECRET_NAME',
+          message: 'Names start with a letter and contain only letters, digits and underscores (max 64).',
+        },
       ]);
     }
     if (value.length === 0) {
-      throw new ValidationError('A secret cannot be empty', [{ path: 'value', code: 'EMPTY_SECRET', message: 'value is required' }]);
+      throw new ValidationError('A secret cannot be empty', [
+        { path: 'value', code: 'EMPTY_SECRET', message: 'value is required' },
+      ]);
     }
     if (Buffer.byteLength(value, 'utf8') > MAX_SECRET_BYTES) {
-      throw new ValidationError('Secret is too large', [{ path: 'value', code: 'SECRET_TOO_LARGE', message: `Secrets are limited to ${MAX_SECRET_BYTES} bytes` }]);
+      throw new ValidationError('Secret is too large', [
+        { path: 'value', code: 'SECRET_TOO_LARGE', message: `Secrets are limited to ${MAX_SECRET_BYTES} bytes` },
+      ]);
     }
     const { cipher, keyId } = encryptSecret(this.keyring, tenant, name, value);
     this.store.put(tenant, name, cipher, keyId, by, description);
@@ -235,7 +286,11 @@ export class SecretBroker {
     for (const name of [...new Set(req.names)]) {
       const rec = this.store.get(req.tenant, name);
       if (!rec) {
-        throw new OmniflowError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, { errorClass: 'contract', retryable: false, details: { name } });
+        throw new OmniflowError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, {
+          errorClass: 'contract',
+          retryable: false,
+          details: { name },
+        });
       }
       secrets.set(name, decryptSecret(this.keyring, req.tenant, name, rec.cipher));
     }
@@ -251,7 +306,13 @@ export class SecretBroker {
 
   /** A lease that grants nothing — for steps that use no secrets. */
   emptyLease(): ActiveLease {
-    return new LeaseImpl(newId('lse'), new Map(), new Date(this.clock.now().getTime() + 60_000).toISOString(), this.clock, () => {});
+    return new LeaseImpl(
+      newId('lse'),
+      new Map(),
+      new Date(this.clock.now().getTime() + 60_000).toISOString(),
+      this.clock,
+      () => {},
+    );
   }
 
   /** Re-encrypt every secret under the current primary key. Returns how many were rewritten. */
@@ -260,7 +321,12 @@ export class SecretBroker {
     let n = 0;
     for (const rec of this.store.all()) {
       if (rec.keyId === newKeyring.primaryId) continue;
-      const plain = decryptSecret(old.keys.size >= newKeyring.keys.size ? old : mergeKeyrings(old, newKeyring), rec.tenant, rec.name, rec.cipher);
+      const plain = decryptSecret(
+        old.keys.size >= newKeyring.keys.size ? old : mergeKeyrings(old, newKeyring),
+        rec.tenant,
+        rec.name,
+        rec.cipher,
+      );
       const enc = encryptSecret(newKeyring, rec.tenant, rec.name, plain);
       this.store.put(rec.tenant, rec.name, enc.cipher, enc.keyId, rec.createdBy);
       n++;

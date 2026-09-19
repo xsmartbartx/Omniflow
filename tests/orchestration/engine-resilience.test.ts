@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { echo, type Engine, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
+import { type Engine, echo, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
 
 let e: Engine;
 const engines: Engine[] = [];
@@ -28,7 +28,11 @@ const effect = (id: string, extra: Record<string, unknown> = {}) => ({
   retry: fastRetry(3),
   ...extra,
 });
-const undo = (label: string, key = `undo-key-${label}`) => ({ uses: 'sim-undo@^1', with: { label }, idempotencyKey: key });
+const undo = (label: string, key = `undo-key-${label}`) => ({
+  uses: 'sim-undo@^1',
+  with: { label },
+  idempotencyKey: key,
+});
 
 const until = async (fn: () => boolean, ms = 5000) => {
   const t0 = Date.now();
@@ -61,7 +65,12 @@ describe('retry and timeout', () => {
     expect(run.status).toBe('failed');
     expect(run.error).toMatchObject({ code: 'FLAKY', class: 'transient' });
     expect(e.step(run.id, 'svc')!.attempt).toBe(3);
-    expect(e.events(run.id).filter((x) => x.type === 'step.failed').at(-1)!.data).toMatchObject({ final: true, willRetry: false });
+    expect(
+      e
+        .events(run.id)
+        .filter((x) => x.type === 'step.failed')
+        .at(-1)!.data,
+    ).toMatchObject({ final: true, willRetry: false });
   });
 
   it('never retries business or authorisation failures', async () => {
@@ -77,9 +86,19 @@ describe('retry and timeout', () => {
   it('derives retry jitter from the run seed: reproducible, and different for other seeds', async () => {
     const delays = async (seed: string) => {
       e = track(makeEngine());
-      e.publish(wf([{ ...flaky('svc', 99), retry: { attempts: 4, backoff: 'exponential', initialDelay: '20ms', maxDelay: '500ms', jitter: 0.5 } }]));
+      e.publish(
+        wf([
+          {
+            ...flaky('svc', 99),
+            retry: { attempts: 4, backoff: 'exponential', initialDelay: '20ms', maxDelay: '500ms', jitter: 0.5 },
+          },
+        ]),
+      );
       const run = await e.run('wf', {}, { seed });
-      return e.events(run.id).filter((x) => x.type === 'step.retry-scheduled').map((x) => x.data.delayMs);
+      return e
+        .events(run.id)
+        .filter((x) => x.type === 'step.retry-scheduled')
+        .map((x) => x.data.delayMs);
     };
     const a1 = await delays('seed-A');
     const a2 = await delays('seed-A');
@@ -92,7 +111,18 @@ describe('retry and timeout', () => {
 
   it('times out slow steps as transient failures, aborts the adapter, and retries', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'slow', type: 'capability', uses: 'sim-slow@^1', with: { ms: 2000 }, timeout: '60ms', retry: fastRetry(2) }]));
+    e.publish(
+      wf([
+        {
+          id: 'slow',
+          type: 'capability',
+          uses: 'sim-slow@^1',
+          with: { ms: 2000 },
+          timeout: '60ms',
+          retry: fastRetry(2),
+        },
+      ]),
+    );
     const run = await e.run('wf');
     expect(run.status).toBe('failed');
     expect(run.error).toMatchObject({ code: 'STEP_TIMEOUT', class: 'transient' });
@@ -125,7 +155,11 @@ describe('effective exactly-once execution (ADR-0002 D3)', () => {
 
   it('performs distinct effects for distinct keys', async () => {
     e = track(makeEngine());
-    e.publish(wf([effect('a', { idempotencyKey: 'k-${{ inputs.n }}', with: { label: 'a-${{ inputs.n }}' } })], { inputs: { n: { type: 'integer', required: true } } }));
+    e.publish(
+      wf([effect('a', { idempotencyKey: 'k-${{ inputs.n }}', with: { label: 'a-${{ inputs.n }}' } })], {
+        inputs: { n: { type: 'integer', required: true } },
+      }),
+    );
     await e.run('wf', { n: 1 });
     await e.run('wf', { n: 2 });
     await e.run('wf', { n: 1 });
@@ -204,7 +238,15 @@ describe('compensation and rollback (§9.2)', () => {
     wf([
       effect('s1', { compensate: undo('undo-s1') }),
       effect('s2', { dependsOn: ['s1'], compensate: undo('undo-s2') }),
-      { id: 'boom', type: 'capability', uses: 'util-fail@^1', dependsOn: ['s2'], with: { message: 'downstream broke' }, retry: { attempts: 1 }, onError: failing ? 'compensate' : 'fail' },
+      {
+        id: 'boom',
+        type: 'capability',
+        uses: 'util-fail@^1',
+        dependsOn: ['s2'],
+        with: { message: 'downstream broke' },
+        retry: { attempts: 1 },
+        onError: failing ? 'compensate' : 'fail',
+      },
     ]);
 
   it('rolls back completed steps in reverse order and ends RolledBack', async () => {
@@ -250,8 +292,17 @@ describe('compensation and rollback (§9.2)', () => {
     e = track(makeEngine());
     e.publish(
       wf([
-        effect('s1', { compensate: { uses: 'sim-effect@^1', with: { label: 'undo-s1', hangMs: 400 }, idempotencyKey: 'undo-s1' } }),
-        { id: 'boom', type: 'capability', uses: 'util-fail@^1', dependsOn: ['s1'], retry: { attempts: 1 }, onError: 'compensate' },
+        effect('s1', {
+          compensate: { uses: 'sim-effect@^1', with: { label: 'undo-s1', hangMs: 400 }, idempotencyKey: 'undo-s1' },
+        }),
+        {
+          id: 'boom',
+          type: 'capability',
+          uses: 'util-fail@^1',
+          dependsOn: ['s1'],
+          retry: { attempts: 1 },
+          onError: 'compensate',
+        },
       ]),
     );
     const run = await e.run('wf', {}, { wait: false });
@@ -265,7 +316,19 @@ describe('compensation and rollback (§9.2)', () => {
 
   it('skips rollback (plain failure) when nothing completed has a compensation', async () => {
     e = track(makeEngine());
-    e.publish(wf([echo('a', 1), { id: 'boom', type: 'capability', uses: 'util-fail@^1', dependsOn: ['a'], retry: { attempts: 1 }, onError: 'compensate' }]));
+    e.publish(
+      wf([
+        echo('a', 1),
+        {
+          id: 'boom',
+          type: 'capability',
+          uses: 'util-fail@^1',
+          dependsOn: ['a'],
+          retry: { attempts: 1 },
+          onError: 'compensate',
+        },
+      ]),
+    );
     expect((await e.run('wf')).status).toBe('failed');
   });
 });
@@ -273,7 +336,12 @@ describe('compensation and rollback (§9.2)', () => {
 describe('cancellation', () => {
   it('cancels a run whose step is in flight, aborting the adapter', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'slow', type: 'capability', uses: 'sim-slow@^1', with: { ms: 5000 } }, echo('after', 1, { dependsOn: ['slow'] })]));
+    e.publish(
+      wf([
+        { id: 'slow', type: 'capability', uses: 'sim-slow@^1', with: { ms: 5000 } },
+        echo('after', 1, { dependsOn: ['slow'] }),
+      ]),
+    );
     const run = await e.run('wf', {}, { wait: false });
     await until(() => e.step(run.id, 'slow')?.status === 'running');
     const t0 = Date.now();
@@ -291,7 +359,14 @@ describe('cancellation', () => {
     e = track(makeEngine());
     e.publish(wf([echo('a', 1)]));
     const v = e.state.registry.latestVersion('default', 'wf')!;
-    const queued = e.orch.createRun({ tenant: 'default', plan: e.state.registry.getPlan('default', v.planHash)!, planHash: v.planHash, inputs: {}, principal: { id: 'u', type: 'user', name: 'u', tenant: 'default', roles: ['admin'] }, trigger: { type: 'manual' } });
+    const queued = e.orch.createRun({
+      tenant: 'default',
+      plan: e.state.registry.getPlan('default', v.planHash)!,
+      planHash: v.planHash,
+      inputs: {},
+      principal: { id: 'u', type: 'user', name: 'u', tenant: 'default', roles: ['admin'] },
+      trigger: { type: 'manual' },
+    });
     expect(e.orch.cancelRun(queued.id, { id: 'u' }).status).toBe('cancelled');
     const done = await e.run('wf');
     expect(e.orch.cancelRun(done.id, { id: 'u' }).status).toBe('succeeded');
@@ -311,8 +386,17 @@ describe('cancellation', () => {
     e = track(makeEngine());
     e.publish(
       wf([
-        effect('s1', { compensate: { uses: 'sim-effect@^1', with: { label: 'undo', hangMs: 500 }, idempotencyKey: 'undo' } }),
-        { id: 'boom', type: 'capability', uses: 'util-fail@^1', dependsOn: ['s1'], retry: { attempts: 1 }, onError: 'compensate' },
+        effect('s1', {
+          compensate: { uses: 'sim-effect@^1', with: { label: 'undo', hangMs: 500 }, idempotencyKey: 'undo' },
+        }),
+        {
+          id: 'boom',
+          type: 'capability',
+          uses: 'util-fail@^1',
+          dependsOn: ['s1'],
+          retry: { attempts: 1 },
+          onError: 'compensate',
+        },
       ]),
     );
     const run = await e.run('wf', {}, { wait: false });

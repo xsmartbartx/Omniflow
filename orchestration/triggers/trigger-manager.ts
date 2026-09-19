@@ -1,5 +1,6 @@
 import { Cron } from 'croner';
 import {
+  AuthenticationError,
   type Clock,
   evaluate,
   isTruthy,
@@ -12,7 +13,6 @@ import {
   systemClock,
   toErrorInfo,
   ValidationError,
-  AuthenticationError,
 } from '../../core/index.ts';
 import type { Plan } from '../../schemas/plan.ts';
 import type { Principal } from '../../schemas/policy.ts';
@@ -67,7 +67,15 @@ export class TriggerManager {
   private readonly offs: Array<() => void> = [];
   private ticking = false;
 
-  constructor(deps: { state: State; runService: RunService; orchestrator: Orchestrator; broker: SecretBroker; registry: RegistryService; clock?: Clock; log?: Logger }) {
+  constructor(deps: {
+    state: State;
+    runService: RunService;
+    orchestrator: Orchestrator;
+    broker: SecretBroker;
+    registry: RegistryService;
+    clock?: Clock;
+    log?: Logger;
+  }) {
     this.st = deps.state;
     this.runs = deps.runService;
     this.orch = deps.orchestrator;
@@ -129,7 +137,10 @@ export class TriggerManager {
         if (t.type === 'schedule') {
           const prev = existing.get(name);
           const same = prev && prev.config.cron === t.cron && prev.config.timezone === t.timezone;
-          nextFireAt = same && prev.nextFireAt && prev.nextFireAt > now.toISOString() ? prev.nextFireAt : this.nextRun(t.cron, t.timezone, now)?.toISOString();
+          nextFireAt =
+            same && prev.nextFireAt && prev.nextFireAt > now.toISOString()
+              ? prev.nextFireAt
+              : this.nextRun(t.cron, t.timezone, now)?.toISOString();
         }
         return { name, type: type as string, config, ...(nextFireAt ? { nextFireAt } : {}) };
       });
@@ -140,7 +151,11 @@ export class TriggerManager {
       if (s.type === 'webhook' && !this.broker.has(tenant, this.secretName(workflow, s.name))) {
         created.push(this.rotateWebhookSecret(tenant, workflow, s.name));
       }
-      this.st.events.append({ tenant, type: 'trigger.registered', data: { workflow, trigger: s.name, kind: s.type, version } });
+      this.st.events.append({
+        tenant,
+        type: 'trigger.registered',
+        data: { workflow, trigger: s.name, kind: s.type, version },
+      });
     }
     return created;
   }
@@ -185,19 +200,43 @@ export class TriggerManager {
 
     const late = now.getTime() - scheduled.getTime();
     if (late > MISSED_AFTER_MS && catchup === 'none') {
-      this.st.events.append({ tenant: t.tenant, type: 'trigger.rejected', data: { workflow: t.workflowName, trigger: t.name, reason: `missed slot ${scheduled.toISOString()} skipped (catchup: none)` } });
+      this.st.events.append({
+        tenant: t.tenant,
+        type: 'trigger.rejected',
+        data: {
+          workflow: t.workflowName,
+          trigger: t.name,
+          reason: `missed slot ${scheduled.toISOString()} skipped (catchup: none)`,
+        },
+      });
       return undefined;
     }
     // Exactly-once per slot, even across restarts or overlapping ticks.
     if (!this.st.triggers.recordFire(t.id, scheduled.toISOString())) return undefined;
 
     const inputs = (t.config.inputs as Record<string, unknown> | undefined) ?? {};
-    return this.fire(t, inputs, { type: 'schedule', name: t.name, payload: { scheduledFor: scheduled.toISOString() } }, scheduled.toISOString());
+    return this.fire(
+      t,
+      inputs,
+      { type: 'schedule', name: t.name, payload: { scheduledFor: scheduled.toISOString() } },
+      scheduled.toISOString(),
+    );
   }
 
-  private fire(t: TriggerRecord, inputs: Record<string, unknown>, trigger: { type: string; name: string; payload?: unknown }, fireKey: string): TriggerResult | undefined {
+  private fire(
+    t: TriggerRecord,
+    inputs: Record<string, unknown>,
+    trigger: { type: string; name: string; payload?: unknown },
+    fireKey: string,
+  ): TriggerResult | undefined {
     try {
-      const result = this.runs.trigger({ principal: TRIGGER_PRINCIPAL(t.tenant, t.name), workflow: t.workflowName, inputs, trigger, correlationId: `${t.name}:${fireKey}` });
+      const result = this.runs.trigger({
+        principal: TRIGGER_PRINCIPAL(t.tenant, t.name),
+        workflow: t.workflowName,
+        inputs,
+        trigger,
+        correlationId: `${t.name}:${fireKey}`,
+      });
       this.st.triggers.patch(t.id, { lastFiredAt: this.clock.now().toISOString() });
       if (result.status === 'queued') this.st.triggers.attachRunToFire(t.id, fireKey, result.run.id);
       this.st.events.append({
@@ -209,7 +248,11 @@ export class TriggerManager {
       return result;
     } catch (e) {
       const info = toErrorInfo(e);
-      this.st.events.append({ tenant: t.tenant, type: 'trigger.rejected', data: { workflow: t.workflowName, trigger: t.name, reason: `${info.code}: ${info.message}` } });
+      this.st.events.append({
+        tenant: t.tenant,
+        type: 'trigger.rejected',
+        data: { workflow: t.workflowName, trigger: t.name, reason: `${info.code}: ${info.message}` },
+      });
       return undefined;
     }
   }
@@ -224,7 +267,13 @@ export class TriggerManager {
     const t = this.st.triggers.find(tenant, workflow, trigger);
     if (t?.type !== 'webhook') throw new NotFoundError('Webhook trigger', `${workflow}/${trigger}`);
     const secret = `whsec_${randomToken(32)}`;
-    this.broker.put(tenant, this.secretName(workflow, trigger), secret, 'system:trigger-manager', `Signing secret for webhook ${workflow}/${trigger}`);
+    this.broker.put(
+      tenant,
+      this.secretName(workflow, trigger),
+      secret,
+      'system:trigger-manager',
+      `Signing secret for webhook ${workflow}/${trigger}`,
+    );
     return { trigger, secret };
   }
 
@@ -233,9 +282,15 @@ export class TriggerManager {
     // Same error for "no such webhook" and "bad signature" — do not reveal which webhooks exist.
     if (t?.type !== 'webhook' || !t.enabled) throw new AuthenticationError('Webhook authentication failed');
     if (Buffer.byteLength(d.rawBody, 'utf8') > MAX_WEBHOOK_BODY) {
-      throw new ValidationError('Webhook payload is too large', [{ path: 'body', code: 'PAYLOAD_TOO_LARGE', message: 'Payloads are limited to 1 MiB' }]);
+      throw new ValidationError('Webhook payload is too large', [
+        { path: 'body', code: 'PAYLOAD_TOO_LARGE', message: 'Payloads are limited to 1 MiB' },
+      ]);
     }
-    const lease = this.broker.lease({ tenant: d.tenant, names: [this.secretName(d.workflow, d.trigger)], ttlMs: 5_000 });
+    const lease = this.broker.lease({
+      tenant: d.tenant,
+      names: [this.secretName(d.workflow, d.trigger)],
+      ttlMs: 5_000,
+    });
     let verdict: ReturnType<typeof verifyWebhook>;
     try {
       verdict = verifyWebhook({
@@ -249,13 +304,21 @@ export class TriggerManager {
       lease.revoke();
     }
     if (!verdict.ok) {
-      this.st.events.append({ tenant: d.tenant, type: 'trigger.rejected', data: { workflow: d.workflow, trigger: d.trigger, reason: `webhook ${verdict.reason}` } });
+      this.st.events.append({
+        tenant: d.tenant,
+        type: 'trigger.rejected',
+        data: { workflow: d.workflow, trigger: d.trigger, reason: `webhook ${verdict.reason}` },
+      });
       throw new AuthenticationError('Webhook authentication failed');
     }
     // Replay protection: a given delivery is accepted once.
     const fireKey = d.headers.delivery ?? verdict.nonce;
     if (!this.st.triggers.useNonce(d.tenant, `${t.id}:${fireKey}`, 10 * 60_000)) {
-      this.st.events.append({ tenant: d.tenant, type: 'trigger.rejected', data: { workflow: d.workflow, trigger: d.trigger, reason: 'webhook replay' } });
+      this.st.events.append({
+        tenant: d.tenant,
+        type: 'trigger.rejected',
+        data: { workflow: d.workflow, trigger: d.trigger, reason: 'webhook replay' },
+      });
       throw new AuthenticationError('Webhook authentication failed');
     }
 
@@ -263,18 +326,28 @@ export class TriggerManager {
     try {
       payload = d.rawBody.trim() === '' ? {} : JSON.parse(d.rawBody);
     } catch {
-      throw new ValidationError('Webhook body must be JSON', [{ path: 'body', code: 'INVALID_JSON', message: 'The request body is not valid JSON' }]);
+      throw new ValidationError('Webhook body must be JSON', [
+        { path: 'body', code: 'INVALID_JSON', message: 'The request body is not valid JSON' },
+      ]);
     }
     const inputs = this.mapInputs(t, { type: `webhook:${d.trigger}`, payload }, d.tenant);
     this.st.triggers.recordFire(t.id, fireKey);
     const result = this.fire(t, inputs, { type: 'webhook', name: t.name, payload }, fireKey);
-    if (!result) throw new ValidationError('The webhook was accepted but the run could not be started', [{ path: '', code: 'RUN_NOT_STARTED', message: 'See the audit log (trigger.rejected) for the reason' }]);
+    if (!result)
+      throw new ValidationError('The webhook was accepted but the run could not be started', [
+        { path: '', code: 'RUN_NOT_STARTED', message: 'See the audit log (trigger.rejected) for the reason' },
+      ]);
     return result;
   }
 
   // ============================================================ events & links
   /** Publish an event: resumes matching `wait` steps and fires matching event triggers. */
-  publishEvent(tenant: string, type: string, payload: unknown, correlation?: string): { resumed: number; runs: string[] } {
+  publishEvent(
+    tenant: string,
+    type: string,
+    payload: unknown,
+    correlation?: string,
+  ): { resumed: number; runs: string[] } {
     const resumed = this.orch.deliverEvent(tenant, type, correlation ?? null, payload);
     const runs: string[] = [];
     for (const t of this.st.triggers.eventSubscribers(tenant, type)) {
@@ -294,7 +367,11 @@ export class TriggerManager {
         const r = this.fire(t, inputs, { type: 'event', name: t.name, payload }, `${type}:${key}`);
         if (r && (r.status === 'queued' || r.status === 'deduplicated')) runs.push(r.run.id);
       } catch (e) {
-        this.st.events.append({ tenant, type: 'trigger.rejected', data: { workflow: t.workflowName, trigger: t.name, reason: (e as Error).message } });
+        this.st.events.append({
+          tenant,
+          type: 'trigger.rejected',
+          data: { workflow: t.workflowName, trigger: t.name, reason: (e as Error).message },
+        });
       }
     }
     return { resumed, runs };
@@ -305,9 +382,19 @@ export class TriggerManager {
     const failed = run.status === 'failed' || run.status === 'rolled-back' || run.status === 'compensation-failed';
     for (const t of this.st.triggers.completionSubscribers(run.tenant, run.workflowName)) {
       const want = (t.config.status as string | undefined) ?? 'succeeded';
-      if (!((want === 'any') || (want === 'succeeded' && run.status === 'succeeded') || (want === 'failed' && failed))) continue;
+      if (!(want === 'any' || (want === 'succeeded' && run.status === 'succeeded') || (want === 'failed' && failed)))
+        continue;
       try {
-        const facts = { type: 'workflow.completed', payload: { runId: run.id, workflow: run.workflowName, status: run.status, outputs: run.outputs ?? {}, error: run.error ?? null } };
+        const facts = {
+          type: 'workflow.completed',
+          payload: {
+            runId: run.id,
+            workflow: run.workflowName,
+            status: run.status,
+            outputs: run.outputs ?? {},
+            error: run.error ?? null,
+          },
+        };
         const inputs = this.mapInputs(t, facts, run.tenant);
         const key = `completion:${run.id}`;
         if (!this.st.triggers.recordFire(t.id, key)) continue;
@@ -319,7 +406,11 @@ export class TriggerManager {
   }
 
   /** Build workflow inputs from an event using the trigger's mapping, or the raw payload when none is declared. */
-  private mapInputs(t: TriggerRecord, event: { type: string; payload: unknown }, tenant: string): Record<string, unknown> {
+  private mapInputs(
+    t: TriggerRecord,
+    event: { type: string; payload: unknown },
+    tenant: string,
+  ): Record<string, unknown> {
     const mapping = t.config.inputs as Record<string, unknown> | undefined;
     if (!mapping) {
       // A completion payload (run id, status, outputs…) is not shaped like workflow inputs; map it explicitly.
@@ -339,7 +430,9 @@ export class TriggerManager {
       return mapped;
     } catch (e) {
       if (e instanceof ValidationError) throw e;
-      throw new ValidationError(`Could not map trigger inputs: ${(e as Error).message}`, [{ path: 'inputs', code: 'TRIGGER_MAPPING_FAILED', message: (e as Error).message }]);
+      throw new ValidationError(`Could not map trigger inputs: ${(e as Error).message}`, [
+        { path: 'inputs', code: 'TRIGGER_MAPPING_FAILED', message: (e as Error).message },
+      ]);
     }
   }
 }

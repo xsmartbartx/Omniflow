@@ -17,7 +17,8 @@ export function matchRoute(routes, hash) {
   for (const route of routes) {
     const { re, keys } = route.compiled ?? (route.compiled = compile(route.path));
     const m = re.exec(path);
-    if (m) return { route, params: Object.fromEntries(keys.map((k, i) => [k, decodeURIComponent(m[i + 1])])), query, path };
+    if (m)
+      return { route, params: Object.fromEntries(keys.map((k, i) => [k, decodeURIComponent(m[i + 1])])), query, path };
   }
   return { route: undefined, params: {}, query, path };
 }

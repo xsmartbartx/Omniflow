@@ -4,7 +4,14 @@ import { button, card, errorBox, field, input, notice, toast } from '../ui.js';
 
 /** Sign-in screen. Returns a node; calls onSignedIn() after the session cookie is set. */
 export default function login({ onSignedIn }) {
-  const email = input({ type: 'email', name: 'email', autocomplete: 'username', required: true, autofocus: true, placeholder: 'you@company.com' });
+  const email = input({
+    type: 'email',
+    name: 'email',
+    autocomplete: 'username',
+    required: true,
+    autofocus: true,
+    placeholder: 'you@company.com',
+  });
   const password = input({ type: 'password', name: 'password', autocomplete: 'current-password', required: true });
   const slot = h('div');
   const submit = async (ev) => {
@@ -18,8 +25,32 @@ export default function login({ onSignedIn }) {
       clear(slot).append(errorBox(e, { title: e.status === 401 ? 'Could not sign in' : undefined }));
     }
   };
-  const form = h('form', { class: 'form', onSubmit: submit }, field('Email', email), field('Password', password), slot, button('Sign in', { kind: 'primary', type: 'submit' }));
-  return h('div', { class: 'login' }, h('div', { class: 'login-card' }, card(null, h('div', { class: 'stack' }, h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'), h('p', { class: 'muted' }, 'Sign in to build, run and govern workflows.'), form))));
+  const form = h(
+    'form',
+    { class: 'form', onSubmit: submit },
+    field('Email', email),
+    field('Password', password),
+    slot,
+    button('Sign in', { kind: 'primary', type: 'submit' }),
+  );
+  return h(
+    'div',
+    { class: 'login' },
+    h(
+      'div',
+      { class: 'login-card' },
+      card(
+        null,
+        h(
+          'div',
+          { class: 'stack' },
+          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
+          h('p', { class: 'muted' }, 'Sign in to build, run and govern workflows.'),
+          form,
+        ),
+      ),
+    ),
+  );
 }
 
 /** Forced password change (first sign-in with a temporary password). */
@@ -41,5 +72,30 @@ export function changePassword({ onDone }) {
       clear(slot).append(errorBox(e));
     }
   };
-  return h('div', { class: 'login' }, h('div', { class: 'login-card' }, card(null, h('form', { class: 'form', onSubmit: submit }, h('h2', {}, 'Choose a new password'), h('p', { class: 'muted' }, 'You signed in with a temporary password. Pick a new one (at least 12 characters) to continue.'), field('Temporary password', current), field('New password', next), field('Repeat new password', again), slot, button('Change password', { kind: 'primary', type: 'submit' })))));
+  return h(
+    'div',
+    { class: 'login' },
+    h(
+      'div',
+      { class: 'login-card' },
+      card(
+        null,
+        h(
+          'form',
+          { class: 'form', onSubmit: submit },
+          h('h2', {}, 'Choose a new password'),
+          h(
+            'p',
+            { class: 'muted' },
+            'You signed in with a temporary password. Pick a new one (at least 12 characters) to continue.',
+          ),
+          field('Temporary password', current),
+          field('New password', next),
+          field('Repeat new password', again),
+          slot,
+          button('Change password', { kind: 'primary', type: 'submit' }),
+        ),
+      ),
+    ),
+  );
 }

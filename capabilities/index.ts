@@ -6,18 +6,24 @@ import { createChannelNotifier, createEmailNotifier, createWebhookNotifier } fro
 import { createShellCapabilities } from './adapters/shell/index.ts';
 import { createStorageCapabilities } from './adapters/storage/index.ts';
 import { createUtilCapabilities } from './adapters/util/index.ts';
-import type { CapabilityAdapter } from './contract/types.ts';
 import { CapabilityRegistry } from './contract/registry.ts';
+import type { CapabilityAdapter } from './contract/types.ts';
 
 export { type AdapterConfig, defaultAdapterConfig } from './adapters/config.ts';
 export { createDatabaseCapabilities, type DbDriver, type PgFactory, type PgLike } from './adapters/database/index.ts';
-export { createLlmCapabilities } from './adapters/llm/index.ts';
-export { createChannelNotifier, createEmailNotifier, createWebhookNotifier, parseChannel, sendToChannel } from './adapters/notify/index.ts';
-export { createShellCapabilities } from './adapters/shell/index.ts';
-export { createStorageCapabilities } from './adapters/storage/index.ts';
 export { classifyAddress, isAddressAllowed, matchesEgress } from './adapters/http/egress.ts';
 export { createHttpCapabilities } from './adapters/http/index.ts';
 export { safeRequest } from './adapters/http/safe-http.ts';
+export { createLlmCapabilities } from './adapters/llm/index.ts';
+export {
+  createChannelNotifier,
+  createEmailNotifier,
+  createWebhookNotifier,
+  parseChannel,
+  sendToChannel,
+} from './adapters/notify/index.ts';
+export { createShellCapabilities } from './adapters/shell/index.ts';
+export { createStorageCapabilities } from './adapters/storage/index.ts';
 export { createUtilCapabilities } from './adapters/util/index.ts';
 export * from './contract/index.ts';
 

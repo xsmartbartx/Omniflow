@@ -77,7 +77,11 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
           text: { type: 'string' },
           json: {},
           model: { type: 'string' },
-          usage: { type: 'object', required: ['inputTokens', 'outputTokens'], properties: { inputTokens: { type: 'integer' }, outputTokens: { type: 'integer' } } },
+          usage: {
+            type: 'object',
+            required: ['inputTokens', 'outputTokens'],
+            properties: { inputTokens: { type: 'integer' }, outputTokens: { type: 'integer' } },
+          },
           stopReason: { type: 'string' },
         },
         additionalProperties: false,
@@ -89,14 +93,27 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
       failureModes: [
         { code: 'LLM_UNAVAILABLE', class: 'transient', retryable: true, description: 'Rate limited or overloaded' },
         { code: 'LLM_AUTH', class: 'authorisation', retryable: false, description: 'The API key was rejected' },
-        { code: 'LLM_REJECTED', class: 'business', retryable: false, description: 'The request was rejected (e.g. refused or too long)' },
-        { code: 'LLM_SCHEMA_VIOLATION', class: 'contract', retryable: true, description: 'The answer did not match the requested schema' },
+        {
+          code: 'LLM_REJECTED',
+          class: 'business',
+          retryable: false,
+          description: 'The request was rejected (e.g. refused or too long)',
+        },
+        {
+          code: 'LLM_SCHEMA_VIOLATION',
+          class: 'contract',
+          retryable: true,
+          description: 'The answer did not match the requested schema',
+        },
       ],
       dataClassification: 'confidential',
       dryRun: 'execute',
     } as CapabilityDeclaration,
     async execute(ctx, input) {
-      const framed = input.data === undefined ? '' : `\n\n${frameAsData('workflow data', typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2))}`;
+      const framed =
+        input.data === undefined
+          ? ''
+          : `\n\n${frameAsData('workflow data', typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2))}`;
       const schemaNote = input.schema
         ? `\n\nRespond with ONLY a single JSON value that validates against this JSON Schema, with no commentary:\n${JSON.stringify(input.schema)}`
         : '';
@@ -104,7 +121,12 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
       const res = await safeRequest({
         method: 'POST',
         url: `${config.llm.baseUrl.replace(/\/$/, '')}/v1/messages`,
-        headers: { 'content-type': 'application/json', 'x-api-key': config.llm.apiKey!, 'anthropic-version': '2023-06-01', 'user-agent': config.http.userAgent },
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': config.llm.apiKey!,
+          'anthropic-version': '2023-06-01',
+          'user-agent': config.http.userAgent,
+        },
         body: JSON.stringify({
           model,
           max_tokens: input.maxTokens ?? config.llm.maxOutputTokens,
@@ -119,8 +141,17 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         timeoutMs: 120_000,
         followRedirects: false,
       });
-      if (res.status === 401 || res.status === 403) throw new CapabilityError('LLM_AUTH', 'The LLM provider rejected the API key', { errorClass: 'authorisation', retryable: false });
-      if (res.status === 429 || res.status === 529 || res.status >= 500) throw new CapabilityError('LLM_UNAVAILABLE', `The LLM provider is unavailable (${res.status})`, { errorClass: 'transient', retryable: true, details: { status: res.status } });
+      if (res.status === 401 || res.status === 403)
+        throw new CapabilityError('LLM_AUTH', 'The LLM provider rejected the API key', {
+          errorClass: 'authorisation',
+          retryable: false,
+        });
+      if (res.status === 429 || res.status === 529 || res.status >= 500)
+        throw new CapabilityError('LLM_UNAVAILABLE', `The LLM provider is unavailable (${res.status})`, {
+          errorClass: 'transient',
+          retryable: true,
+          details: { status: res.status },
+        });
       if (res.status >= 400) {
         let detail = '';
         try {
@@ -128,7 +159,11 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         } catch {
           /* not JSON */
         }
-        throw new CapabilityError('LLM_REJECTED', `The LLM provider rejected the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`, { errorClass: 'business', retryable: false });
+        throw new CapabilityError(
+          'LLM_REJECTED',
+          `The LLM provider rejected the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
+          { errorClass: 'business', retryable: false },
+        );
       }
       const body = JSON.parse(res.body.toString('utf8')) as {
         content?: Array<{ type: string; text?: string }>;
@@ -136,7 +171,10 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         stop_reason?: string;
         model?: string;
       };
-      const text = (body.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('');
+      const text = (body.content ?? [])
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text ?? '')
+        .join('');
       const out: LlmOutput = {
         text,
         model: body.model ?? model,
@@ -148,11 +186,21 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         try {
           json = extractJson(text);
         } catch {
-          throw new CapabilityError('LLM_SCHEMA_VIOLATION', 'The model did not return valid JSON', { errorClass: 'contract', retryable: true });
+          throw new CapabilityError('LLM_SCHEMA_VIOLATION', 'The model did not return valid JSON', {
+            errorClass: 'contract',
+            retryable: true,
+          });
         }
         const checked = validateValue(input.schema, json);
         if (!checked.ok) {
-          throw new CapabilityError('LLM_SCHEMA_VIOLATION', `The model’s answer does not match the schema: ${checked.issues.slice(0, 3).map((i) => `${i.path || 'value'} ${i.message}`).join('; ')}`, { errorClass: 'contract', retryable: true });
+          throw new CapabilityError(
+            'LLM_SCHEMA_VIOLATION',
+            `The model’s answer does not match the schema: ${checked.issues
+              .slice(0, 3)
+              .map((i) => `${i.path || 'value'} ${i.message}`)
+              .join('; ')}`,
+            { errorClass: 'contract', retryable: true },
+          );
         }
         out.json = checked.value;
       }

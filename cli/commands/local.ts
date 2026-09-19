@@ -9,7 +9,7 @@ import type { Manifest } from '../../schemas/index.ts';
 import { analyzeWorkflow } from '../../security/pentest/index.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createOmniflow } from '../../server/platform.ts';
-import { UsageError, flag, flagAll, has, parseInputs } from '../args.ts';
+import { flag, flagAll, has, parseInputs, UsageError } from '../args.ts';
 import { type CliContext, emit } from '../context.ts';
 import { humanDuration, renderIssue, statusColour, table } from '../format.ts';
 
@@ -75,7 +75,12 @@ interface Checked {
   version?: string;
   planHash?: string;
   steps?: number;
-  risk?: { score: number; level: string; blocking: boolean; findings: Array<{ ruleId: string; severity: string; blocking: boolean; message: string; stepId?: string }> };
+  risk?: {
+    score: number;
+    level: string;
+    blocking: boolean;
+    findings: Array<{ ruleId: string; severity: string; blocking: boolean; message: string; stepId?: string }>;
+  };
   source: string;
   plan?: ReturnType<typeof compile>['plan'];
 }
@@ -110,7 +115,13 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
 
   const failed = results.filter((r) => !r.ok || (strict && r.warnings.length > 0));
   if (ctx.json) {
-    ctx.out(`${JSON.stringify(results.map(({ source: _s, plan: _p, ...r }) => r), null, 2)}\n`);
+    ctx.out(
+      `${JSON.stringify(
+        results.map(({ source: _s, plan: _p, ...r }) => r),
+        null,
+        2,
+      )}\n`,
+    );
     return failed.length > 0 ? 1 : 0;
   }
   const s = ctx.style;
@@ -118,18 +129,24 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
     for (const i of [...r.errors, ...r.warnings]) ctx.err(`${renderIssue(s, r.file, r.source, i)}\n\n`);
     if (r.risk) {
       for (const f of r.risk.findings.filter((x) => x.blocking || x.severity === 'high' || x.severity === 'critical')) {
-        ctx.err(`${f.blocking ? s.red('blocking') : s.yellow('risk')}${s.dim(`[${f.ruleId}]`)}: ${f.message}${f.stepId ? s.dim(` (step ${f.stepId})`) : ''}\n\n`);
+        ctx.err(
+          `${f.blocking ? s.red('blocking') : s.yellow('risk')}${s.dim(`[${f.ruleId}]`)}: ${f.message}${f.stepId ? s.dim(` (step ${f.stepId})`) : ''}\n\n`,
+        );
       }
     }
     if (r.planHash) {
       const okMark = r.ok ? s.green('✓') : s.red('✗');
-      ctx.out(`${okMark} ${s.bold(`${r.workflow}@${r.version}`)}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`);
+      ctx.out(
+        `${okMark} ${s.bold(`${r.workflow}@${r.version}`)}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`,
+      );
     } else {
       ctx.out(`${s.red('✗')} ${r.file}  ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}\n`);
     }
   }
   const warnings = results.reduce((n, r) => n + r.warnings.length, 0);
-  ctx.out(`\n${results.length - failed.length}/${results.length} valid${warnings ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}\n`);
+  ctx.out(
+    `\n${results.length - failed.length}/${results.length} valid${warnings ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}\n`,
+  );
   return failed.length > 0 ? 1 : 0;
 }
 
@@ -143,7 +160,8 @@ export async function compileCommand(ctx: CliContext): Promise<number> {
     return 1;
   }
   const outFile = flag(ctx.args, 'out');
-  if (outFile) writeFileSync(resolve(ctx.cwd, outFile), `${JSON.stringify({ hash: r.planHash, plan: r.plan }, null, 2)}\n`);
+  if (outFile)
+    writeFileSync(resolve(ctx.cwd, outFile), `${JSON.stringify({ hash: r.planHash, plan: r.plan }, null, 2)}\n`);
   emit(ctx, { hash: r.planHash, plan: r.plan }, () => {
     const s = ctx.style;
     const plan = r.plan!;
@@ -172,7 +190,8 @@ export async function compileCommand(ctx: CliContext): Promise<number> {
  */
 export async function devCommand(ctx: CliContext): Promise<number> {
   const file = ctx.args.positionals[1];
-  if (!file) throw new UsageError('Usage: omniflow dev <file> [--input k=v] [--secret NAME=value] [--dry-run] [--auto-approve]');
+  if (!file)
+    throw new UsageError('Usage: omniflow dev <file> [--input k=v] [--secret NAME=value] [--dry-run] [--auto-approve]');
   const source = await readManifest(ctx, file);
   const inputs = parseInputs(flagAll(ctx.args, 'input'));
   const secrets = parseSecrets(flagAll(ctx.args, 'secret'));
@@ -195,11 +214,18 @@ export async function devCommand(ctx: CliContext): Promise<number> {
   const app = createOmniflow(config);
   try {
     await app.start();
-    const admin = { id: 'dev:admin', type: 'system' as const, name: 'dev', tenant: 'default', roles: ['admin' as const] };
+    const admin = {
+      id: 'dev:admin',
+      type: 'system' as const,
+      name: 'dev',
+      tenant: 'default',
+      roles: ['admin' as const],
+    };
     for (const [name, value] of Object.entries(secrets)) app.broker.put('default', name, value, 'dev');
 
     const published = app.registry.submit(admin, source);
-    if (published.status !== 'published') throw new UsageError('Publishing was held for approval, which `dev` cannot grant. Check your policy files.');
+    if (published.status !== 'published')
+      throw new UsageError('Publishing was held for approval, which `dev` cannot grant. Check your policy files.');
     const wf = published.version.name;
     ctx.err(`${s.dim(`published ${wf}@${published.version.version} (ephemeral)`)}\n`);
 
@@ -211,11 +237,18 @@ export async function devCommand(ctx: CliContext): Promise<number> {
       trigger: { type: 'manual', name: 'cli-dev' },
       ...(has(ctx.args, 'dry-run') ? { dryRun: true } : {}),
     });
-    if (trig.status !== 'queued') throw new UsageError(`The run was not started (${trig.status === 'skipped' ? trig.reason : trig.status})`);
+    if (trig.status !== 'queued')
+      throw new UsageError(`The run was not started (${trig.status === 'skipped' ? trig.reason : trig.status})`);
     const runId = trig.run.id;
 
     const printed = new Set<string>();
-    const approver = { id: 'dev:approver', type: 'system' as const, name: 'dev-approver', tenant: 'default', roles: ['admin' as const] };
+    const approver = {
+      id: 'dev:approver',
+      type: 'system' as const,
+      name: 'dev-approver',
+      tenant: 'default',
+      roles: ['admin' as const],
+    };
     const off = app.state.events.onAppend((e) => {
       if (e.runId !== runId) return;
       if (e.type === 'approval.requested') {
@@ -227,16 +260,23 @@ export async function devCommand(ctx: CliContext): Promise<number> {
           } catch (e2) {
             ctx.err(`${s.red('could not auto-approve')}: ${(e2 as Error).message}\n`);
           }
-        } else ctx.err(`${s.yellow('waiting for approval')} ${id} — re-run with --auto-approve to answer approval gates\n`);
+        } else
+          ctx.err(`${s.yellow('waiting for approval')} ${id} — re-run with --auto-approve to answer approval gates\n`);
       }
     });
     const tick = () => {
-      const steps = [...app.state.runs.getSteps(runId)].sort((a, b) => (a.completedSeq ?? Number.MAX_SAFE_INTEGER) - (b.completedSeq ?? Number.MAX_SAFE_INTEGER) || a.stepId.localeCompare(b.stepId));
+      const steps = [...app.state.runs.getSteps(runId)].sort(
+        (a, b) =>
+          (a.completedSeq ?? Number.MAX_SAFE_INTEGER) - (b.completedSeq ?? Number.MAX_SAFE_INTEGER) ||
+          a.stepId.localeCompare(b.stepId),
+      );
       for (const step of steps) {
         const key = `${step.stepId}:${step.status}`;
         if (printed.has(key) || !['succeeded', 'failed', 'skipped', 'cancelled'].includes(step.status)) continue;
         printed.add(key);
-        (ctx.json ? ctx.err : ctx.out)(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${step.error ? s.dim(`  ${step.error.message}`) : ''}\n`);
+        (ctx.json ? ctx.err : ctx.out)(
+          `  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${step.error ? s.dim(`  ${step.error.message}`) : ''}\n`,
+        );
       }
     };
 
@@ -257,11 +297,16 @@ export async function devCommand(ctx: CliContext): Promise<number> {
 
     const ok = run.status === 'succeeded';
     if (ctx.json) {
-      ctx.out(`${JSON.stringify({ status: run.status, outputs: run.outputs ?? null, error: run.error ?? null, steps: app.state.runs.getSteps(runId).map((x) => ({ id: x.stepId, status: x.status, output: x.output ?? null, error: x.error ?? null })) }, null, 2)}\n`);
+      ctx.out(
+        `${JSON.stringify({ status: run.status, outputs: run.outputs ?? null, error: run.error ?? null, steps: app.state.runs.getSteps(runId).map((x) => ({ id: x.stepId, status: x.status, output: x.output ?? null, error: x.error ?? null })) }, null, 2)}\n`,
+      );
     } else {
-      ctx.out(`\n${ok ? s.green('✓') : s.red('✗')} ${statusColour(s, run.status)} in ${humanDuration(Date.now() - started)}${run.dryRun ? s.dim(' (dry run)') : ''}\n`);
+      ctx.out(
+        `\n${ok ? s.green('✓') : s.red('✗')} ${statusColour(s, run.status)} in ${humanDuration(Date.now() - started)}${run.dryRun ? s.dim(' (dry run)') : ''}\n`,
+      );
       if (run.error) ctx.out(`${s.red(run.error.code)}: ${run.error.message}\n`);
-      if (run.outputs && Object.keys(run.outputs).length > 0) ctx.out(`${s.bold('outputs')}\n${JSON.stringify(run.outputs, null, 2)}\n`);
+      if (run.outputs && Object.keys(run.outputs).length > 0)
+        ctx.out(`${s.bold('outputs')}\n${JSON.stringify(run.outputs, null, 2)}\n`);
     }
     return ok ? 0 : 1;
   } finally {

@@ -12,8 +12,8 @@ import {
   ValidationError,
 } from '../core/index.ts';
 import type { Action, Principal } from '../schemas/index.ts';
-import type { Omniflow } from './context.ts';
 import { SESSION_COOKIE } from './auth.ts';
+import type { Omniflow } from './context.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
 declare module 'fastify' {
@@ -67,32 +67,76 @@ export function statusFor(e: unknown): number {
   if (e instanceof RateLimitedError) return 429;
   if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
   if (e instanceof OmniflowError && e.code.startsWith('LLM_')) return 502;
-  if (e instanceof OmniflowError) return e.errorClass === 'contract' ? 400 : e.errorClass === 'authorisation' ? 403 : e.errorClass === 'business' ? 409 : 500;
+  if (e instanceof OmniflowError)
+    return e.errorClass === 'contract'
+      ? 400
+      : e.errorClass === 'authorisation'
+        ? 403
+        : e.errorClass === 'business'
+          ? 409
+          : 500;
   return 500;
 }
 
 /** Server-side conditions whose messages are written for the caller (configuration and upstream-provider problems). */
-const USER_FACING_5XX = new Set(['AI_NOT_CONFIGURED', 'LLM_UNAVAILABLE', 'LLM_BAD_RESPONSE', 'LLM_AUTH', 'LLM_REJECTED']);
+const USER_FACING_5XX = new Set([
+  'AI_NOT_CONFIGURED',
+  'LLM_UNAVAILABLE',
+  'LLM_BAD_RESPONSE',
+  'LLM_AUTH',
+  'LLM_REJECTED',
+]);
 
-export function problem(e: unknown, requestId: string): { status: number; body: ProblemBody; headers?: Record<string, string> } {
+export function problem(
+  e: unknown,
+  requestId: string,
+): { status: number; body: ProblemBody; headers?: Record<string, string> } {
   const status = statusFor(e);
   if (e instanceof OmniflowError && (status < 500 || USER_FACING_5XX.has(e.code))) {
     const info = e.toInfo();
     return {
       status,
-      body: { error: { code: info.code, message: info.message, class: info.class, ...(info.details ? { details: redact(info.details) } : {}), requestId } },
-      ...(e instanceof RateLimitedError ? { headers: { 'retry-after': String((e.details as { retryAfterSeconds: number }).retryAfterSeconds) } } : {}),
+      body: {
+        error: {
+          code: info.code,
+          message: info.message,
+          class: info.class,
+          ...(info.details ? { details: redact(info.details) } : {}),
+          requestId,
+        },
+      },
+      ...(e instanceof RateLimitedError
+        ? { headers: { 'retry-after': String((e.details as { retryAfterSeconds: number }).retryAfterSeconds) } }
+        : {}),
     };
   }
   // Anything else is a bug or an infrastructure fault: never leak internals to the client.
-  return { status: 500, body: { error: { code: 'INTERNAL', message: 'An internal error occurred. Quote the request id when reporting it.', class: 'systemic', requestId } } };
+  return {
+    status: 500,
+    body: {
+      error: {
+        code: 'INTERNAL',
+        message: 'An internal error occurred. Quote the request id when reporting it.',
+        class: 'systemic',
+        requestId,
+      },
+    },
+  };
 }
 
-export function fromFastifyValidation(validation: Array<{ instancePath?: string; message?: string; keyword?: string; params?: Record<string, unknown> }>, where: string): ValidationError {
+export function fromFastifyValidation(
+  validation: Array<{ instancePath?: string; message?: string; keyword?: string; params?: Record<string, unknown> }>,
+  where: string,
+): ValidationError {
   const issues: Issue[] = validation.map((v) => ({
     path: `${where}${(v.instancePath ?? '').replace(/\//g, '.')}`.replace(/\.$/, ''),
     code: `SCHEMA_${(v.keyword ?? 'invalid').toUpperCase()}`,
-    message: v.keyword === 'required' ? `Missing required property '${String(v.params?.missingProperty)}'` : v.keyword === 'additionalProperties' ? `Unknown property '${String(v.params?.additionalProperty)}'` : (v.message ?? 'Invalid value'),
+    message:
+      v.keyword === 'required'
+        ? `Missing required property '${String(v.params?.missingProperty)}'`
+        : v.keyword === 'additionalProperties'
+          ? `Unknown property '${String(v.params?.additionalProperty)}'`
+          : (v.message ?? 'Invalid value'),
   }));
   return new ValidationError('The request is invalid', issues);
 }
@@ -110,7 +154,8 @@ export function parseCookies(header: string | undefined): Record<string, string>
 export function sessionCookie(token: string, maxAgeSeconds: number, secure: boolean): string {
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${secure ? '; Secure' : ''}`;
 }
-export const clearSessionCookie = (secure: boolean) => `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
+export const clearSessionCookie = (secure: boolean) =>
+  `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -141,7 +186,12 @@ export interface Registered {
   def: RouteDef;
 }
 
-export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: RouteDef[], limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter }): void {
+export function registerRoutes(
+  fastify: FastifyInstance,
+  app: Omniflow,
+  defs: RouteDef[],
+  limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter },
+): void {
   for (const def of defs) {
     const handler: RouteHandlerMethod = async (req, reply) => {
       const ip = req.ip;
@@ -163,7 +213,13 @@ export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: Ro
               tenant: principal.tenant,
               type: 'policy.decision',
               actor: { type: principal.type, id: principal.id, name: principal.name },
-              data: { action: def.action, effect: decision.effect, reasonCode: decision.reasonCode, reason: decision.reason, route: `${def.method} ${def.url}` },
+              data: {
+                action: def.action,
+                effect: decision.effect,
+                reasonCode: decision.reasonCode,
+                reason: decision.reason,
+                route: `${def.method} ${def.url}`,
+              },
             });
             throw new PolicyDeniedError(decision.reasonCode, decision.reason);
           }
@@ -182,7 +238,8 @@ export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: Ro
       if (def.raw) return reply;
       return result === undefined ? null : result;
     };
-    const optionalBody = def.schema?.body !== undefined && !(def.schema.body as { required?: string[] }).required?.length;
+    const optionalBody =
+      def.schema?.body !== undefined && !(def.schema.body as { required?: string[] }).required?.length;
     fastify.route({
       method: def.method,
       url: def.url,
@@ -209,8 +266,9 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
     for (const name of [...d.url.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]!)) {
       params.push({ name, in: 'path', required: true, schema: { type: 'string' } });
     }
-    const q = (d.schema?.querystring as { properties?: Record<string, unknown>; required?: string[] } | undefined);
-    for (const [name, schema] of Object.entries(q?.properties ?? {})) params.push({ name, in: 'query', required: q?.required?.includes(name) ?? false, schema });
+    const q = d.schema?.querystring as { properties?: Record<string, unknown>; required?: string[] } | undefined;
+    for (const [name, schema] of Object.entries(q?.properties ?? {}))
+      params.push({ name, in: 'query', required: q?.required?.includes(name) ?? false, schema });
     (paths[url] ??= {})[d.method.toLowerCase()] = {
       summary: d.summary,
       tags: [d.tag],
@@ -218,30 +276,70 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
       ...(d.public ? { security: [] } : {}),
       ...(d.action ? { 'x-required-action': d.action } : {}),
       ...(params.length ? { parameters: params } : {}),
-      ...(d.schema?.body ? { requestBody: { required: ((d.schema.body as { required?: string[] }).required?.length ?? 0) > 0, content: { 'application/json': { schema: d.schema.body } } } } : {}),
+      ...(d.schema?.body
+        ? {
+            requestBody: {
+              required: ((d.schema.body as { required?: string[] }).required?.length ?? 0) > 0,
+              content: { 'application/json': { schema: d.schema.body } },
+            },
+          }
+        : {}),
       responses: {
         [String(d.status ?? 200)]: { description: 'Success' },
-        '400': { description: 'Validation failed', content: { 'application/json': { schema: { $ref: '#/components/schemas/Problem' } } } },
-        ...(d.public ? {} : { '401': { description: 'Authentication required' }, '403': { description: 'Not permitted (RBAC or policy)' } }),
+        '400': {
+          description: 'Validation failed',
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/Problem' } } },
+        },
+        ...(d.public
+          ? {}
+          : {
+              '401': { description: 'Authentication required' },
+              '403': { description: 'Not permitted (RBAC or policy)' },
+            }),
         '429': { description: 'Rate limited' },
       },
     };
   }
   return {
     openapi: '3.1.0',
-    info: { title: 'OmniFlow API', version: info.version, description: 'Declarative workflow substrate: publish validated workflows, run them deterministically, audit everything.' },
+    info: {
+      title: 'OmniFlow API',
+      version: info.version,
+      description:
+        'Declarative workflow substrate: publish validated workflows, run them deterministically, audit everything.',
+    },
     servers: [{ url: '/' }],
     security: [{ bearerApiKey: [] }, { sessionCookie: [] }],
     paths,
     components: {
       securitySchemes: {
-        bearerApiKey: { type: 'http', scheme: 'bearer', description: 'API key: `Authorization: Bearer omf_<prefix>_<secret>`' },
-        sessionCookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE, description: 'Console session. Mutating requests also need `X-Requested-With: omniflow`.' },
+        bearerApiKey: {
+          type: 'http',
+          scheme: 'bearer',
+          description: 'API key: `Authorization: Bearer omf_<prefix>_<secret>`',
+        },
+        sessionCookie: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: SESSION_COOKIE,
+          description: 'Console session. Mutating requests also need `X-Requested-With: omniflow`.',
+        },
       },
       schemas: {
         Problem: {
           type: 'object',
-          properties: { error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' }, class: { type: 'string' }, details: {}, requestId: { type: 'string' } } } },
+          properties: {
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'string' },
+                message: { type: 'string' },
+                class: { type: 'string' },
+                details: {},
+                requestId: { type: 'string' },
+              },
+            },
+          },
         },
       },
     },

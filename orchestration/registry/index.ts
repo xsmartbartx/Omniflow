@@ -1,8 +1,8 @@
 export {
   type InspectResult,
+  type RegistryEvents,
   RegistryService,
   type RegistryServiceDeps,
-  type RegistryEvents,
   type SubmitOptions,
   type SubmitResult,
 } from './registry-service.ts';

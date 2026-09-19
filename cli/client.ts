@@ -51,7 +51,9 @@ export class ApiClient {
         signal: AbortSignal.timeout(this.timeout),
       });
     } catch (e) {
-      throw new ConnectionError(`Could not reach ${this.base} (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).message}). Is the server running, and is OMNIFLOW_URL correct?`);
+      throw new ConnectionError(
+        `Could not reach ${this.base} (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).message}). Is the server running, and is OMNIFLOW_URL correct?`,
+      );
     }
     const text = await res.text();
     let data: any = null;
@@ -62,7 +64,12 @@ export class ApiClient {
     }
     if (!res.ok) {
       const err = data?.error;
-      throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? `HTTP ${res.status}`, err?.details);
+      throw new ApiError(
+        res.status,
+        err?.code ?? `HTTP_${res.status}`,
+        err?.message ?? `HTTP ${res.status}`,
+        err?.details,
+      );
     }
     return data as T;
   }
@@ -71,7 +78,10 @@ export class ApiClient {
   async getText(path: string): Promise<string> {
     let res: Response;
     try {
-      res = await fetch(`${this.base}${path}`, { headers: this.headers({ accept: 'text/plain, text/markdown' }), signal: AbortSignal.timeout(this.timeout) });
+      res = await fetch(`${this.base}${path}`, {
+        headers: this.headers({ accept: 'text/plain, text/markdown' }),
+        signal: AbortSignal.timeout(this.timeout),
+      });
     } catch (e) {
       throw new ConnectionError(`Could not reach ${this.base}: ${(e as Error).message}`);
     }
@@ -83,7 +93,12 @@ export class ApiClient {
       } catch {
         /* not JSON */
       }
-      throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? `HTTP ${res.status}`, err?.details);
+      throw new ApiError(
+        res.status,
+        err?.code ?? `HTTP_${res.status}`,
+        err?.message ?? `HTTP ${res.status}`,
+        err?.details,
+      );
     }
     return text;
   }
@@ -102,10 +117,17 @@ export class ApiClient {
   }
 
   /** Stream server-sent events, calling `onEvent` for each until the server closes the stream. */
-  async stream(path: string, onEvent: (e: { id?: string; event: string; data: any }) => void, signal?: AbortSignal): Promise<void> {
+  async stream(
+    path: string,
+    onEvent: (e: { id?: string; event: string; data: any }) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
     let res: Response;
     try {
-      res = await fetch(`${this.base}${path}`, { headers: this.headers({ accept: 'text/event-stream' }), ...(signal ? { signal } : {}) });
+      res = await fetch(`${this.base}${path}`, {
+        headers: this.headers({ accept: 'text/event-stream' }),
+        ...(signal ? { signal } : {}),
+      });
     } catch (e) {
       throw new ConnectionError(`Could not reach ${this.base}: ${(e as Error).message}`);
     }

@@ -1,6 +1,6 @@
+import { sensitivityRank } from '../../core/index.ts';
 import type { Plan } from '../../schemas/plan.ts';
 import type { AutonomyTier, EnvironmentName } from '../../schemas/policy.ts';
-import { sensitivityRank } from '../../core/index.ts';
 import type { RiskSummary } from './engine.ts';
 
 /**
@@ -36,9 +36,11 @@ export function checkBlastRadius(plan: Plan, risk: RiskSummary | undefined, maxR
     violations.push('handles confidential data');
   }
   for (const s of plan.steps) {
-    if (s.effect === 'effectful' && !s.compensate) violations.push(`step '${s.id}' is effectful and not reversible (no compensation)`);
+    if (s.effect === 'effectful' && !s.compensate)
+      violations.push(`step '${s.id}' is effectful and not reversible (no compensation)`);
   }
-  if (plan.analysis.maxCost > maxRunCost) violations.push(`worst-case cost ${plan.analysis.maxCost} exceeds the ceiling ${maxRunCost}`);
+  if (plan.analysis.maxCost > maxRunCost)
+    violations.push(`worst-case cost ${plan.analysis.maxCost} exceeds the ceiling ${maxRunCost}`);
   if (plan.analysis.families.includes('shell')) violations.push('uses shell steps');
   if (risk?.blocking) violations.push('has blocking findings');
   if (risk && (risk.level === 'high' || risk.level === 'critical')) violations.push(`risk level is ${risk.level}`);

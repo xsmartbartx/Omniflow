@@ -7,7 +7,9 @@ export function diffLines(before, after) {
   const m = b.length;
   // longest-common-subsequence table (manifests are small; O(n·m) is fine)
   const lcs = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
   const ops = [];
   let i = 0;
   let j = 0;
@@ -41,4 +43,7 @@ export function collapse(ops, context = 3) {
   return out;
 }
 
-export const stats = (ops) => ({ added: ops.filter((o) => o.op === 'add').length, removed: ops.filter((o) => o.op === 'del').length });
+export const stats = (ops) => ({
+  added: ops.filter((o) => o.op === 'add').length,
+  removed: ops.filter((o) => o.op === 'del').length,
+});

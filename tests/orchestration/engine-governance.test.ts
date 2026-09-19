@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { echo, type Engine, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
+import { type Engine, echo, fastRetry, makeEngine, wf } from '../helpers/engine.ts';
 
 let e: Engine;
 const engines: Engine[] = [];
@@ -19,9 +19,19 @@ const until = async (fn: () => boolean, ms = 5000) => {
   }
 };
 
-const gate = (extra: Record<string, unknown> = {}) => ({ id: 'gate', type: 'approval', message: 'Approve ${{ inputs.what }}?', timeout: '5s', onTimeout: 'deny', ...extra });
+const gate = (extra: Record<string, unknown> = {}) => ({
+  id: 'gate',
+  type: 'approval',
+  message: 'Approve ${{ inputs.what }}?',
+  timeout: '5s',
+  onTimeout: 'deny',
+  ...extra,
+});
 const gated = (extra: Record<string, unknown> = {}) =>
-  wf([gate(extra), echo('after', 'released', { dependsOn: ['gate'] })], { inputs: { what: { type: 'string', default: 'the thing' } }, outputs: { by: '${{ steps.gate.output.by }}', v: '${{ steps.after.output.value }}' } });
+  wf([gate(extra), echo('after', 'released', { dependsOn: ['gate'] })], {
+    inputs: { what: { type: 'string', default: 'the thing' } },
+    outputs: { by: '${{ steps.gate.output.by }}', v: '${{ steps.after.output.value }}' },
+  });
 
 describe('approvals (human-in-the-loop)', () => {
   it('suspends the run, records the request, and resumes on approval', async () => {
@@ -35,7 +45,12 @@ describe('approvals (human-in-the-loop)', () => {
     expect(e.step(run.id, 'after')!.status).toBe('pending'); // nothing past the gate has run
 
     const [a] = e.state.approvals.list({ tenant: 'default', status: 'pending' });
-    expect(a).toMatchObject({ runId: run.id, stepId: 'gate', message: 'Approve the thing?', approvers: { roles: ['approver'], users: [] } });
+    expect(a).toMatchObject({
+      runId: run.id,
+      stepId: 'gate',
+      message: 'Approve the thing?',
+      approvers: { roles: ['approver'], users: [] },
+    });
     e.state.approvals.decide(a!.id, 'approved', 'usr_approver', 'looks fine');
     e.orch.resolveApproval(a!.id);
 
@@ -68,7 +83,10 @@ describe('approvals (human-in-the-loop)', () => {
     expect(done.status).toBe('failed');
     expect(done.error).toMatchObject({ code: 'APPROVAL_TIMEOUT' });
     expect(e.types(done.id)).toContain('approval.timed-out');
-    expect(e.state.approvals.list({ tenant: 'default' })[0]).toMatchObject({ status: 'timed-out', decidedBy: 'system:timeout' });
+    expect(e.state.approvals.list({ tenant: 'default' })[0]).toMatchObject({
+      status: 'timed-out',
+      decidedBy: 'system:timeout',
+    });
   });
 
   it('timeout with approve-by-default (justified) releases the run and says so', async () => {
@@ -77,7 +95,11 @@ describe('approvals (human-in-the-loop)', () => {
     const done = await e.run('wf');
     expect(done.status).toBe('succeeded');
     expect(e.events(done.id).find((x) => x.type === 'approval.timed-out')!.data.outcome).toBe('approved');
-    expect(e.step(done.id, 'gate')!.output).toMatchObject({ decision: 'approved', timedOut: true, by: 'system:timeout' });
+    expect(e.step(done.id, 'gate')!.output).toMatchObject({
+      decision: 'approved',
+      timedOut: true,
+      by: 'system:timeout',
+    });
   });
 
   it('escalates once, then denies', async () => {
@@ -107,11 +129,27 @@ describe('approvals (human-in-the-loop)', () => {
 
 describe('subworkflows (version-pinned)', () => {
   const child = () =>
-    wf([echo('hi', 'hello ${{ inputs.who }}')], { inputs: { who: { type: 'string', required: true } }, outputs: { greeting: '${{ steps.hi.output.value }}' } }, 'child');
+    wf(
+      [echo('hi', 'hello ${{ inputs.who }}')],
+      { inputs: { who: { type: 'string', required: true } }, outputs: { greeting: '${{ steps.hi.output.value }}' } },
+      'child',
+    );
   const parent = (extra: Record<string, unknown> = {}) =>
     wf(
-      [{ id: 'sub', type: 'subworkflow', workflow: 'child', version: '1.0.0', with: { who: '${{ inputs.name }}' }, ...extra }],
-      { inputs: { name: { type: 'string', required: true } }, outputs: { said: '${{ steps.sub.output.outputs.greeting }}', childRun: '${{ steps.sub.output.runId }}' } },
+      [
+        {
+          id: 'sub',
+          type: 'subworkflow',
+          workflow: 'child',
+          version: '1.0.0',
+          with: { who: '${{ inputs.name }}' },
+          ...extra,
+        },
+      ],
+      {
+        inputs: { name: { type: 'string', required: true } },
+        outputs: { said: '${{ steps.sub.output.outputs.greeting }}', childRun: '${{ steps.sub.output.runId }}' },
+      },
       'parent',
     );
 
@@ -123,7 +161,13 @@ describe('subworkflows (version-pinned)', () => {
     expect(run.status).toBe('succeeded');
     expect(run.outputs).toMatchObject({ said: 'hello Ada' });
     const childRun = e.state.runs.getRun((run.outputs as any).childRun)!;
-    expect(childRun).toMatchObject({ workflowName: 'child', status: 'succeeded', parentRunId: run.id, parentStepId: 'sub', triggerType: 'subworkflow' });
+    expect(childRun).toMatchObject({
+      workflowName: 'child',
+      status: 'succeeded',
+      parentRunId: run.id,
+      parentStepId: 'sub',
+      triggerType: 'subworkflow',
+    });
     expect(run.planHash).not.toBe(childRun.planHash);
   });
 
@@ -141,7 +185,13 @@ describe('subworkflows (version-pinned)', () => {
 
   it('fails the parent step when the child fails, carrying the child’s error class', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'x', type: 'capability', uses: 'util-fail@^1', retry: { attempts: 1 } }], { inputs: { who: { type: 'string', required: true } } }, 'child'));
+    e.publish(
+      wf(
+        [{ id: 'x', type: 'capability', uses: 'util-fail@^1', retry: { attempts: 1 } }],
+        { inputs: { who: { type: 'string', required: true } } },
+        'child',
+      ),
+    );
     e.publish(parent());
     const run = await e.run('parent', { name: 'Ada' });
     expect(run.status).toBe('failed');
@@ -151,7 +201,13 @@ describe('subworkflows (version-pinned)', () => {
 
   it('cancelling the parent cancels a waiting child', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'w', type: 'wait', until: { event: 'never' }, timeout: '1h' }], { inputs: { who: { type: 'string', required: true } } }, 'child'));
+    e.publish(
+      wf(
+        [{ id: 'w', type: 'wait', until: { event: 'never' }, timeout: '1h' }],
+        { inputs: { who: { type: 'string', required: true } } },
+        'child',
+      ),
+    );
     e.publish(parent());
     const run = await e.run('parent', { name: 'Ada' }, { wait: false });
     await until(() => e.state.runs.childrenOf(run.id).some((c) => c.status === 'waiting-event'));
@@ -163,7 +219,21 @@ describe('subworkflows (version-pinned)', () => {
 
   it('a subworkflow can itself be retried by its parent', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'f', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'child-flaky', failTimes: 1 }, retry: { attempts: 1 } }], { inputs: { who: { type: 'string', required: true } } }, 'child'));
+    e.publish(
+      wf(
+        [
+          {
+            id: 'f',
+            type: 'capability',
+            uses: 'sim-flaky@^1',
+            with: { key: 'child-flaky', failTimes: 1 },
+            retry: { attempts: 1 },
+          },
+        ],
+        { inputs: { who: { type: 'string', required: true } } },
+        'child',
+      ),
+    );
     e.publish(parent({ retry: { ...fastRetry(2), retryOn: ['business'] } }));
     // business failures never retry, even when listed — the child failure here is transient-class
     const run = await e.run('parent', { name: 'Ada' });
@@ -178,7 +248,14 @@ describe('dry run (shadow mode, ADR-0002 D3)', () => {
       wf(
         [
           { id: 'read', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'dry-read', failTimes: 0 } },
-          { id: 'charge', type: 'capability', uses: 'sim-effect@^1', dependsOn: ['read'], with: { label: 'real-charge' }, idempotencyKey: 'dry-key' },
+          {
+            id: 'charge',
+            type: 'capability',
+            uses: 'sim-effect@^1',
+            dependsOn: ['read'],
+            with: { label: 'real-charge' },
+            idempotencyKey: 'dry-key',
+          },
           echo('after', '${{ steps.charge.output.id }}', { dependsOn: ['charge'] }),
         ],
         { outputs: { id: '${{ steps.after.output.value }}' } },
@@ -203,7 +280,18 @@ describe('dry run (shadow mode, ADR-0002 D3)', () => {
 describe('secrets never leak (T3, R10)', () => {
   const TOKEN = 'tok-SECRET-9f8e7d6c5b4a';
   const secretWf = (withExtra: Record<string, unknown> = {}) =>
-    wf([{ id: 'call', type: 'capability', uses: 'sim-secret@^1', with: { token: '${{ secrets.API_TOKEN }}', ...withExtra }, retry: { attempts: 1 } }], { outputs: { len: '${{ steps.call.output.length }}' } });
+    wf(
+      [
+        {
+          id: 'call',
+          type: 'capability',
+          uses: 'sim-secret@^1',
+          with: { token: '${{ secrets.API_TOKEN }}', ...withExtra },
+          retry: { attempts: 1 },
+        },
+      ],
+      { outputs: { len: '${{ steps.call.output.length }}' } },
+    );
 
   const dumpEverything = (x: Engine): string => {
     const tables = x.state.db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'");
@@ -248,7 +336,19 @@ describe('secrets never leak (T3, R10)', () => {
   it('redacts a credential an adapter echoes back in its output', async () => {
     e = track(makeEngine());
     e.broker.put('default', 'API_TOKEN', TOKEN, 'usr');
-    e.publish(wf([{ id: 'call', type: 'capability', uses: 'sim-secret@^1', with: { token: '${{ secrets.API_TOKEN }}', echo: true } }], { outputs: { echoed: '${{ steps.call.output.echoed }}' } }));
+    e.publish(
+      wf(
+        [
+          {
+            id: 'call',
+            type: 'capability',
+            uses: 'sim-secret@^1',
+            with: { token: '${{ secrets.API_TOKEN }}', echo: true },
+          },
+        ],
+        { outputs: { echoed: '${{ steps.call.output.echoed }}' } },
+      ),
+    );
     const run = await e.run('wf');
     expect(JSON.stringify(run.outputs)).not.toContain(TOKEN);
     expect(dumpEverything(e)).not.toContain(TOKEN);
@@ -273,7 +373,11 @@ describe('secrets never leak (T3, R10)', () => {
 describe('operator controls and circuit breakers (§12.3)', () => {
   it('a capability kill switch stops steps that use it, and can be lifted', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'svc', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'ks', failTimes: 0 }, retry: fastRetry(3) }]));
+    e.publish(
+      wf([
+        { id: 'svc', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'ks', failTimes: 0 }, retry: fastRetry(3) },
+      ]),
+    );
     e.state.kv.setCapabilityKilled('default', 'sim-flaky', true, 'usr', 'incident 42');
     const blocked = await e.run('wf');
     expect(blocked.status).toBe('failed');
@@ -295,18 +399,42 @@ describe('operator controls and circuit breakers (§12.3)', () => {
   it('opens the circuit after repeated systemic failures and defers — without spending attempts — until it recovers', async () => {
     e = track(makeEngine());
     // threshold is 3 consecutive failures, cooldown 100ms (see makeEngine)
-    e.publish(wf([{ id: 'svc', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'cb', failTimes: 3, errorClass: 'systemic' }, retry: { ...fastRetry(6), retryOn: ['systemic', 'transient'] } }]));
+    e.publish(
+      wf([
+        {
+          id: 'svc',
+          type: 'capability',
+          uses: 'sim-flaky@^1',
+          with: { key: 'cb', failTimes: 3, errorClass: 'systemic' },
+          retry: { ...fastRetry(6), retryOn: ['systemic', 'transient'] },
+        },
+      ]),
+    );
     const run = await e.run('wf');
     expect(run.status).toBe('succeeded');
     expect(e.world.attempts.get('cb')).toBe(4); // 3 failures + 1 probe success — no hammering while open
     expect(e.step(run.id, 'svc')!.attempt).toBe(4); // the deferred dispatch did not consume an attempt
-    expect(e.events(run.id).some((x) => x.type === 'step.waiting' && String(x.data.on).includes('circuit open'))).toBe(true);
+    expect(e.events(run.id).some((x) => x.type === 'step.waiting' && String(x.data.on).includes('circuit open'))).toBe(
+      true,
+    );
     expect(e.breakers.snapshot()['sim-flaky']!.state).toBe('closed');
   });
 
   it('a single tenant’s failing capability does not affect a healthy one', async () => {
     e = track(makeEngine());
-    e.publish(wf([{ id: 'bad', type: 'capability', uses: 'sim-flaky@^1', with: { key: 'bad', failTimes: 99, errorClass: 'systemic' }, retry: { attempts: 1 }, onError: 'continue' }, echo('good', 1)]));
+    e.publish(
+      wf([
+        {
+          id: 'bad',
+          type: 'capability',
+          uses: 'sim-flaky@^1',
+          with: { key: 'bad', failTimes: 99, errorClass: 'systemic' },
+          retry: { attempts: 1 },
+          onError: 'continue',
+        },
+        echo('good', 1),
+      ]),
+    );
     const run = await e.run('wf');
     expect(run.status).toBe('succeeded');
   });
@@ -315,7 +443,20 @@ describe('operator controls and circuit breakers (§12.3)', () => {
 describe('event log integrity under a full engine run', () => {
   it('records every step and keeps the hash chain intact', async () => {
     e = track(makeEngine());
-    e.publish(wf([echo('a', 1), { id: 'boom', type: 'capability', uses: 'util-fail@^1', dependsOn: ['a'], retry: { attempts: 1 }, onError: 'continue' }, echo('c', 3, { dependsOn: ['boom'] })]));
+    e.publish(
+      wf([
+        echo('a', 1),
+        {
+          id: 'boom',
+          type: 'capability',
+          uses: 'util-fail@^1',
+          dependsOn: ['a'],
+          retry: { attempts: 1 },
+          onError: 'continue',
+        },
+        echo('c', 3, { dependsOn: ['boom'] }),
+      ]),
+    );
     const run = await e.run('wf');
     expect(run.status).toBe('succeeded');
     expect(e.state.events.verify('default')).toMatchObject({ ok: true });
@@ -333,6 +474,9 @@ describe('event log integrity under a full engine run', () => {
     const log = JSON.stringify(e.events(run.id));
     expect(log).not.toContain('123-45-6789');
     expect(e.events(run.id)[0]!.data.inputs).toEqual({ ssn: '[REDACTED]' });
-    expect(e.events(run.id).find((x) => x.type === 'step.succeeded')!.data.output).toMatchObject({ redacted: true, sensitivity: 'confidential' });
+    expect(e.events(run.id).find((x) => x.type === 'step.succeeded')!.data.output).toMatchObject({
+      redacted: true,
+      sensitivity: 'confidential',
+    });
   });
 });

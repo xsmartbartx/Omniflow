@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import semver from 'semver';
 import { parse as parseYaml } from 'yaml';
+import type { CapabilityRegistry } from '../../capabilities/index.ts';
 import {
   type Clock,
   ConflictError,
@@ -14,7 +15,6 @@ import {
   systemClock,
   ValidationError,
 } from '../../core/index.ts';
-import type { CapabilityRegistry } from '../../capabilities/index.ts';
 import type { Manifest } from '../../schemas/manifest.ts';
 import type { Plan } from '../../schemas/plan.ts';
 import type { AutonomyTier, PolicyDecision, Principal } from '../../schemas/policy.ts';
@@ -62,7 +62,12 @@ export interface RegistryEvents {
   deactivated: [{ tenant: string; workflow: string }];
 }
 
-const summarise = (r: PentestReport): RiskSummary => ({ score: r.score, level: r.level, blocking: r.blocking, findings: r.findings.length });
+const summarise = (r: PentestReport): RiskSummary => ({
+  score: r.score,
+  level: r.level,
+  blocking: r.blocking,
+  findings: r.findings.length,
+});
 
 /**
  * Workflow Registry service (architecture §5.1 #7): immutable, versioned publishing with lineage,
@@ -127,7 +132,16 @@ export class RegistryService {
     // The validator has already accepted this text, so parsing it again cannot fail.
     const manifest = (typeof text === 'string' ? parseYaml(text, { maxAliasCount: 0 }) : text) as Manifest;
     const risk = analyzeWorkflow({ manifest, plan: compiled.plan, origin });
-    return { ok: true, issues: compiled.issues, errors: [], warnings: compiled.warnings, manifest, plan: compiled.plan, planHash: compiled.hash, risk };
+    return {
+      ok: true,
+      issues: compiled.issues,
+      errors: [],
+      warnings: compiled.warnings,
+      manifest,
+      plan: compiled.plan,
+      planHash: compiled.hash,
+      risk,
+    };
   }
 
   // ------------------------------------------------------------- publishing
@@ -158,13 +172,20 @@ export class RegistryService {
       },
     });
     this.audit(principal, 'workflow.publish', decision, name);
-    if (decision.effect === 'deny') throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: name, version });
+    if (decision.effect === 'deny')
+      throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: name, version });
 
     const gate =
       decision.effect === 'require-approval'
         ? decision
         : opts.forceApproval
-          ? { ...decision, effect: 'require-approval' as const, reasonCode: opts.forceApproval.code, reason: opts.forceApproval.reason, requiredApprovals: 1 }
+          ? {
+              ...decision,
+              effect: 'require-approval' as const,
+              reasonCode: opts.forceApproval.code,
+              reason: opts.forceApproval.reason,
+              requiredApprovals: 1,
+            }
           : undefined;
     if (gate) {
       const change = this.st.authoring.createChange({
@@ -184,16 +205,30 @@ export class RegistryService {
         tenant,
         type: 'workflow.change-requested',
         actor: actorOf(principal),
-        data: { workflow: name, version, changeId: change.id, reasonCode: gate.reasonCode, requiredApprovals: change.requiredApprovals },
+        data: {
+          workflow: name,
+          version,
+          changeId: change.id,
+          reasonCode: gate.reasonCode,
+          requiredApprovals: change.requiredApprovals,
+        },
       });
       return { status: 'pending-approval', change, decision: gate, risk: r.risk };
     }
-    const published = this.publishInternal(tenant, text, r, { publishedBy: principal.id, origin, ...(opts.canaryPercent ? { canaryPercent: opts.canaryPercent } : {}) });
+    const published = this.publishInternal(tenant, text, r, {
+      publishedBy: principal.id,
+      origin,
+      ...(opts.canaryPercent ? { canaryPercent: opts.canaryPercent } : {}),
+    });
     return { status: 'published', version: published, risk: r.risk };
   }
 
   /** Approve a pending change. Publishes once the required number of distinct approvers is reached. */
-  approveChange(principal: Principal, changeId: string, comment?: string): { change: ChangeRecord; published?: VersionRecord } {
+  approveChange(
+    principal: Principal,
+    changeId: string,
+    comment?: string,
+  ): { change: ChangeRecord; published?: VersionRecord } {
     const change = this.mustGetChange(principal.tenant, changeId);
     if (change.status !== 'pending') throw new ConflictError(`Change ${changeId} is ${change.status}`);
     const decision = this.policy.decide({
@@ -203,17 +238,26 @@ export class RegistryService {
     });
     this.audit(principal, 'workflow.approve-change', decision, change.workflowName);
     if (decision.effect !== 'allow') throw new PolicyDeniedError(decision.reasonCode, decision.reason);
-    if (change.approvals.some((a) => a.by === principal.id)) throw new ConflictError('You have already approved this change');
+    if (change.approvals.some((a) => a.by === principal.id))
+      throw new ConflictError('You have already approved this change');
 
-    const approvals = [...change.approvals, { by: principal.id, name: principal.name, at: this.clock.now().toISOString(), ...(comment ? { comment } : {}) }];
+    const approvals = [
+      ...change.approvals,
+      { by: principal.id, name: principal.name, at: this.clock.now().toISOString(), ...(comment ? { comment } : {}) },
+    ];
     if (approvals.length < change.requiredApprovals) {
       return { change: this.st.authoring.patchChange(changeId, { approvals }) };
     }
 
     // Enough approvals: re-inspect against the *current* registry (capabilities or subworkflows may have changed).
     const r = this.inspect(change.tenant, change.manifestText, change.origin === 'agent' ? 'agent' : 'human');
-    if (!r.ok || !r.plan || !r.risk) throw new ConflictError('The manifest no longer compiles against the current registry', { errors: r.errors });
-    if (r.risk.blocking) throw new PolicyDeniedError('BLOCKING_FINDINGS', 'The pentest review raised blocking findings; the change cannot be published');
+    if (!r.ok || !r.plan || !r.risk)
+      throw new ConflictError('The manifest no longer compiles against the current registry', { errors: r.errors });
+    if (r.risk.blocking)
+      throw new PolicyDeniedError(
+        'BLOCKING_FINDINGS',
+        'The pentest review raised blocking findings; the change cannot be published',
+      );
     this.assertVersionIsNew(change.tenant, change.workflowName, change.version);
     const published = this.publishInternal(change.tenant, change.manifestText, r, {
       publishedBy: change.requestedBy,
@@ -226,14 +270,23 @@ export class RegistryService {
       actor: actorOf(principal),
       data: { workflow: change.workflowName, version: change.version, changeId, approvers: approvals.map((a) => a.by) },
     });
-    const updated = this.st.authoring.patchChange(changeId, { approvals, status: 'published', decidedBy: principal.id, ...(comment ? { decisionComment: comment } : {}) });
+    const updated = this.st.authoring.patchChange(changeId, {
+      approvals,
+      status: 'published',
+      decidedBy: principal.id,
+      ...(comment ? { decisionComment: comment } : {}),
+    });
     return { change: updated, published };
   }
 
   rejectChange(principal: Principal, changeId: string, comment?: string): ChangeRecord {
     const change = this.mustGetChange(principal.tenant, changeId);
     if (change.status !== 'pending') throw new ConflictError(`Change ${changeId} is ${change.status}`);
-    const decision = this.policy.decide({ principal, action: 'workflow.approve-change', resource: { tenant: change.tenant, workflow: change.workflowName } });
+    const decision = this.policy.decide({
+      principal,
+      action: 'workflow.approve-change',
+      resource: { tenant: change.tenant, workflow: change.workflowName },
+    });
     if (decision.effect !== 'allow') throw new PolicyDeniedError(decision.reasonCode, decision.reason);
     this.st.events.append({
       tenant: change.tenant,
@@ -241,23 +294,34 @@ export class RegistryService {
       actor: actorOf(principal),
       data: { workflow: change.workflowName, version: change.version, changeId, ...(comment ? { comment } : {}) },
     });
-    return this.st.authoring.patchChange(changeId, { status: 'rejected', decidedBy: principal.id, ...(comment ? { decisionComment: comment } : {}) });
+    return this.st.authoring.patchChange(changeId, {
+      status: 'rejected',
+      decidedBy: principal.id,
+      ...(comment ? { decisionComment: comment } : {}),
+    });
   }
 
   withdrawChange(principal: Principal, changeId: string): ChangeRecord {
     const change = this.mustGetChange(principal.tenant, changeId);
     if (change.status !== 'pending') throw new ConflictError(`Change ${changeId} is ${change.status}`);
-    if (change.requestedBy !== principal.id && !principal.roles.includes('admin')) throw new ForbiddenError('Only the requester or an admin can withdraw a change');
+    if (change.requestedBy !== principal.id && !principal.roles.includes('admin'))
+      throw new ForbiddenError('Only the requester or an admin can withdraw a change');
     return this.st.authoring.patchChange(changeId, { status: 'withdrawn', decidedBy: principal.id });
   }
 
   private assertVersionIsNew(tenant: string, name: string, version: string): void {
     if (this.st.registry.getVersion(tenant, name, version)) {
-      throw new ConflictError(`${name}@${version} already exists; published versions are immutable — bump the version`, { workflow: name, version });
+      throw new ConflictError(
+        `${name}@${version} already exists; published versions are immutable — bump the version`,
+        { workflow: name, version },
+      );
     }
     const latest = this.st.registry.listVersions(tenant, name)[0];
     if (latest && !semver.gt(version, latest.version)) {
-      throw new ConflictError(`Version ${version} must be greater than the latest published version ${latest.version}`, { workflow: name, latest: latest.version });
+      throw new ConflictError(
+        `Version ${version} must be greater than the latest published version ${latest.version}`,
+        { workflow: name, latest: latest.version },
+      );
     }
   }
 
@@ -290,11 +354,22 @@ export class RegistryService {
         name,
         v.version,
         v.planHash,
-        r.risk!.findings.map((f) => ({ ruleId: f.ruleId, severity: f.severity, blocking: f.blocking, message: f.message, detail: { ...(f.stepId ? { stepId: f.stepId } : {}), ...(f.path ? { path: f.path } : {}) } })),
+        r.risk!.findings.map((f) => ({
+          ruleId: f.ruleId,
+          severity: f.severity,
+          blocking: f.blocking,
+          message: f.message,
+          detail: { ...(f.stepId ? { stepId: f.stepId } : {}), ...(f.path ? { path: f.path } : {}) },
+        })),
       );
       const settings = this.st.registry.getSettings(tenant, name)!;
       if (o.canaryPercent && o.canaryPercent > 0 && settings.stableVersion) {
-        this.st.registry.patchSettings(tenant, name, { canaryVersion: v.version, canaryPercent: Math.min(100, o.canaryPercent) }, o.publishedBy);
+        this.st.registry.patchSettings(
+          tenant,
+          name,
+          { canaryVersion: v.version, canaryPercent: Math.min(100, o.canaryPercent) },
+          o.publishedBy,
+        );
       } else {
         this.st.registry.patchSettings(tenant, name, { stableVersion: v.version }, o.publishedBy);
       }
@@ -302,12 +377,20 @@ export class RegistryService {
         tenant,
         type: 'workflow.published',
         actor: { type: 'user', id: o.publishedBy },
-        data: { workflow: name, version: v.version, planHash: v.planHash, origin: o.origin, riskScore: r.risk!.score, ...(o.canaryPercent ? { canaryPercent: o.canaryPercent } : {}) },
+        data: {
+          workflow: name,
+          version: v.version,
+          planHash: v.planHash,
+          origin: o.origin,
+          riskScore: r.risk!.score,
+          ...(o.canaryPercent ? { canaryPercent: o.canaryPercent } : {}),
+        },
       });
       return v;
     });
     const settings = this.st.registry.getSettings(tenant, name)!;
-    if (settings.stableVersion) this.emitter.emit('activated', { tenant, workflow: name, version: settings.stableVersion });
+    if (settings.stableVersion)
+      this.emitter.emit('activated', { tenant, workflow: name, version: settings.stableVersion });
     return record;
   }
 
@@ -318,17 +401,40 @@ export class RegistryService {
     const v = this.st.registry.getVersion(principal.tenant, name, version);
     if (!v) throw new NotFoundError('Workflow version', `${name}@${version}`);
     if (v.status !== 'published') throw new ConflictError(`${name}@${version} is ${v.status} and cannot be activated`);
-    const s = this.st.registry.patchSettings(principal.tenant, name, { stableVersion: version, clearCanary: true }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.rollout-changed', actor: actorOf(principal), data: { workflow: name, stable: version, canary: null } });
+    const s = this.st.registry.patchSettings(
+      principal.tenant,
+      name,
+      { stableVersion: version, clearCanary: true },
+      principal.id,
+    );
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.rollout-changed',
+      actor: actorOf(principal),
+      data: { workflow: name, stable: version, canary: null },
+    });
     this.emitter.emit('activated', { tenant: principal.tenant, workflow: name, version });
     return s;
   }
 
   setCanary(principal: Principal, name: string, version: string, percent: number): WorkflowSettings {
     this.authorise(principal, 'workflow.manage', name);
-    if (!this.st.registry.getVersion(principal.tenant, name, version)) throw new NotFoundError('Workflow version', `${name}@${version}`);
-    const s = this.st.registry.patchSettings(principal.tenant, name, percent <= 0 ? { clearCanary: true } : { canaryVersion: version, canaryPercent: Math.min(100, Math.floor(percent)) }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.rollout-changed', actor: actorOf(principal), data: { workflow: name, canary: percent <= 0 ? null : version, percent } });
+    if (!this.st.registry.getVersion(principal.tenant, name, version))
+      throw new NotFoundError('Workflow version', `${name}@${version}`);
+    const s = this.st.registry.patchSettings(
+      principal.tenant,
+      name,
+      percent <= 0
+        ? { clearCanary: true }
+        : { canaryVersion: version, canaryPercent: Math.min(100, Math.floor(percent)) },
+      principal.id,
+    );
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.rollout-changed',
+      actor: actorOf(principal),
+      data: { workflow: name, canary: percent <= 0 ? null : version, percent },
+    });
     return s;
   }
 
@@ -341,46 +447,84 @@ export class RegistryService {
   rollbackCanary(principal: Principal, name: string, reason = 'manual rollback'): WorkflowSettings {
     this.authorise(principal, 'workflow.manage', name);
     const s = this.st.registry.patchSettings(principal.tenant, name, { clearCanary: true }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.rollout-changed', actor: actorOf(principal), data: { workflow: name, canary: null, rolledBack: true, reason } });
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.rollout-changed',
+      actor: actorOf(principal),
+      data: { workflow: name, canary: null, rolledBack: true, reason },
+    });
     return s;
   }
 
   deprecate(principal: Principal, name: string, version: string): void {
     this.authorise(principal, 'workflow.manage', name);
     const settings = this.st.registry.getSettings(principal.tenant, name);
-    if (settings?.stableVersion === version) throw new ConflictError('The stable version cannot be deprecated; activate another version first');
+    if (settings?.stableVersion === version)
+      throw new ConflictError('The stable version cannot be deprecated; activate another version first');
     this.st.registry.setStatus(principal.tenant, name, version, 'deprecated');
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.deprecated', actor: actorOf(principal), data: { workflow: name, version } });
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.deprecated',
+      actor: actorOf(principal),
+      data: { workflow: name, version },
+    });
   }
 
   /** Enable/disable and the workflow-level kill switch (§12.3). */
   setEnabled(principal: Principal, name: string, enabled: boolean): WorkflowSettings {
     this.authorise(principal, 'workflow.manage', name);
     const s = this.st.registry.patchSettings(principal.tenant, name, { enabled }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.settings-changed', actor: actorOf(principal), data: { workflow: name, enabled } });
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.settings-changed',
+      actor: actorOf(principal),
+      data: { workflow: name, enabled },
+    });
     if (!enabled) this.emitter.emit('deactivated', { tenant: principal.tenant, workflow: name });
-    else if (s.stableVersion) this.emitter.emit('activated', { tenant: principal.tenant, workflow: name, version: s.stableVersion });
+    else if (s.stableVersion)
+      this.emitter.emit('activated', { tenant: principal.tenant, workflow: name, version: s.stableVersion });
     return s;
   }
 
   kill(principal: Principal, name: string, reason: string): WorkflowSettings {
     this.authorise(principal, 'workflow.manage', name);
-    const s = this.st.registry.patchSettings(principal.tenant, name, { killed: true, killReason: reason }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.killed', actor: actorOf(principal), data: { workflow: name, reason } });
+    const s = this.st.registry.patchSettings(
+      principal.tenant,
+      name,
+      { killed: true, killReason: reason },
+      principal.id,
+    );
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.killed',
+      actor: actorOf(principal),
+      data: { workflow: name, reason },
+    });
     return s;
   }
 
   revive(principal: Principal, name: string): WorkflowSettings {
     this.authorise(principal, 'workflow.manage', name);
     const s = this.st.registry.patchSettings(principal.tenant, name, { killed: false }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.revived', actor: actorOf(principal), data: { workflow: name } });
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.revived',
+      actor: actorOf(principal),
+      data: { workflow: name },
+    });
     return s;
   }
 
   setAutonomy(principal: Principal, name: string, tier: AutonomyTier): WorkflowSettings {
-    if (!principal.roles.includes('admin')) throw new ForbiddenError('Only admins can change a workflow’s autonomy tier');
+    if (!principal.roles.includes('admin'))
+      throw new ForbiddenError('Only admins can change a workflow’s autonomy tier');
     const s = this.st.registry.patchSettings(principal.tenant, name, { autonomyTier: tier }, principal.id);
-    this.st.events.append({ tenant: principal.tenant, type: 'workflow.settings-changed', actor: actorOf(principal), data: { workflow: name, autonomyTier: tier } });
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'workflow.settings-changed',
+      actor: actorOf(principal),
+      data: { workflow: name, autonomyTier: tier },
+    });
     return s;
   }
 
@@ -437,4 +581,3 @@ export class RegistryService {
 function actorOf(p: Principal): { type: string; id: string; name: string } {
   return { type: p.type, id: p.id, name: p.name };
 }
-

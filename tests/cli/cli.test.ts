@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseArgs, parseInputs, UsageError } from '../../cli/args.ts';
 import { runCli } from '../../cli/main.ts';
-import { openState, stateOptionsFor } from '../../state/index.ts';
 import { createLogger } from '../../core/index.ts';
+import { buildServer } from '../../gateway/server.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createOmniflow } from '../../server/platform.ts';
-import { buildServer } from '../../gateway/server.ts';
+import { openState, stateOptionsFor } from '../../state/index.ts';
 import { type Api, echoStep, makeApi, until, yamlWf } from '../helpers/api.ts';
 
 interface Result {
@@ -17,7 +17,10 @@ interface Result {
   err: string;
 }
 
-async function cli(argv: string[], opts: { env?: Record<string, string>; stdin?: string; cwd?: string } = {}): Promise<Result> {
+async function cli(
+  argv: string[],
+  opts: { env?: Record<string, string>; stdin?: string; cwd?: string } = {},
+): Promise<Result> {
   let out = '';
   let err = '';
   const code = await runCli(
@@ -30,22 +33,50 @@ async function cli(argv: string[], opts: { env?: Record<string, string>; stdin?:
 }
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'omniflow-cli-'));
-const HELLO = yamlWf('hello', [echoStep('greet', 'hello ${{ inputs.who }}'), echoStep('again', '${{ steps.greet.output.value }}!', { dependsOn: ['greet'] })], {
-  inputs: { who: { type: 'string', default: 'world' } },
-  outputs: { message: '${{ steps.again.output.value }}' },
-});
+const HELLO = yamlWf(
+  'hello',
+  [
+    echoStep('greet', 'hello ${{ inputs.who }}'),
+    echoStep('again', '${{ steps.greet.output.value }}!', { dependsOn: ['greet'] }),
+  ],
+  {
+    inputs: { who: { type: 'string', default: 'world' } },
+    outputs: { message: '${{ steps.again.output.value }}' },
+  },
+);
 
 describe('argument parsing', () => {
   it('handles flags, values, repeats, equals and --', () => {
-    const a = parseArgs(['run', 'wf', '--input', 'a=1', '--input=b=2', '--json', '--dry-run', '-h', '--', '--not-a-flag']);
+    const a = parseArgs([
+      'run',
+      'wf',
+      '--input',
+      'a=1',
+      '--input=b=2',
+      '--json',
+      '--dry-run',
+      '-h',
+      '--',
+      '--not-a-flag',
+    ]);
     expect(a.positionals).toEqual(['run', 'wf', '--not-a-flag']);
     expect(a.flags.get('input')).toEqual(['a=1', 'b=2']);
     expect(a.flags.has('json') && a.flags.has('dry-run') && a.flags.has('help')).toBe(true);
   });
 
   it('decodes JSON-looking input values and keeps strings as strings', () => {
-    expect(parseInputs(['n=42', 'f=1.5', 'b=true', 'z=null', 'l=[1,2]', 'o={"a":1}', 's=hello', 'eq=a=b', 'bad=[oops'])).toEqual({
-      n: 42, f: 1.5, b: true, z: null, l: [1, 2], o: { a: 1 }, s: 'hello', eq: 'a=b', bad: '[oops',
+    expect(
+      parseInputs(['n=42', 'f=1.5', 'b=true', 'z=null', 'l=[1,2]', 'o={"a":1}', 's=hello', 'eq=a=b', 'bad=[oops']),
+    ).toEqual({
+      n: 42,
+      f: 1.5,
+      b: true,
+      z: null,
+      l: [1, 2],
+      o: { a: 1 },
+      s: 'hello',
+      eq: 'a=b',
+      bad: '[oops',
     });
   });
 
@@ -82,7 +113,10 @@ describe('help and errors', () => {
 describe('validate and compile (offline)', () => {
   const dir = tmp();
   writeFileSync(join(dir, 'hello.yaml'), HELLO);
-  writeFileSync(join(dir, 'bad.yaml'), yamlWf('bad', [{ id: 'one', type: 'capability', uses: 'util-ecoh@^1', with: { value: 1 } }]));
+  writeFileSync(
+    join(dir, 'bad.yaml'),
+    yamlWf('bad', [{ id: 'one', type: 'capability', uses: 'util-ecoh@^1', with: { value: 1 } }]),
+  );
   mkdirSync(join(dir, 'good'));
   writeFileSync(join(dir, 'good', 'a.yaml'), yamlWf('alpha', [echoStep('s', 1)]));
   writeFileSync(join(dir, 'good', 'b.yml'), yamlWf('beta', [echoStep('s', 2)]));
@@ -98,7 +132,7 @@ describe('validate and compile (offline)', () => {
   it('points at the offending line with a suggestion, and exits 1', async () => {
     const r = await cli(['validate', 'bad.yaml'], { cwd: dir });
     expect(r.code).toBe(1);
-    expect(r.err).toContain("UNKNOWN_CAPABILITY");
+    expect(r.err).toContain('UNKNOWN_CAPABILITY');
     expect(r.err).toContain("did you mean 'util-echo'");
     expect(r.err).toMatch(/--> bad\.yaml:\d+:\d+/);
     expect(r.err).toContain('uses: util-ecoh@^1');
@@ -165,7 +199,9 @@ describe('dev (embedded run)', () => {
   });
 
   it('exits 1 when the run fails and shows why', async () => {
-    const wf = yamlWf('boom', [{ id: 'x', type: 'capability', uses: 'util-fail@^1', with: { errorClass: 'business', message: 'nope' } }]);
+    const wf = yamlWf('boom', [
+      { id: 'x', type: 'capability', uses: 'util-fail@^1', with: { errorClass: 'business', message: 'nope' } },
+    ]);
     const r = await cli(['dev', '-'], { stdin: wf });
     expect(r.code).toBe(1);
     expect(r.out).toContain('failed');
@@ -178,7 +214,10 @@ describe('dev (embedded run)', () => {
   });
 
   it('passes secrets to the ephemeral store and can auto-answer approval gates', async () => {
-    const wf = yamlWf('gated', [{ id: 'gate', type: 'approval', message: 'Ship it?', timeout: '1h', onTimeout: 'deny' }, echoStep('after', 'shipped', { dependsOn: ['gate'] })]);
+    const wf = yamlWf('gated', [
+      { id: 'gate', type: 'approval', message: 'Ship it?', timeout: '1h', onTimeout: 'deny' },
+      echoStep('after', 'shipped', { dependsOn: ['gate'] }),
+    ]);
     const waiting = cli(['dev', '-', '--timeout', '1'], { stdin: wf });
     expect((await waiting).code).toBe(1);
     const r = await cli(['dev', '-', '--auto-approve'], { stdin: wf });
@@ -281,14 +320,22 @@ describe('remote commands against a live server', () => {
     expect(good.code).toBe(0);
     expect(good.out).toContain('succeeded');
 
-    await cli(['publish', '-'], { env: env(), stdin: yamlWf('fails', [{ id: 'x', type: 'capability', uses: 'util-fail@^1', with: { errorClass: 'business', message: 'nope' } }]) });
+    await cli(['publish', '-'], {
+      env: env(),
+      stdin: yamlWf('fails', [
+        { id: 'x', type: 'capability', uses: 'util-fail@^1', with: { errorClass: 'business', message: 'nope' } },
+      ]),
+    });
     const bad = await cli(['run', 'fails', '--wait'], { env: env() });
     expect(bad.code).toBe(1);
     expect(bad.out).toContain('failed');
   });
 
   it('reports invalid manifests with source locations when publishing', async () => {
-    const r = await cli(['publish', '-'], { env: env(), stdin: yamlWf('broken', [{ id: 'one', type: 'capability', uses: 'util-ecoh@^1', with: {} }]) });
+    const r = await cli(['publish', '-'], {
+      env: env(),
+      stdin: yamlWf('broken', [{ id: 'one', type: 'capability', uses: 'util-ecoh@^1', with: {} }]),
+    });
     expect(r.code).toBe(1);
     expect(r.err).toContain('UNKNOWN_CAPABILITY');
   });
@@ -310,7 +357,10 @@ describe('remote commands against a live server', () => {
   });
 
   it('answers approvals from the command line', async () => {
-    const stdin = yamlWf('needs-ok', [{ id: 'gate', type: 'approval', message: 'Ship?', timeout: '1h', onTimeout: 'deny' }, echoStep('after', 'shipped', { dependsOn: ['gate'] })]);
+    const stdin = yamlWf('needs-ok', [
+      { id: 'gate', type: 'approval', message: 'Ship?', timeout: '1h', onTimeout: 'deny' },
+      echoStep('after', 'shipped', { dependsOn: ['gate'] }),
+    ]);
     await cli(['publish', '-'], { env: env(), stdin });
     const runner = await cli(['run', 'needs-ok', '--json'], { env: env() });
     const runId = JSON.parse(runner.out).run.id as string;
@@ -322,14 +372,19 @@ describe('remote commands against a live server', () => {
     expect((await cli(['approvals', 'approve', id], { env: env() })).code).toBe(1);
     // … a different person may.
     const other = (await api.key(['admin'])).apiKey!;
-    const ok = await cli(['approvals', 'approve', id, '--comment', 'lgtm'], { env: { OMNIFLOW_URL: url, OMNIFLOW_API_KEY: other } });
+    const ok = await cli(['approvals', 'approve', id, '--comment', 'lgtm'], {
+      env: { OMNIFLOW_URL: url, OMNIFLOW_API_KEY: other },
+    });
     expect(ok.code).toBe(0);
     await until(() => api.app.state.runs.getRun(runId)?.status === 'succeeded');
     expect((await cli(['approvals', 'approve'], { env: env() })).code).toBe(2);
   });
 
   it('manages secrets without putting values on the command line', async () => {
-    const set = await cli(['secrets', 'set', 'DB_PASSWORD', '--stdin', '--description', 'db'], { env: env(), stdin: 's3cr3t-value\n' });
+    const set = await cli(['secrets', 'set', 'DB_PASSWORD', '--stdin', '--description', 'db'], {
+      env: env(),
+      stdin: 's3cr3t-value\n',
+    });
     expect(set.code).toBe(0);
     expect(set.out + set.err).not.toContain('s3cr3t-value');
     const list = await cli(['secrets'], { env: env() });
@@ -353,7 +408,12 @@ describe('admin commands on a data directory', () => {
 
   beforeAll(async () => {
     const config = loadConfig(
-      { OMNIFLOW_DATA_DIR: dataDir, OMNIFLOW_LOG_LEVEL: 'silent', OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple', OMNIFLOW_ENV: 'production' },
+      {
+        OMNIFLOW_DATA_DIR: dataDir,
+        OMNIFLOW_LOG_LEVEL: 'silent',
+        OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple',
+        OMNIFLOW_ENV: 'production',
+      },
       { cwd: dataDir },
     );
     const app = createOmniflow(config, { log: createLogger({ level: 'silent' }) });
@@ -371,7 +431,8 @@ describe('admin commands on a data directory', () => {
     await stop();
   });
 
-  const admin = (argv: string[], stdin?: string) => cli(['admin', ...argv], { env: { OMNIFLOW_DATA_DIR: dataDir }, cwd: dataDir, ...(stdin ? { stdin } : {}) });
+  const admin = (argv: string[], stdin?: string) =>
+    cli(['admin', ...argv], { env: { OMNIFLOW_DATA_DIR: dataDir }, cwd: dataDir, ...(stdin ? { stdin } : {}) });
 
   it('bootstraps API access with no login: create-api-key, then use it against the server', async () => {
     const created = await admin(['create-api-key', '--name', 'ci', '--role', 'operator', '--json']);
@@ -388,13 +449,21 @@ describe('admin commands on a data directory', () => {
     expect(created.code).toBe(0);
     const { password } = JSON.parse(created.out);
     // the temporary password works and is flagged for change
-    const login = await fetch(`${url}/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'ops@example.com', password }) });
+    const login = await fetch(`${url}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'ops@example.com', password }),
+    });
     expect(login.status).toBe(200);
     expect(((await login.json()) as { user: { mustChangePassword: boolean } }).user.mustChangePassword).toBe(true);
 
     const reset = JSON.parse((await admin(['reset-password', '--email', 'ops@example.com', '--json'])).out);
     expect(reset.password).not.toBe(password);
-    const old = await fetch(`${url}/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'ops@example.com', password }) });
+    const old = await fetch(`${url}/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'ops@example.com', password }),
+    });
     expect(old.status).toBe(401);
 
     const users = await admin(['list-users']);
@@ -438,11 +507,29 @@ describe('insight commands', () => {
     try {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
-      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
-      const wf = yamlWf('swallow', [echoStep('a', 1), { id: 'flaky', type: 'capability', uses: 'util-fail@^1', dependsOn: ['a'], onError: 'continue', with: { errorClass: 'business', message: 'nope' } }]);
+      const env = {
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
+      };
+      const wf = yamlWf('swallow', [
+        echoStep('a', 1),
+        {
+          id: 'flaky',
+          type: 'capability',
+          uses: 'util-fail@^1',
+          dependsOn: ['a'],
+          onError: 'continue',
+          with: { errorClass: 'business', message: 'nope' },
+        },
+      ]);
       expect((await cli(['publish', '-'], { env, stdin: wf })).code).toBe(0);
       for (let i = 0; i < 12; i++) await cli(['run', 'swallow'], { env });
-      await until(() => api.app.state.runs.listRuns({ tenant: 'default', workflow: 'swallow', limit: 50 }).filter((r) => r.status === 'succeeded').length === 12);
+      await until(
+        () =>
+          api.app.state.runs
+            .listRuns({ tenant: 'default', workflow: 'swallow', limit: 50 })
+            .filter((r) => r.status === 'succeeded').length === 12,
+      );
 
       const overview = await cli(['insights', '--hours', '6'], { env });
       expect(overview.code).toBe(0);
@@ -469,12 +556,20 @@ describe('insight commands', () => {
 describe('authoring commands', () => {
   it('plans, reviews, imports, explains and documents', async () => {
     const { ScriptedLlm, modelReply } = await import('../helpers/llm.ts');
-    const llm = new ScriptedLlm(modelReply(yamlWf('greeter', [echoStep('hi', 'hello')]), { rationale: 'Says hello.', questions: ['Which language?'] }));
+    const llm = new ScriptedLlm(
+      modelReply(yamlWf('greeter', [echoStep('hi', 'hello')]), {
+        rationale: 'Says hello.',
+        questions: ['Which language?'],
+      }),
+    );
     const api = await makeApi({ llm, env: { OMNIFLOW_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl' } });
     try {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
-      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
+      const env = {
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
+      };
       const dir = tmp();
 
       const planned = await cli(['plan', 'greet', 'people', '--out', 'greeter.yaml'], { env, cwd: dir });
@@ -500,14 +595,22 @@ describe('authoring commands', () => {
       expect((await cli(['drafts', 'create', 'mine.yaml'], { env, cwd: dir })).out).toContain('✓ valid');
       expect((await cli(['drafts', 'wobble', draftId], { env })).code).toBe(2);
 
-      writeFileSync(join(dir, 'crontab'), '0 2 * * * /usr/bin/curl -fsS https://backup.example.com/run\n15 3 * * * /usr/bin/pg_dump app | gzip > /b/app.gz\n@reboot /bin/x\n');
+      writeFileSync(
+        join(dir, 'crontab'),
+        '0 2 * * * /usr/bin/curl -fsS https://backup.example.com/run\n15 3 * * * /usr/bin/pg_dump app | gzip > /b/app.gz\n@reboot /bin/x\n',
+      );
       const imported = await cli(['import', 'crontab', 'crontab', '--out-dir', 'imported'], { env, cwd: dir });
       expect(imported.code).toBe(0);
       expect(imported.out).toContain('skipped');
       const files = readdirSync(join(dir, 'imported')).sort();
       expect(files.filter((f) => f.endsWith('.yaml'))).toHaveLength(2);
       expect(files.filter((f) => f.endsWith('.sh'))).toHaveLength(1);
-      expect(readFileSync(join(dir, 'imported', files.find((f) => f.startsWith('cron-curl') && f.endsWith('.yaml'))!), 'utf8')).toContain('shell-exec@^1');
+      expect(
+        readFileSync(
+          join(dir, 'imported', files.find((f) => f.startsWith('cron-curl') && f.endsWith('.yaml'))!),
+          'utf8',
+        ),
+      ).toContain('shell-exec@^1');
       expect(imported.out).toContain('suggested scripts');
       expect((await cli(['import', 'nonsense', 'x'], { env })).code).toBe(2);
 
@@ -536,7 +639,10 @@ describe('authoring commands', () => {
     try {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
-      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
+      const env = {
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
+      };
       const r = await cli(['plan', 'do', 'something'], { env });
       expect(r.code).toBe(1);
       expect(r.err).toContain('AI_NOT_CONFIGURED');

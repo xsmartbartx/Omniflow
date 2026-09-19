@@ -109,13 +109,19 @@ export function tokenize(command: string): string[] | undefined {
   return out;
 }
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'job';
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'job';
 
 function addDays(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-const CRON_FIELD = /^(\*|\*\/\d+|\d+(-\d+)?(\/\d+)?)(,(\*|\d+(-\d+)?(\/\d+)?))*$|^[A-Za-z]{3}(-[A-Za-z]{3})?(,[A-Za-z]{3}(-[A-Za-z]{3})?)*$/;
+const CRON_FIELD =
+  /^(\*|\*\/\d+|\d+(-\d+)?(\/\d+)?)(,(\*|\d+(-\d+)?(\/\d+)?))*$|^[A-Za-z]{3}(-[A-Za-z]{3})?(,[A-Za-z]{3}(-[A-Za-z]{3})?)*$/;
 
 export function importCrontab(text: string, opts: ImportOptions): ImportResult {
   const result: ImportResult = { workflows: [], skipped: [], environment: {} };
@@ -139,7 +145,9 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     const words = line.split(/\s+/);
     if (words[0]!.startsWith('@')) {
       if (words[0] === '@reboot') {
-        skip('@reboot jobs run at machine start; OmniFlow has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.');
+        skip(
+          '@reboot jobs run at machine start; OmniFlow has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.',
+        );
         continue;
       }
       const expanded = MACROS[words[0]!.toLowerCase()];
@@ -172,7 +180,10 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     // A stable, readable name from the first word(s) of the command.
     const words0 = command.split(/[\s|&;<>]+/).filter(Boolean);
     const exeWord = (words0[0] ?? 'job').split('/').pop() ?? 'job';
-    let name = `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !needsShell(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
+    let name =
+      `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !needsShell(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`
+        .replace(/-{2,}/g, '-')
+        .replace(/-+$/, '');
     for (let n = 2; used.has(name); n++) name = `${name.replace(/-\d+$/, '')}-${n}`;
     used.add(name);
 
@@ -181,7 +192,9 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
       const path = `${(opts.scriptDir ?? '/opt/omniflow/scripts').replace(/\/$/, '')}/${name}.sh`;
       script = { path, content: `#!/bin/sh\nset -eu\n${command}\n` };
       argv = [path];
-      notes.push(`The command uses shell syntax (pipes, redirects, globs or substitutions). OmniFlow refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to OMNIFLOW_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`);
+      notes.push(
+        `The command uses shell syntax (pipes, redirects, globs or substitutions). OmniFlow refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to OMNIFLOW_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`,
+      );
     } else {
       const parsed = tokenize(command);
       if (!parsed || parsed.length === 0) {
@@ -194,16 +207,32 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
       if (!exe.startsWith('/')) {
         const known = KNOWN_PATHS[exe];
         argv[0] = known ?? `/usr/bin/${exe}`;
-        notes.push(`'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to OMNIFLOW_SHELL_ALLOWED_COMMANDS.`);
+        notes.push(
+          `'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to OMNIFLOW_SHELL_ALLOWED_COMMANDS.`,
+        );
       } else notes.push(`Add ${exe} to OMNIFLOW_SHELL_ALLOWED_COMMANDS or the shell capability will refuse to run it.`);
     }
-    if (/\b(rm\s+-rf?|dd\s+if=|mkfs|:\s*\(\)\s*\{)/.test(command)) notes.push('This command looks destructive. Review it carefully before publishing.');
-    if (/(password|passwd|secret|token|api[_-]?key)\s*=/i.test(command) || /https?:\/\/[^\s/@]+:[^\s/@]+@/.test(command)) {
-      notes.push('The command appears to contain a credential. Move it into a secret and pass it with ${{ secrets.NAME }} before publishing.');
+    if (/\b(rm\s+-rf?|dd\s+if=|mkfs|:\s*\(\)\s*\{)/.test(command))
+      notes.push('This command looks destructive. Review it carefully before publishing.');
+    if (
+      /(password|passwd|secret|token|api[_-]?key)\s*=/i.test(command) ||
+      /https?:\/\/[^\s/@]+:[^\s/@]+@/.test(command)
+    ) {
+      notes.push(
+        'The command appears to contain a credential. Move it into a secret and pass it with ${{ secrets.NAME }} before publishing.',
+      );
     }
-    if (result.environment.MAILTO) notes.push(`The crontab mailed output to ${result.environment.MAILTO}. Configure an alert channel (OMNIFLOW_ALERT_CHANNELS) so failures are reported the same way.`);
-    if (Object.keys(result.environment).some((k) => k !== 'MAILTO')) notes.push('The crontab sets environment variables. Shell steps run with a scrubbed environment; pass what the job needs through the step `env`.');
-    notes.push(`Schedules run in ${opts.timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`);
+    if (result.environment.MAILTO)
+      notes.push(
+        `The crontab mailed output to ${result.environment.MAILTO}. Configure an alert channel (OMNIFLOW_ALERT_CHANNELS) so failures are reported the same way.`,
+      );
+    if (Object.keys(result.environment).some((k) => k !== 'MAILTO'))
+      notes.push(
+        'The crontab sets environment variables. Shell steps run with a scrubbed environment; pass what the job needs through the step `env`.',
+      );
+    notes.push(
+      `Schedules run in ${opts.timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`,
+    );
 
     const manifest = {
       apiVersion: 'omniflow.dev/v1',
@@ -232,7 +261,14 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
         },
       ],
     };
-    result.workflows.push({ name, line: i + 1, source: line, manifest: stringify(manifest, { lineWidth: 0 }), notes, ...(script ? { script } : {}) });
+    result.workflows.push({
+      name,
+      line: i + 1,
+      source: line,
+      manifest: stringify(manifest, { lineWidth: 0 }),
+      notes,
+      ...(script ? { script } : {}),
+    });
   }
   return result;
 }

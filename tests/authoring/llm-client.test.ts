@@ -15,7 +15,9 @@ interface Seen {
   body?: any;
 }
 
-async function fakeProvider(respond: (seen: Seen) => { status: number; body: unknown }): Promise<{ url: string; seen: Seen }> {
+async function fakeProvider(
+  respond: (seen: Seen) => { status: number; body: unknown },
+): Promise<{ url: string; seen: Seen }> {
   const seen: Seen = {};
   server = createServer((req, res) => {
     let raw = '';
@@ -34,7 +36,11 @@ async function fakeProvider(respond: (seen: Seen) => { status: number; body: unk
 
 const config = (baseUrl: string, over: { apiKey?: string; allowPrivate?: boolean } = {}) => {
   const c = defaultAdapterConfig({ allowPrivateNetworks: over.allowPrivate ?? true });
-  c.llm = { ...c.llm, baseUrl, ...(over.apiKey === undefined ? { apiKey: 'sk-test-key' } : over.apiKey ? { apiKey: over.apiKey } : {}) };
+  c.llm = {
+    ...c.llm,
+    baseUrl,
+    ...(over.apiKey === undefined ? { apiKey: 'sk-test-key' } : over.apiKey ? { apiKey: over.apiKey } : {}),
+  };
   if (over.apiKey === '') delete c.llm.apiKey;
   return c;
 };
@@ -45,13 +51,35 @@ describe('Anthropic client', () => {
   });
 
   it('calls the Messages API with the right headers and body, and parses the reply', async () => {
-    const { url, seen } = await fakeProvider(() => ({ status: 200, body: { model: 'claude-x', content: [{ type: 'text', text: 'Hello ' }, { type: 'tool_use' }, { type: 'text', text: 'world' }], usage: { input_tokens: 12, output_tokens: 3 }, stop_reason: 'end_turn' } }));
+    const { url, seen } = await fakeProvider(() => ({
+      status: 200,
+      body: {
+        model: 'claude-x',
+        content: [{ type: 'text', text: 'Hello ' }, { type: 'tool_use' }, { type: 'text', text: 'world' }],
+        usage: { input_tokens: 12, output_tokens: 3 },
+        stop_reason: 'end_turn',
+      },
+    }));
     const c = createAnthropicClient(config(url))!;
     const r = await c.complete({ system: 'be brief', messages: [{ role: 'user', content: 'hi' }], maxTokens: 50 });
-    expect(r).toEqual({ text: 'Hello world', model: 'claude-x', usage: { inputTokens: 12, outputTokens: 3 }, stopReason: 'end_turn' });
+    expect(r).toEqual({
+      text: 'Hello world',
+      model: 'claude-x',
+      usage: { inputTokens: 12, outputTokens: 3 },
+      stopReason: 'end_turn',
+    });
     expect(seen.path).toBe('/v1/messages');
-    expect(seen.headers).toMatchObject({ 'x-api-key': 'sk-test-key', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' });
-    expect(seen.body).toMatchObject({ model: c.model, max_tokens: 50, system: 'be brief', messages: [{ role: 'user', content: 'hi' }] });
+    expect(seen.headers).toMatchObject({
+      'x-api-key': 'sk-test-key',
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    });
+    expect(seen.body).toMatchObject({
+      model: c.model,
+      max_tokens: 50,
+      system: 'be brief',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
   });
 
   it.each([
@@ -63,24 +91,35 @@ describe('Anthropic client', () => {
     [400, 'LLM_REJECTED', 'prompt is too long'],
   ])('maps HTTP %i to %s', async (status, code, text) => {
     const { url } = await fakeProvider(() => ({ status, body: { error: { message: 'prompt is too long' } } }));
-    await expect(createAnthropicClient(config(url))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] })).rejects.toMatchObject({ code, message: expect.stringContaining(text) });
+    await expect(
+      createAnthropicClient(config(url))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] }),
+    ).rejects.toMatchObject({ code, message: expect.stringContaining(text) });
   });
 
   it('never leaks the API key into an error', async () => {
     const { url } = await fakeProvider(() => ({ status: 401, body: { error: { message: 'bad key sk-test-key' } } }));
-    const err = await createAnthropicClient(config(url))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] }).catch((e) => e);
+    const err = await createAnthropicClient(config(url))!
+      .complete({ system: 's', messages: [{ role: 'user', content: 'x' }] })
+      .catch((e) => e);
     expect(String(err.message)).not.toContain('sk-test-key');
   });
 
   it('refuses to reach private addresses unless the operator allowed it (SSRF guard applies to the model too)', async () => {
     const { url } = await fakeProvider(() => ({ status: 200, body: { content: [] } }));
-    await expect(createAnthropicClient(config(url, { allowPrivate: false }))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] })).rejects.toBeTruthy();
+    await expect(
+      createAnthropicClient(config(url, { allowPrivate: false }))!.complete({
+        system: 's',
+        messages: [{ role: 'user', content: 'x' }],
+      }),
+    ).rejects.toBeTruthy();
   });
 
   it('reports a non-JSON reply as a bad response', async () => {
     server = createServer((_req, res) => res.writeHead(200).end('<html>oops</html>'));
     await new Promise<void>((r) => server!.listen(0, '127.0.0.1', r));
     const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-    await expect(createAnthropicClient(config(url))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] })).rejects.toMatchObject({ code: 'LLM_BAD_RESPONSE' });
+    await expect(
+      createAnthropicClient(config(url))!.complete({ system: 's', messages: [{ role: 'user', content: 'x' }] }),
+    ).rejects.toMatchObject({ code: 'LLM_BAD_RESPONSE' });
   });
 });

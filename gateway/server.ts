@@ -7,7 +7,7 @@ import addFormats from 'ajv-formats';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ulid } from '../core/index.ts';
 import type { Omniflow } from './context.ts';
-import { buildOpenApi, fromFastifyValidation, problem, registerRoutes, type RouteDef } from './http.ts';
+import { buildOpenApi, fromFastifyValidation, problem, type RouteDef, registerRoutes } from './http.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { authoringRoutes } from './routes/authoring.ts';
@@ -26,7 +26,8 @@ export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url
   return resolve(from, '..');
 }
 
-const CONSOLE_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+const CONSOLE_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 function securityHeaders(app: Omniflow): Record<string, string> {
   return {
@@ -36,7 +37,9 @@ function securityHeaders(app: Omniflow): Record<string, string> {
     'cross-origin-opener-policy': 'same-origin',
     'cross-origin-resource-policy': 'same-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=()',
-    ...(app.config.publicUrl.startsWith('https:') ? { 'strict-transport-security': 'max-age=31536000; includeSubDomains' } : {}),
+    ...(app.config.publicUrl.startsWith('https:')
+      ? { 'strict-transport-security': 'max-age=31536000; includeSubDomains' }
+      : {}),
   };
 }
 
@@ -60,10 +63,14 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
   // parameters are text by nature, so they are coerced. Unknown properties are rejected, never dropped.
   const ajvOpts = { allErrors: true, useDefaults: true, removeAdditional: false, strict: false } as const;
   // ajv-formats ships CommonJS; under NodeNext its default export is the module namespace.
-  const applyFormats = ((addFormats as unknown as { default?: unknown }).default ?? addFormats) as unknown as (a: Ajv) => Ajv;
+  const applyFormats = ((addFormats as unknown as { default?: unknown }).default ?? addFormats) as unknown as (
+    a: Ajv,
+  ) => Ajv;
   const strictAjv = applyFormats(new Ajv({ ...ajvOpts, coerceTypes: false }));
   const coercingAjv = applyFormats(new Ajv({ ...ajvOpts, coerceTypes: 'array' }));
-  server.setValidatorCompiler(({ schema, httpPart }) => (httpPart === 'body' ? strictAjv : coercingAjv).compile(schema));
+  server.setValidatorCompiler(({ schema, httpPart }) =>
+    (httpPart === 'body' ? strictAjv : coercingAjv).compile(schema),
+  );
 
   const limiters = {
     api: new RateLimiter(app.config.rateLimitPerMinute),
@@ -82,7 +89,10 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
   });
 
   const httpRequests = app.metrics.counter('omniflow_http_requests_total', 'HTTP requests by route and status.');
-  const httpSeconds = app.metrics.histogram('omniflow_http_request_duration_seconds', 'HTTP request duration by route.');
+  const httpSeconds = app.metrics.histogram(
+    'omniflow_http_request_duration_seconds',
+    'HTTP request duration by route.',
+  );
 
   server.addHook('onRequest', async (req, reply) => {
     reply.header('x-request-id', req.id);
@@ -90,7 +100,9 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     const wait = limiters.ipGlobal.take(`ip:${req.ip}`);
     if (wait > 0) {
       reply.header('retry-after', String(wait));
-      reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many requests', class: 'transient', requestId: req.id } });
+      reply
+        .code(429)
+        .send({ error: { code: 'RATE_LIMITED', message: 'Too many requests', class: 'transient', requestId: req.id } });
       return reply;
     }
     if (req.url.startsWith('/v1/') || req.url === '/metrics') {
@@ -103,21 +115,53 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     const route = req.routeOptions?.url ?? 'unmatched';
     httpRequests.inc({ method: req.method, route, status: String(reply.statusCode) });
     httpSeconds.observe({ route }, reply.elapsedTime / 1000);
-    app.log.debug('request', { id: req.id, method: req.method, route, status: reply.statusCode, ms: Math.round(reply.elapsedTime), principal: req.principal?.id });
+    app.log.debug('request', {
+      id: req.id,
+      method: req.method,
+      route,
+      status: reply.statusCode,
+      ms: Math.round(reply.elapsedTime),
+      principal: req.principal?.id,
+    });
   });
 
   server.setErrorHandler((err, req, reply) => {
     let e: unknown = err;
-    const fv = err as { validation?: Array<{ instancePath?: string; message?: string; keyword?: string; params?: Record<string, unknown> }>; validationContext?: string; statusCode?: number; code?: string };
+    const fv = err as {
+      validation?: Array<{
+        instancePath?: string;
+        message?: string;
+        keyword?: string;
+        params?: Record<string, unknown>;
+      }>;
+      validationContext?: string;
+      statusCode?: number;
+      code?: string;
+    };
     if (fv.validation) e = fromFastifyValidation(fv.validation, fv.validationContext ?? 'request');
     else if (fv.statusCode && fv.statusCode < 500 && !(e as { errorClass?: unknown }).errorClass) {
       // Fastify's own 4xx (payload too large, malformed JSON, unsupported media type…)
       const status = fv.statusCode;
-      void reply.code(status).send({ error: { code: fv.code ?? 'BAD_REQUEST', message: status === 413 ? 'The request body is too large' : status === 415 ? 'Send application/json' : 'The request could not be understood', class: 'contract', requestId: req.id } });
+      void reply
+        .code(status)
+        .send({
+          error: {
+            code: fv.code ?? 'BAD_REQUEST',
+            message:
+              status === 413
+                ? 'The request body is too large'
+                : status === 415
+                  ? 'Send application/json'
+                  : 'The request could not be understood',
+            class: 'contract',
+            requestId: req.id,
+          },
+        });
       return;
     }
     const p = problem(e, req.id);
-    if (p.status >= 500) app.log.error('request failed', { id: req.id, method: req.method, url: req.url.split('?')[0], error: e });
+    if (p.status >= 500)
+      app.log.error('request failed', { id: req.id, method: req.method, url: req.url.split('?')[0], error: e });
     for (const [k, v] of Object.entries(p.headers ?? {})) reply.header(k, v);
     void reply.code(p.status).send(p.body);
   });
@@ -126,7 +170,14 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
   const defs: RouteDef[] = [];
   let openApi: object | undefined;
   const getOpenApi = () => (openApi ??= buildOpenApi(defs, { version: app.config.version }));
-  defs.push(...publicRoutes(getOpenApi), ...workflowRoutes(), ...runRoutes(), ...insightRoutes(), ...authoringRoutes(), ...adminRoutes());
+  defs.push(
+    ...publicRoutes(getOpenApi),
+    ...workflowRoutes(),
+    ...runRoutes(),
+    ...insightRoutes(),
+    ...authoringRoutes(),
+    ...adminRoutes(),
+  );
   registerRoutes(server, app, defs, limiters);
 
   // ---------------------------------------------------------------- console
@@ -148,7 +199,9 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     if (!isApi && existsSync(join(consoleDir, 'index.html')) && (req.headers.accept ?? '').includes('text/html')) {
       return reply.type('text/html').header('content-security-policy', CONSOLE_CSP).sendFile('index.html');
     }
-    return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found', class: 'business', requestId: req.id } });
+    return reply
+      .code(404)
+      .send({ error: { code: 'NOT_FOUND', message: 'Not found', class: 'business', requestId: req.id } });
   });
 
   return { server, routes: defs };

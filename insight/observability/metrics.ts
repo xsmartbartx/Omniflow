@@ -6,7 +6,11 @@
 type Labels = Record<string, string>;
 
 const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"');
-const key = (labels: Labels) => Object.entries(labels).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}="${esc(v)}"`).join(',');
+const key = (labels: Labels) =>
+  Object.entries(labels)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}="${esc(v)}"`)
+    .join(',');
 
 class Counter {
   readonly values = new Map<string, number>();
@@ -101,7 +105,8 @@ export class MetricsRegistry {
       }
     }
     const out: string[] = [];
-    const line = (name: string, labels: string, v: number) => out.push(`${name}${labels ? `{${labels}}` : ''} ${Number.isFinite(v) ? v : 0}`);
+    const line = (name: string, labels: string, v: number) =>
+      out.push(`${name}${labels ? `{${labels}}` : ''} ${Number.isFinite(v) ? v : 0}`);
     for (const c of this.counters.values()) {
       out.push(`# HELP ${c.name} ${c.help}`, `# TYPE ${c.name} counter`);
       for (const [l, v] of c.values) line(c.name, l, v);
@@ -113,7 +118,8 @@ export class MetricsRegistry {
     for (const h of this.histograms.values()) {
       out.push(`# HELP ${h.name} ${h.help}`, `# TYPE ${h.name} histogram`);
       for (const [l, s] of h.series) {
-        for (let i = 0; i < h.buckets.length; i++) line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${h.buckets[i]}"`, s.counts[i]!);
+        for (let i = 0; i < h.buckets.length; i++)
+          line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${h.buckets[i]}"`, s.counts[i]!);
         line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="+Inf"`, s.count);
         line(`${h.name}_sum`, l, s.sum);
         line(`${h.name}_count`, l, s.count);

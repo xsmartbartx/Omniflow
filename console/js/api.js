@@ -42,7 +42,12 @@ async function request(method, path, body, accept = 'application/json') {
       /* not JSON */
     }
     if (res.status === 401 && !path.startsWith('/v1/auth/login')) for (const fn of listeners) fn();
-    throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? `Request failed (HTTP ${res.status})`, err?.details);
+    throw new ApiError(
+      res.status,
+      err?.code ?? `HTTP_${res.status}`,
+      err?.message ?? `Request failed (HTTP ${res.status})`,
+      err?.details,
+    );
   }
   if (accept !== 'application/json') return text;
   return text ? JSON.parse(text) : null;
@@ -65,7 +70,8 @@ export function issuesOf(e) {
 /** Follow a server-sent-event stream with fetch (EventSource cannot see named events generically). */
 export async function stream(path, onEvent, signal) {
   const res = await fetch(path, { credentials: 'same-origin', headers: { accept: 'text/event-stream' }, signal });
-  if (!res.ok || !res.body) throw new ApiError(res.status, `HTTP_${res.status}`, `Could not open the live stream (HTTP ${res.status})`);
+  if (!res.ok || !res.body)
+    throw new ApiError(res.status, `HTTP_${res.status}`, `Could not open the live stream (HTTP ${res.status})`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';

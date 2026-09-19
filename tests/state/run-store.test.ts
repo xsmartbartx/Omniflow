@@ -47,7 +47,9 @@ describe('run store: lifecycle', () => {
     expect(running.startedAt).toBe('2026-06-01T12:00:01.000Z');
     s.runs.transition(r.id, 'waiting-approval');
     s.runs.transition(r.id, 'running');
-    s.runs.transition(r.id, 'compensating', { error: { code: 'X', message: 'm', class: 'business', retryable: false } });
+    s.runs.transition(r.id, 'compensating', {
+      error: { code: 'X', message: 'm', class: 'business', retryable: false },
+    });
     const done = s.runs.transition(r.id, 'compensation-failed');
     expect(done.finishedAt).toBeDefined();
     expect(done.error?.code).toBe('X');
@@ -123,10 +125,20 @@ describe('run store: step state and timers', () => {
   it('patches steps, clears nullable columns, and orders completions', () => {
     const r = s.runs.createRun(newRun());
     s.runs.patchStep(r.id, 'a', { status: 'running', attempt: 1, startedAt: 'T', idempotencyKey: 'k' });
-    s.runs.patchStep(r.id, 'a', { status: 'succeeded', output: { v: 1 }, completedSeq: s.runs.nextCompletionSeq(r.id) });
+    s.runs.patchStep(r.id, 'a', {
+      status: 'succeeded',
+      output: { v: 1 },
+      completedSeq: s.runs.nextCompletionSeq(r.id),
+    });
     s.runs.patchStep(r.id, 'b', { status: 'succeeded', completedSeq: s.runs.nextCompletionSeq(r.id) });
     const a = s.runs.getStep(r.id, 'a')!;
-    expect(a).toMatchObject({ status: 'succeeded', attempt: 1, output: { v: 1 }, idempotencyKey: 'k', completedSeq: 1 });
+    expect(a).toMatchObject({
+      status: 'succeeded',
+      attempt: 1,
+      output: { v: 1 },
+      idempotencyKey: 'k',
+      completedSeq: 1,
+    });
     expect(s.runs.getStep(r.id, 'b')!.completedSeq).toBe(2);
     s.runs.patchStep(r.id, 'a', { output: null });
     expect(s.runs.getStep(r.id, 'a')!.output).toBeUndefined();
@@ -149,7 +161,12 @@ describe('run store: step state and timers', () => {
     const r = s.runs.createRun(newRun());
     s.runs.patchStep(r.id, 'a', { status: 'waiting-event', waitEvent: 'payment.settled', waitCorrelation: 'o-1' });
     s.runs.patchStep(r.id, 'b', { status: 'waiting-event', waitEvent: 'payment.settled' }); // any correlation
-    expect(s.runs.findWaitingEventSteps('default', 'payment.settled', 'o-1').map((x) => x.stepId).sort()).toEqual(['a', 'b']);
+    expect(
+      s.runs
+        .findWaitingEventSteps('default', 'payment.settled', 'o-1')
+        .map((x) => x.stepId)
+        .sort(),
+    ).toEqual(['a', 'b']);
     expect(s.runs.findWaitingEventSteps('default', 'payment.settled', 'o-2').map((x) => x.stepId)).toEqual(['b']);
     expect(s.runs.findWaitingEventSteps('other', 'payment.settled', 'o-1')).toHaveLength(0);
     expect(s.runs.findWaitingEventSteps('default', 'other.event', null)).toHaveLength(0);
@@ -257,7 +274,10 @@ describe('artifact store', () => {
   it('detects a corrupted file', () => {
     const a = s.artifacts.put('default', 'payload');
     const root = join(s.dir, 'artifacts');
-    const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+    const walk = (d: string): string[] =>
+      readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)],
+      );
     const file = walk(root).find((f) => readFileSync(f, 'utf8') === 'payload')!;
     writeFileSync(file, 'tampered');
     expect(() => s.artifacts.get('default', a.ref)).toThrow(/integrity/);
@@ -316,22 +336,37 @@ describe('registry store: immutability', () => {
 
   it('manages workflow settings: kill switch, canary, autonomy', () => {
     s.registry.insertVersion(version());
-    expect(s.registry.getSettings('default', 'wf')).toMatchObject({ enabled: true, killed: false, autonomyTier: 'T1', canaryPercent: 0 });
+    expect(s.registry.getSettings('default', 'wf')).toMatchObject({
+      enabled: true,
+      killed: false,
+      autonomyTier: 'T1',
+      canaryPercent: 0,
+    });
     const killed = s.registry.patchSettings('default', 'wf', { killed: true, killReason: 'incident 42' }, 'usr_a');
     expect(killed).toMatchObject({ killed: true, killReason: 'incident 42' });
     const revived = s.registry.patchSettings('default', 'wf', { killed: false }, 'usr_a');
     expect(revived.killReason).toBeUndefined();
     s.registry.patchSettings('default', 'wf', { canaryVersion: '1.1.0', canaryPercent: 10 }, 'usr_a');
-    expect(s.registry.patchSettings('default', 'wf', { clearCanary: true }, 'usr_a')).toMatchObject({ canaryPercent: 0 });
+    expect(s.registry.patchSettings('default', 'wf', { clearCanary: true }, 'usr_a')).toMatchObject({
+      canaryPercent: 0,
+    });
     expect(() => s.registry.patchSettings('default', 'ghost', {}, 'x')).toThrow(/no published version/);
   });
 });
 
 describe('identity, secrets, triggers, authoring and kv stores', () => {
   it('manages users, login lockout and sessions', () => {
-    const u = s.identity.createUser({ tenant: 'default', email: 'A@Example.com', name: 'A', roles: ['admin'], passwordHash: 'h' });
+    const u = s.identity.createUser({
+      tenant: 'default',
+      email: 'A@Example.com',
+      name: 'A',
+      roles: ['admin'],
+      passwordHash: 'h',
+    });
     expect(u.email).toBe('a@example.com');
-    expect(() => s.identity.createUser({ tenant: 'default', email: 'a@example.com', name: 'A', roles: [] })).toThrow(ConflictError);
+    expect(() => s.identity.createUser({ tenant: 'default', email: 'a@example.com', name: 'A', roles: [] })).toThrow(
+      ConflictError,
+    );
     expect(s.identity.findUsersByEmail('A@example.com')).toHaveLength(1);
     expect(s.identity.recordLoginFailure(u.id, 3, 60_000).locked).toBe(false);
     s.identity.recordLoginFailure(u.id, 3, 60_000);
@@ -348,7 +383,14 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
   });
 
   it('stores API keys by prefix and revokes them', () => {
-    const k = s.identity.createApiKey({ tenant: 'default', name: 'ci', prefix: 'abc123', keyHash: 'h', roles: ['operator'], createdBy: 'usr' });
+    const k = s.identity.createApiKey({
+      tenant: 'default',
+      name: 'ci',
+      prefix: 'abc123',
+      keyHash: 'h',
+      roles: ['operator'],
+      createdBy: 'usr',
+    });
     expect(s.identity.findApiKeyByPrefix('abc123')?.id).toBe(k.id);
     s.identity.revokeApiKey(k.id);
     expect(s.identity.getApiKey(k.id)?.revokedAt).toBeDefined();
@@ -357,9 +399,19 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
   it('keeps secret ciphertext out of listings and versions updates', () => {
     s.secrets.put('default', 'API_TOKEN', 'ciphertext', 'k1', 'usr', 'the token');
     s.secrets.put('default', 'API_TOKEN', 'ciphertext2', 'k1', 'usr');
-    expect(s.secrets.get('default', 'API_TOKEN')).toMatchObject({ cipher: 'ciphertext2', version: 2, description: 'the token' });
+    expect(s.secrets.get('default', 'API_TOKEN')).toMatchObject({
+      cipher: 'ciphertext2',
+      version: 2,
+      description: 'the token',
+    });
     expect(JSON.stringify(s.secrets.list('default'))).not.toContain('ciphertext');
-    const lease = s.secrets.recordLease({ tenant: 'default', runId: 'r', stepId: 's', names: ['API_TOKEN'], ttlMs: 1000 });
+    const lease = s.secrets.recordLease({
+      tenant: 'default',
+      runId: 'r',
+      stepId: 's',
+      names: ['API_TOKEN'],
+      ttlMs: 1000,
+    });
     expect(s.secrets.outstandingLeases()).toHaveLength(1);
     s.secrets.revokeLease(lease.id);
     expect(s.secrets.outstandingLeases()).toHaveLength(0);
@@ -377,7 +429,9 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
     s.triggers.patch(t!.id, { nextFireAt: '2026-06-02T02:00:00.000Z', lastFiredAt: 'now' });
     expect(s.triggers.dueSchedules('2026-06-01T12:00:00.000Z')).toHaveLength(0);
     // Re-registering keeps fire history and removes triggers no longer declared
-    s.triggers.replaceForWorkflow('default', 'wf', '1.1.0', [{ name: 'nightly', type: 'schedule', config: { cron: '0 3 * * *' } }]);
+    s.triggers.replaceForWorkflow('default', 'wf', '1.1.0', [
+      { name: 'nightly', type: 'schedule', config: { cron: '0 3 * * *' } },
+    ]);
     expect(s.triggers.listForWorkflow('default', 'wf').map((x) => x.name)).toEqual(['nightly']);
     expect(s.triggers.find('default', 'wf', 'nightly')?.lastFiredAt).toBe('now');
     expect(s.triggers.useNonce('default', 'n1', 1000)).toBe(true);
@@ -385,23 +439,70 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
   });
 
   it('handles drafts, change requests, proposals and findings', () => {
-    const d = s.authoring.createDraft({ tenant: 'default', manifestText: 'x', origin: 'agent:planner', createdBy: 'planner' });
+    const d = s.authoring.createDraft({
+      tenant: 'default',
+      manifestText: 'x',
+      origin: 'agent:planner',
+      createdBy: 'planner',
+    });
     expect(s.authoring.updateDraft(d.id, { status: 'submitted' }).status).toBe('submitted');
     expect(() => s.authoring.updateDraft('nope', {})).toThrow(NotFoundError);
 
-    const c = s.authoring.createChange({ tenant: 'default', workflowName: 'wf', version: '1.0.0', manifestText: 'x', requestedBy: 'u', reasonCode: 'R', reason: 'r', requiredApprovals: 1 });
-    expect(() => s.authoring.createChange({ tenant: 'default', workflowName: 'wf', version: '1.0.0', manifestText: 'x', requestedBy: 'u', reasonCode: 'R', reason: 'r', requiredApprovals: 1 })).toThrow(ConflictError);
-    const approved = s.authoring.patchChange(c.id, { approvals: [{ by: 'a', at: 'now' }], status: 'approved', decidedBy: 'a' });
+    const c = s.authoring.createChange({
+      tenant: 'default',
+      workflowName: 'wf',
+      version: '1.0.0',
+      manifestText: 'x',
+      requestedBy: 'u',
+      reasonCode: 'R',
+      reason: 'r',
+      requiredApprovals: 1,
+    });
+    expect(() =>
+      s.authoring.createChange({
+        tenant: 'default',
+        workflowName: 'wf',
+        version: '1.0.0',
+        manifestText: 'x',
+        requestedBy: 'u',
+        reasonCode: 'R',
+        reason: 'r',
+        requiredApprovals: 1,
+      }),
+    ).toThrow(ConflictError);
+    const approved = s.authoring.patchChange(c.id, {
+      approvals: [{ by: 'a', at: 'now' }],
+      status: 'approved',
+      decidedBy: 'a',
+    });
     expect(approved).toMatchObject({ status: 'approved', decidedBy: 'a' });
     expect(approved.decidedAt).toBeDefined();
 
-    const p = s.authoring.createProposal({ tenant: 'default', kind: 'remove-step', title: 't', body: { a: 1 }, source: 'analysis', dedupeKey: 'k' });
+    const p = s.authoring.createProposal({
+      tenant: 'default',
+      kind: 'remove-step',
+      title: 't',
+      body: { a: 1 },
+      source: 'analysis',
+      dedupeKey: 'k',
+    });
     expect(p).toBeDefined();
-    expect(s.authoring.createProposal({ tenant: 'default', kind: 'remove-step', title: 't', body: {}, source: 'analysis', dedupeKey: 'k' })).toBeUndefined(); // deduped while open
+    expect(
+      s.authoring.createProposal({
+        tenant: 'default',
+        kind: 'remove-step',
+        title: 't',
+        body: {},
+        source: 'analysis',
+        dedupeKey: 'k',
+      }),
+    ).toBeUndefined(); // deduped while open
     expect(s.authoring.decideProposal(p!.id, 'accepted', 'u').status).toBe('accepted');
     expect(() => s.authoring.decideProposal(p!.id, 'dismissed', 'u')).toThrow(ConflictError);
 
-    const f = s.authoring.replaceFindings('default', 'wf', '1.0.0', 'sha256:p', [{ ruleId: 'R1', severity: 'high', blocking: true, message: 'm' }]);
+    const f = s.authoring.replaceFindings('default', 'wf', '1.0.0', 'sha256:p', [
+      { ruleId: 'R1', severity: 'high', blocking: true, message: 'm' },
+    ]);
     expect(f).toHaveLength(1);
     expect(s.authoring.replaceFindings('default', 'wf', '1.0.0', 'sha256:p', [])).toHaveLength(0);
   });
@@ -420,7 +521,13 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
     s.kv.setCapabilityKilled('default', 'http-request', false, 'usr');
     expect(s.kv.isCapabilityKilled('default', 'http-request').killed).toBe(false);
 
-    s.kv.putChannel({ tenant: 'default', name: 'ops', type: 'slack', config: { channel: '#ops' }, secretName: 'SLACK_URL' });
+    s.kv.putChannel({
+      tenant: 'default',
+      name: 'ops',
+      type: 'slack',
+      config: { channel: '#ops' },
+      secretName: 'SLACK_URL',
+    });
     expect(s.kv.getChannel('default', 'ops')?.secretName).toBe('SLACK_URL');
     expect(s.kv.deleteChannel('default', 'ops')).toBe(true);
   });

@@ -1,16 +1,31 @@
-import { accessSync, chmodSync, constants, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statfsSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import {
+  accessSync,
+  chmodSync,
+  constants,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statfsSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { OmniflowError, randomToken } from '../../core/index.ts';
+import { DatabaseSync } from 'node:sqlite';
+import { createLogger, OmniflowError, randomToken } from '../../core/index.ts';
+import { Authenticator } from '../../gateway/auth.ts';
 import type { Principal, Role } from '../../schemas/index.ts';
 import { ROLES } from '../../schemas/index.ts';
-import { Authenticator } from '../../gateway/auth.ts';
 import { createKeyring, decryptSecret, SecretBroker } from '../../security/secret-broker/index.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createLogger } from '../../core/index.ts';
 import { openState, type State, stateOptionsFor } from '../../state/index.ts';
-import { UsageError, flag, flagAll, has } from '../args.ts';
+import { flag, flagAll, has, UsageError } from '../args.ts';
 import { type CliContext, emit } from '../context.ts';
 import { table } from '../format.ts';
 
@@ -21,30 +36,49 @@ import { table } from '../format.ts';
  * running server.
  */
 
-const SYSTEM: Principal = { id: 'system:cli', type: 'system', name: 'omniflow-cli', tenant: 'default', roles: ['admin'] };
+const SYSTEM: Principal = {
+  id: 'system:cli',
+  type: 'system',
+  name: 'omniflow-cli',
+  tenant: 'default',
+  roles: ['admin'],
+};
 
 function open(ctx: CliContext) {
   const dataDir = resolve(ctx.cwd, flag(ctx.args, 'data-dir') ?? ctx.env.OMNIFLOW_DATA_DIR ?? './data');
   if (!existsSync(join(dataDir, 'omniflow.db'))) {
-    throw new UsageError(`No OmniFlow database in ${dataDir}. Set OMNIFLOW_DATA_DIR (or --data-dir) to the directory the server uses.`);
+    throw new UsageError(
+      `No OmniFlow database in ${dataDir}. Set OMNIFLOW_DATA_DIR (or --data-dir) to the directory the server uses.`,
+    );
   }
-  const config = loadConfig({ ...ctx.env, OMNIFLOW_DATA_DIR: dataDir, OMNIFLOW_LOG_LEVEL: 'silent' }, { cwd: ctx.cwd, persistMasterKey: false });
+  const config = loadConfig(
+    { ...ctx.env, OMNIFLOW_DATA_DIR: dataDir, OMNIFLOW_LOG_LEVEL: 'silent' },
+    { cwd: ctx.cwd, persistMasterKey: false },
+  );
   const state = openState(stateOptionsFor(dataDir));
-  const auth = new Authenticator(state, { sessionTtlHours: config.sessionTtlHours, log: createLogger({ level: 'silent' }) });
+  const auth = new Authenticator(state, {
+    sessionTtlHours: config.sessionTtlHours,
+    log: createLogger({ level: 'silent' }),
+  });
   return { config, state, auth, dataDir };
 }
 
 function rolesOf(ctx: CliContext, dflt: Role): Role[] {
   const given = flagAll(ctx.args, 'role');
   const roles = (given.length ? given : [dflt]).flatMap((r) => r.split(',')) as Role[];
-  for (const r of roles) if (!(ROLES as readonly string[]).includes(r)) throw new UsageError(`Unknown role '${r}'. Roles: ${ROLES.join(', ')}`);
+  for (const r of roles)
+    if (!(ROLES as readonly string[]).includes(r))
+      throw new UsageError(`Unknown role '${r}'. Roles: ${ROLES.join(', ')}`);
   return roles;
 }
 
 export async function adminCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1];
   const s = ctx.style;
-  if (!sub) throw new UsageError('Usage: omniflow admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|doctor|rotate-master-key>');
+  if (!sub)
+    throw new UsageError(
+      'Usage: omniflow admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|doctor|rotate-master-key>',
+    );
 
   // Restore may target a fresh, empty data directory, so it cannot require an existing database.
   if (sub === 'restore') return restore(ctx);
@@ -54,12 +88,24 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
     switch (sub) {
       case 'create-user': {
         const email = flag(ctx.args, 'email');
-        if (!email) throw new UsageError('Usage: omniflow admin create-user --email <email> [--name <name>] [--role admin|operator|…]');
+        if (!email)
+          throw new UsageError(
+            'Usage: omniflow admin create-user --email <email> [--name <name>] [--role admin|operator|…]',
+          );
         const generated = `${randomToken(12)}Aa1`;
         const password = ctx.env.OMNIFLOW_NEW_PASSWORD ?? generated;
-        const user = await auth.createUser(SYSTEM, { email, ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name')! } : {}), password, roles: rolesOf(ctx, 'operator'), mustChangePassword: password === generated });
-        emit(ctx, { id: user.id, email: user.email, roles: user.roles, ...(password === generated ? { password } : {}) }, () =>
-          `${s.green('✓')} created ${user.email} (${user.roles.join(', ')})${password === generated ? `\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in` : ''}`,
+        const user = await auth.createUser(SYSTEM, {
+          email,
+          ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name')! } : {}),
+          password,
+          roles: rolesOf(ctx, 'operator'),
+          mustChangePassword: password === generated,
+        });
+        emit(
+          ctx,
+          { id: user.id, email: user.email, roles: user.roles, ...(password === generated ? { password } : {}) },
+          () =>
+            `${s.green('✓')} created ${user.email} (${user.roles.join(', ')})${password === generated ? `\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in` : ''}`,
         );
         return 0;
       }
@@ -70,21 +116,48 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         if (!user) throw new UsageError(`No user with email ${email}`);
         const password = `${randomToken(12)}Aa1`;
         await auth.resetPassword(SYSTEM, user.id, password);
-        emit(ctx, { email, password }, () => `${s.green('✓')} password reset for ${email}\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in`);
+        emit(
+          ctx,
+          { email, password },
+          () =>
+            `${s.green('✓')} password reset for ${email}\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in`,
+        );
         return 0;
       }
       case 'create-api-key': {
         const name = flag(ctx.args, 'name');
-        if (!name) throw new UsageError('Usage: omniflow admin create-api-key --name <label> [--role operator] [--tenant default]');
+        if (!name)
+          throw new UsageError(
+            'Usage: omniflow admin create-api-key --name <label> [--role operator] [--tenant default]',
+          );
         const tenant = flag(ctx.args, 'tenant') ?? 'default';
         if (!state.identity.getTenant(tenant)) throw new UsageError(`No such tenant '${tenant}'`);
         const { key, record } = auth.createApiKey({ ...SYSTEM, tenant }, { name, roles: rolesOf(ctx, 'operator') });
-        emit(ctx, { id: record.id, key, roles: record.roles }, () => `${s.green('✓')} API key created (${record.roles.join(', ')})\n  ${s.bold(key)}\n  Store it now — it cannot be shown again.\n  export OMNIFLOW_API_KEY=${key}`);
+        emit(
+          ctx,
+          { id: record.id, key, roles: record.roles },
+          () =>
+            `${s.green('✓')} API key created (${record.roles.join(', ')})\n  ${s.bold(key)}\n  Store it now — it cannot be shown again.\n  export OMNIFLOW_API_KEY=${key}`,
+        );
         return 0;
       }
       case 'list-users': {
         const users = state.identity.listUsers(flag(ctx.args, 'tenant') ?? 'default');
-        emit(ctx, users.map(({ passwordHash: _p, ...u }: any) => u), () => table(users.map((u) => [u.email, u.name ?? '', u.roles.join(','), u.disabled ? s.red('disabled') : s.green('active')]), ['EMAIL', 'NAME', 'ROLES', 'STATE'], s));
+        emit(
+          ctx,
+          users.map(({ passwordHash: _p, ...u }: any) => u),
+          () =>
+            table(
+              users.map((u) => [
+                u.email,
+                u.name ?? '',
+                u.roles.join(','),
+                u.disabled ? s.red('disabled') : s.green('active'),
+              ]),
+              ['EMAIL', 'NAME', 'ROLES', 'STATE'],
+              s,
+            ),
+        );
         return 0;
       }
       case 'verify-audit': {
@@ -93,10 +166,21 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         for (const t of state.identity.listTenants()) {
           const r = state.events.verify(t.id);
           checked += r.checked;
-          if (!r.ok) bad.push({ tenant: t.id, ...(r.brokenAtSeq !== undefined ? { brokenAtSeq: r.brokenAtSeq } : {}), ...(r.reason ? { reason: r.reason } : {}) });
+          if (!r.ok)
+            bad.push({
+              tenant: t.id,
+              ...(r.brokenAtSeq !== undefined ? { brokenAtSeq: r.brokenAtSeq } : {}),
+              ...(r.reason ? { reason: r.reason } : {}),
+            });
         }
         emit(ctx, { ok: bad.length === 0, checked, problems: bad }, () =>
-          bad.length === 0 ? `${s.green('✓')} audit log intact — ${checked} events verified` : bad.map((b) => `${s.red('✗')} tenant ${b.tenant}: tampering detected at event ${b.brokenAtSeq} (${b.reason})`).join('\n'),
+          bad.length === 0
+            ? `${s.green('✓')} audit log intact — ${checked} events verified`
+            : bad
+                .map(
+                  (b) => `${s.red('✗')} tenant ${b.tenant}: tampering detected at event ${b.brokenAtSeq} (${b.reason})`,
+                )
+                .join('\n'),
         );
         return bad.length === 0 ? 0 : 1;
       }
@@ -111,21 +195,31 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         // Large step outputs live in a content-addressed directory: copy it beside the database snapshot.
         const artifacts = join(dataDir, 'artifacts');
         const artifactsCopy = `${abs}.artifacts`;
-        if (existsSync(artifacts) && readdirSync(artifacts).length > 0) cpSync(artifacts, artifactsCopy, { recursive: true });
-        emit(ctx, { ok: true, file: abs, bytes }, () =>
-          `${s.green('✓')} backed up ${dataDir} to ${abs} (${(bytes / 1024).toFixed(0)} KiB)\n  ${s.dim('The master key is NOT in the backup. Keep OMNIFLOW_MASTER_KEY (or data/master.key) safely elsewhere — without it stored secrets cannot be decrypted.')}`,
+        if (existsSync(artifacts) && readdirSync(artifacts).length > 0)
+          cpSync(artifacts, artifactsCopy, { recursive: true });
+        emit(
+          ctx,
+          { ok: true, file: abs, bytes },
+          () =>
+            `${s.green('✓')} backed up ${dataDir} to ${abs} (${(bytes / 1024).toFixed(0)} KiB)\n  ${s.dim('The master key is NOT in the backup. Keep OMNIFLOW_MASTER_KEY (or data/master.key) safely elsewhere — without it stored secrets cannot be decrypted.')}`,
         );
         return 0;
       }
       case 'doctor':
         return doctor(ctx, { config, state, dataDir });
       case 'rotate-master-key': {
-        if (config.masterKeySource === 'ephemeral') throw new UsageError('No master key is available. Provide the new key in OMNIFLOW_MASTER_KEY and the old one(s) in OMNIFLOW_PREVIOUS_MASTER_KEYS.');
+        if (config.masterKeySource === 'ephemeral')
+          throw new UsageError(
+            'No master key is available. Provide the new key in OMNIFLOW_MASTER_KEY and the old one(s) in OMNIFLOW_PREVIOUS_MASTER_KEYS.',
+          );
         const keyring = createKeyring(config.masterKey, config.previousMasterKeys);
         const broker = new SecretBroker(state.secrets, keyring);
         const rewritten = broker.rotate(keyring);
-        emit(ctx, { ok: true, rewritten }, () =>
-          `${s.green('✓')} ${rewritten} secret${rewritten === 1 ? '' : 's'} re-encrypted under the current master key\n  ${s.dim('Once every instance runs the new OMNIFLOW_MASTER_KEY you can drop OMNIFLOW_PREVIOUS_MASTER_KEYS.')}`,
+        emit(
+          ctx,
+          { ok: true, rewritten },
+          () =>
+            `${s.green('✓')} ${rewritten} secret${rewritten === 1 ? '' : 's'} re-encrypted under the current master key\n  ${s.dim('Once every instance runs the new OMNIFLOW_MASTER_KEY you can drop OMNIFLOW_PREVIOUS_MASTER_KEYS.')}`,
         );
         return 0;
       }
@@ -153,7 +247,10 @@ interface Check {
 }
 
 /** A deployment health check: everything an operator would otherwise verify by hand. */
-function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnType<typeof loadConfig>; state: State; dataDir: string }): number {
+function doctor(
+  ctx: CliContext,
+  { config, state, dataDir }: { config: ReturnType<typeof loadConfig>; state: State; dataDir: string },
+): number {
   const s = ctx.style;
   const checks: Check[] = [];
   const add = (level: Level, check: string, detail: string) => checks.push({ level, check, detail });
@@ -176,7 +273,11 @@ function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnTyp
   }
 
   const integrity = state.db.get<{ integrity_check: string }>('PRAGMA integrity_check')?.integrity_check;
-  add(integrity === 'ok' ? 'ok' : 'fail', 'database integrity', integrity === 'ok' ? 'SQLite integrity_check passed' : `SQLite reports: ${integrity}`);
+  add(
+    integrity === 'ok' ? 'ok' : 'fail',
+    'database integrity',
+    integrity === 'ok' ? 'SQLite integrity_check passed' : `SQLite reports: ${integrity}`,
+  );
 
   let chained = 0;
   const broken: string[] = [];
@@ -185,13 +286,23 @@ function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnTyp
     chained += v.checked;
     if (!v.ok) broken.push(`${t.id} at event ${v.brokenAtSeq}`);
   }
-  add(broken.length ? 'fail' : 'ok', 'audit log', broken.length ? `hash chain broken: ${broken.join('; ')}` : `${chained.toLocaleString('en')} events, hash chain intact`);
+  add(
+    broken.length ? 'fail' : 'ok',
+    'audit log',
+    broken.length
+      ? `hash chain broken: ${broken.join('; ')}`
+      : `${chained.toLocaleString('en')} events, hash chain intact`,
+  );
 
   const keyring = createKeyring(config.masterKey, config.previousMasterKeys);
   const secrets = config.masterKeySource === 'ephemeral' ? [] : state.secrets.all();
   if (config.masterKeySource === 'ephemeral') {
     const n = state.secrets.all().length;
-    add(n ? 'fail' : 'warn', 'master key', `not available to this command (no OMNIFLOW_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${n ? `${n} stored secret(s) could not be checked` : 'no secrets are stored yet'}`);
+    add(
+      n ? 'fail' : 'warn',
+      'master key',
+      `not available to this command (no OMNIFLOW_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${n ? `${n} stored secret(s) could not be checked` : 'no secrets are stored yet'}`,
+    );
   }
   let unreadable = 0;
   let old = 0;
@@ -203,9 +314,16 @@ function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnTyp
       unreadable++;
     }
   }
-  if (unreadable) add('fail', 'secrets', `${unreadable} of ${secrets.length} cannot be decrypted with the configured master key(s) — is OMNIFLOW_MASTER_KEY the one they were written with?`);
-  else if (old) add('warn', 'secrets', `${old} secret(s) still use an older master key; run 'omniflow admin rotate-master-key'`);
-  else if (config.masterKeySource !== 'ephemeral') add('ok', 'secrets', `${secrets.length} stored, all readable with the current master key`);
+  if (unreadable)
+    add(
+      'fail',
+      'secrets',
+      `${unreadable} of ${secrets.length} cannot be decrypted with the configured master key(s) — is OMNIFLOW_MASTER_KEY the one they were written with?`,
+    );
+  else if (old)
+    add('warn', 'secrets', `${old} secret(s) still use an older master key; run 'omniflow admin rotate-master-key'`);
+  else if (config.masterKeySource !== 'ephemeral')
+    add('ok', 'secrets', `${secrets.length} stored, all readable with the current master key`);
 
   const keyFile = join(dataDir, 'master.key');
   if (config.masterKeySource === 'ephemeral') {
@@ -213,29 +331,78 @@ function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnTyp
   } else if (ctx.env.OMNIFLOW_MASTER_KEY) add('ok', 'master key', 'supplied through OMNIFLOW_MASTER_KEY');
   else if (existsSync(keyFile)) {
     const loose = (statSync(keyFile).mode & 0o077) !== 0;
-    add(loose ? 'fail' : config.environment === 'production' ? 'warn' : 'ok', 'master key', loose ? `${keyFile} is readable by other users (chmod 600)` : `generated key in ${keyFile}${config.environment === 'production' ? ' — in production, supply OMNIFLOW_MASTER_KEY from a secret manager and keep a copy off this host' : ''}`);
+    add(
+      loose ? 'fail' : config.environment === 'production' ? 'warn' : 'ok',
+      'master key',
+      loose
+        ? `${keyFile} is readable by other users (chmod 600)`
+        : `generated key in ${keyFile}${config.environment === 'production' ? ' — in production, supply OMNIFLOW_MASTER_KEY from a secret manager and keep a copy off this host' : ''}`,
+    );
   }
 
   const admins = state.identity.listUsers('default').filter((u) => u.roles.includes('admin') && !u.disabled);
-  add(admins.length ? 'ok' : 'fail', 'administrators', admins.length ? `${admins.length} active admin${admins.length === 1 ? '' : 's'}` : 'no active administrator — run: omniflow admin create-user --role admin');
+  add(
+    admins.length ? 'ok' : 'fail',
+    'administrators',
+    admins.length
+      ? `${admins.length} active admin${admins.length === 1 ? '' : 's'}`
+      : 'no active administrator — run: omniflow admin create-user --role admin',
+  );
 
   if (config.environment === 'production') {
-    if (!config.publicUrl.startsWith('https://')) add('warn', 'HTTPS', `OMNIFLOW_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`);
-    else if (!config.trustProxy) add('warn', 'reverse proxy', 'OMNIFLOW_PUBLIC_URL is https but OMNIFLOW_TRUST_PROXY is off: rate limits and audit will see the proxy\'s address, not the client\'s');
+    if (!config.publicUrl.startsWith('https://'))
+      add(
+        'warn',
+        'HTTPS',
+        `OMNIFLOW_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`,
+      );
+    else if (!config.trustProxy)
+      add(
+        'warn',
+        'reverse proxy',
+        "OMNIFLOW_PUBLIC_URL is https but OMNIFLOW_TRUST_PROXY is off: rate limits and audit will see the proxy's address, not the client's",
+      );
     else add('ok', 'HTTPS', 'public URL is https and the proxy is trusted');
-    add('ok', 'metrics', config.metricsToken ? '/metrics accepts the OMNIFLOW_METRICS_TOKEN bearer token' : '/metrics needs an API key with audit access (set OMNIFLOW_METRICS_TOKEN for a dedicated scrape token)');
-    add(config.alertChannels.length ? 'ok' : 'warn', 'alerting', config.alertChannels.length ? `alerts go to: ${config.alertChannels.join(', ')}` : 'no OMNIFLOW_ALERT_CHANNELS: alerts are only visible in the console');
+    add(
+      'ok',
+      'metrics',
+      config.metricsToken
+        ? '/metrics accepts the OMNIFLOW_METRICS_TOKEN bearer token'
+        : '/metrics needs an API key with audit access (set OMNIFLOW_METRICS_TOKEN for a dedicated scrape token)',
+    );
+    add(
+      config.alertChannels.length ? 'ok' : 'warn',
+      'alerting',
+      config.alertChannels.length
+        ? `alerts go to: ${config.alertChannels.join(', ')}`
+        : 'no OMNIFLOW_ALERT_CHANNELS: alerts are only visible in the console',
+    );
   }
-  if (config.adapters.shell.allowedCommands.length) add('warn', 'shell capability', `enabled for ${config.adapters.shell.allowedCommands.length} executable(s); run OmniFlow in a network-restricted container`);
-  if (config.adapters.allowPrivateNetworks) add('warn', 'private network egress', 'OMNIFLOW_ALLOW_PRIVATE_EGRESS is on: allow-listed hosts may resolve to private addresses');
+  if (config.adapters.shell.allowedCommands.length)
+    add(
+      'warn',
+      'shell capability',
+      `enabled for ${config.adapters.shell.allowedCommands.length} executable(s); run OmniFlow in a network-restricted container`,
+    );
+  if (config.adapters.allowPrivateNetworks)
+    add(
+      'warn',
+      'private network egress',
+      'OMNIFLOW_ALLOW_PRIVATE_EGRESS is on: allow-listed hosts may resolve to private addresses',
+    );
 
   const failed = checks.filter((c) => c.level === 'fail').length;
   const warned = checks.filter((c) => c.level === 'warn').length;
   emit(ctx, { ok: failed === 0, failed, warnings: warned, checks }, () =>
     [
-      ...checks.map((c) => `${c.level === 'ok' ? s.green('✓') : c.level === 'warn' ? s.yellow('!') : s.red('✗')} ${s.bold(c.check.padEnd(22))} ${c.detail}`),
+      ...checks.map(
+        (c) =>
+          `${c.level === 'ok' ? s.green('✓') : c.level === 'warn' ? s.yellow('!') : s.red('✗')} ${s.bold(c.check.padEnd(22))} ${c.detail}`,
+      ),
       '',
-      failed ? s.red(`${failed} problem${failed === 1 ? '' : 's'} need attention`) : s.green('Healthy') + (warned ? s.yellow(` — ${warned} warning${warned === 1 ? '' : 's'}`) : ''),
+      failed
+        ? s.red(`${failed} problem${failed === 1 ? '' : 's'} need attention`)
+        : s.green('Healthy') + (warned ? s.yellow(` — ${warned} warning${warned === 1 ? '' : 's'}`) : ''),
     ].join('\n'),
   );
   return failed === 0 ? 0 : 1;
@@ -266,7 +433,10 @@ function restore(ctx: CliContext): number {
       if (ok !== 'ok') throw new UsageError(`The backup is damaged (integrity_check: ${ok})`);
       for (const t of state.identity.listTenants()) {
         const v = state.events.verify(t.id);
-        if (!v.ok) throw new UsageError(`The backup's audit log for tenant '${t.id}' fails verification at event ${v.brokenAtSeq}: ${v.reason}. Refusing to restore it.`);
+        if (!v.ok)
+          throw new UsageError(
+            `The backup's audit log for tenant '${t.id}' fails verification at event ${v.brokenAtSeq}: ${v.reason}. Refusing to restore it.`,
+          );
       }
     } finally {
       state.close();
@@ -279,7 +449,10 @@ function restore(ctx: CliContext): number {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   let previous: string | undefined;
   if (existsSync(target)) {
-    if (!has(ctx.args, 'yes')) throw new UsageError(`${target} already exists. Re-run with --yes to replace it (the old database is kept as omniflow.db.pre-restore-*).`);
+    if (!has(ctx.args, 'yes'))
+      throw new UsageError(
+        `${target} already exists. Re-run with --yes to replace it (the old database is kept as omniflow.db.pre-restore-*).`,
+      );
     const live = new DatabaseSync(target);
     try {
       live.exec('BEGIN EXCLUSIVE');
@@ -302,7 +475,14 @@ function restore(ctx: CliContext): number {
   if (existsSync(artifacts)) cpSync(artifacts, join(dataDir, 'artifacts'), { recursive: true });
 
   emit(ctx, { ok: true, restored: target, previous: previous ?? null }, () =>
-    [`${s.green('✓')} restored ${from} → ${target}`, previous ? `  previous database kept at ${previous}` : '', '  Start the server, then run: omniflow admin doctor', s.dim('  Secrets in the snapshot can only be read with the master key they were written with.')].filter(Boolean).join('\n'),
+    [
+      `${s.green('✓')} restored ${from} → ${target}`,
+      previous ? `  previous database kept at ${previous}` : '',
+      '  Start the server, then run: omniflow admin doctor',
+      s.dim('  Secrets in the snapshot can only be read with the master key they were written with.'),
+    ]
+      .filter(Boolean)
+      .join('\n'),
   );
   return 0;
 }

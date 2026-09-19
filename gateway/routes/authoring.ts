@@ -8,7 +8,12 @@ const draftStatus = { enum: ['open', 'submitted', 'rejected', 'published'] } as 
 
 function sendText(reply: FastifyReply, type: string, text: string): void {
   reply.hijack();
-  reply.raw.writeHead(200, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" });
+  reply.raw.writeHead(200, {
+    'content-type': `${type}; charset=utf-8`,
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    'content-security-policy': "default-src 'none'",
+  });
   reply.raw.end(text);
 }
 
@@ -21,7 +26,10 @@ export function authoringRoutes(): RouteDef[] {
       summary: 'Whether AI authoring is available, and which model it uses',
       tag: 'Authoring',
       action: 'workflow.read',
-      handler: ({ app }) => ({ aiEnabled: app.authoring.aiEnabled, model: app.authoring.aiEnabled ? app.config.adapters.llm.model : null }),
+      handler: ({ app }) => ({
+        aiEnabled: app.authoring.aiEnabled,
+        model: app.authoring.aiEnabled ? app.config.adapters.llm.model : null,
+      }),
     },
 
     // ------------------------------------------------------------------ drafts
@@ -32,7 +40,9 @@ export function authoringRoutes(): RouteDef[] {
       tag: 'Authoring',
       action: 'workflow.read',
       schema: { querystring: obj({ status: draftStatus }) },
-      handler: ({ app, principal, query }) => ({ items: app.authoring.listDrafts(principal, query.status).map(({ manifestText: _m, ...d }) => d) }),
+      handler: ({ app, principal, query }) => ({
+        items: app.authoring.listDrafts(principal, query.status).map(({ manifestText: _m, ...d }) => d),
+      }),
     },
     {
       method: 'POST',
@@ -89,17 +99,32 @@ export function authoringRoutes(): RouteDef[] {
       summary: 'Publish a draft, or open a change request when policy requires approval',
       tag: 'Authoring',
       action: 'workflow.publish',
-      schema: { params: obj({ id }, ['id']), body: obj({ canaryPercent: { type: 'integer', minimum: 1, maximum: 100 } }) },
+      schema: {
+        params: obj({ id }, ['id']),
+        body: obj({ canaryPercent: { type: 'integer', minimum: 1, maximum: 100 } }),
+      },
       handler: ({ app, principal, params, body, reply }) => {
-        const r = app.authoring.submitDraft(principal, params.id, body?.canaryPercent ? { canaryPercent: body.canaryPercent } : {});
+        const r = app.authoring.submitDraft(
+          principal,
+          params.id,
+          body?.canaryPercent ? { canaryPercent: body.canaryPercent } : {},
+        );
         if (r.status === 'published') {
           reply.code(201);
           const { manifestText: _m, ...v } = r.version;
-          return { status: 'published', version: v, risk: { score: r.risk.score, level: r.risk.level, findings: r.risk.findings.length } };
+          return {
+            status: 'published',
+            version: v,
+            risk: { score: r.risk.score, level: r.risk.level, findings: r.risk.findings.length },
+          };
         }
         reply.code(202);
         const { manifestText: _m, ...change } = r.change;
-        return { status: 'pending-approval', change, decision: { effect: r.decision.effect, reasonCode: r.decision.reasonCode, reason: r.decision.reason } };
+        return {
+          status: 'pending-approval',
+          change,
+          decision: { effect: r.decision.effect, reasonCode: r.decision.reasonCode, reason: r.decision.reason },
+        };
       },
     },
     {
@@ -114,7 +139,13 @@ export function authoringRoutes(): RouteDef[] {
         if (!r.result) return { applied: false, tier: r.tier, verdict: r.verdict };
         return r.result.status === 'published'
           ? { applied: true, tier: r.tier, verdict: r.verdict, status: 'published', version: r.result.version.version }
-          : { applied: true, tier: r.tier, verdict: r.verdict, status: 'pending-approval', changeId: r.result.change.id };
+          : {
+              applied: true,
+              tier: r.tier,
+              verdict: r.verdict,
+              status: 'pending-approval',
+              changeId: r.result.change.id,
+            };
       },
     },
 
@@ -126,7 +157,12 @@ export function authoringRoutes(): RouteDef[] {
       tag: 'Authoring',
       action: 'agent.invoke',
       schema: { body: obj({ intent: { type: 'string', minLength: 3, maxLength: 8000 }, workflow: name }, ['intent']) },
-      handler: async ({ app, principal, body, req }) => app.authoring.plan(principal, { intent: body.intent, ...(body.workflow ? { workflow: body.workflow } : {}) }, abortOnClose(req)),
+      handler: async ({ app, principal, body, req }) =>
+        app.authoring.plan(
+          principal,
+          { intent: body.intent, ...(body.workflow ? { workflow: body.workflow } : {}) },
+          abortOnClose(req),
+        ),
     },
     {
       method: 'POST',
@@ -135,7 +171,8 @@ export function authoringRoutes(): RouteDef[] {
       tag: 'Authoring',
       action: 'agent.invoke',
       schema: { params: obj({ id }, ['id']) },
-      handler: async ({ app, principal, params, req }) => app.authoring.draftFromProposal(principal, params.id, abortOnClose(req)),
+      handler: async ({ app, principal, params, req }) =>
+        app.authoring.draftFromProposal(principal, params.id, abortOnClose(req)),
     },
 
     // ---------------------------------------------------------------- importers
@@ -145,10 +182,28 @@ export function authoringRoutes(): RouteDef[] {
       summary: 'Import a crontab: one Lift draft per job, wrapped in a supervised shell step with a sunset date',
       tag: 'Authoring',
       action: 'workflow.draft',
-      schema: { body: obj({ text: { type: 'string', minLength: 1, maxLength: 200_000 }, owner: { type: 'string', maxLength: 200 }, timezone: { type: 'string', maxLength: 64 } }, ['text']) },
+      schema: {
+        body: obj(
+          {
+            text: { type: 'string', minLength: 1, maxLength: 200_000 },
+            owner: { type: 'string', maxLength: 200 },
+            timezone: { type: 'string', maxLength: 64 },
+          },
+          ['text'],
+        ),
+      },
       handler: ({ app, principal, body }) => {
         const r = app.authoring.importCrontab(principal, body);
-        return { drafts: r.drafts.map(({ draft, notes, line, script }) => ({ line, notes, ...(script ? { script } : {}), draft: { id: draft.id, workflowName: draft.workflowName ?? null, validation: draft.validation } })), skipped: r.skipped, environment: r.environment };
+        return {
+          drafts: r.drafts.map(({ draft, notes, line, script }) => ({
+            line,
+            notes,
+            ...(script ? { script } : {}),
+            draft: { id: draft.id, workflowName: draft.workflowName ?? null, validation: draft.validation },
+          })),
+          skipped: r.skipped,
+          environment: r.environment,
+        };
       },
     },
     {
@@ -157,7 +212,16 @@ export function authoringRoutes(): RouteDef[] {
       summary: 'Import a legacy script: the Planner Agent proposes a decomposed workflow (draft only)',
       tag: 'Authoring',
       action: 'agent.invoke',
-      schema: { body: obj({ script: { type: 'string', minLength: 1, maxLength: 200_000 }, name, description: { type: 'string', maxLength: 2000 } }, ['script']) },
+      schema: {
+        body: obj(
+          {
+            script: { type: 'string', minLength: 1, maxLength: 200_000 },
+            name,
+            description: { type: 'string', maxLength: 2000 },
+          },
+          ['script'],
+        ),
+      },
       handler: async ({ app, principal, body, req }) => app.authoring.importScript(principal, body, abortOnClose(req)),
     },
 
@@ -169,7 +233,8 @@ export function authoringRoutes(): RouteDef[] {
       tag: 'Authoring',
       action: 'workflow.read',
       schema: { params: obj({ name }, ['name']), querystring: obj({ version }) },
-      handler: ({ app, principal, params, query }) => app.authoring.explainWorkflow(principal, params.name, query.version),
+      handler: ({ app, principal, params, query }) =>
+        app.authoring.explainWorkflow(principal, params.name, query.version),
     },
     {
       method: 'GET',
@@ -178,7 +243,10 @@ export function authoringRoutes(): RouteDef[] {
       tag: 'Authoring',
       action: 'workflow.read',
       raw: true,
-      schema: { params: obj({ name }, ['name']), querystring: obj({ version, format: { enum: ['json', 'markdown', 'mermaid'] } }) },
+      schema: {
+        params: obj({ name }, ['name']),
+        querystring: obj({ version, format: { enum: ['json', 'markdown', 'mermaid'] } }),
+      },
       handler: ({ app, principal, params, query, reply }) => {
         const d = app.authoring.workflowDocs(principal, params.name, query.version);
         if (query.format === 'markdown') return sendText(reply, 'text/markdown', d.markdown);

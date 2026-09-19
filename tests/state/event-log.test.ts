@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ValidationError } from '../../core/index.ts';
-import { GENESIS_HASH, type EventRecord } from '../../schemas/index.ts';
+import { type EventRecord, GENESIS_HASH } from '../../schemas/index.ts';
 import { Db } from '../../state/index.ts';
 import { makeState, type TestState } from '../helpers/state.ts';
 
@@ -82,7 +82,9 @@ describe('event log: schema enforcement', () => {
   it('rejects unknown types, missing run ids and missing required fields', () => {
     expect(() => s.events.append({ tenant: 'default', type: 'made.up' as never })).toThrow(ValidationError);
     expect(() => s.events.append({ tenant: 'default', type: 'run.started' })).toThrow(/requires a runId/);
-    expect(() => s.events.append({ tenant: 'default', type: 'run.failed', runId: 'r', data: {} })).toThrow(/missing required field 'error'/);
+    expect(() => s.events.append({ tenant: 'default', type: 'run.failed', runId: 'r', data: {} })).toThrow(
+      /missing required field 'error'/,
+    );
   });
 
   it('sanitises data before storing it — secrets never reach the log', () => {
@@ -157,8 +159,22 @@ describe('event log: append-only and tamper-evident (T7)', () => {
 describe('event log: reading and live tailing', () => {
   it('filters by run, step, type and sequence', () => {
     s.events.append(runEvt());
-    s.events.append({ tenant: 'default', type: 'step.started', runId: 'run_1', stepId: 'a', attempt: 1, data: { attempt: 1 } });
-    s.events.append({ tenant: 'default', type: 'step.started', runId: 'run_2', stepId: 'a', attempt: 1, data: { attempt: 1 } });
+    s.events.append({
+      tenant: 'default',
+      type: 'step.started',
+      runId: 'run_1',
+      stepId: 'a',
+      attempt: 1,
+      data: { attempt: 1 },
+    });
+    s.events.append({
+      tenant: 'default',
+      type: 'step.started',
+      runId: 'run_2',
+      stepId: 'a',
+      attempt: 1,
+      data: { attempt: 1 },
+    });
     expect(s.events.list({ tenant: 'default', runId: 'run_1' })).toHaveLength(2);
     expect(s.events.list({ tenant: 'default', types: ['step.started'] })).toHaveLength(2);
     expect(s.events.list({ tenant: 'default', stepId: 'a', runId: 'run_2' })).toHaveLength(1);

@@ -1,21 +1,7 @@
-import {
-  evaluate,
-  ExpressionError,
-  isTruthy,
-  type Issue,
-  type Node,
-  parseExpressionField,
-} from '../../core/index.ts';
+import { ExpressionError, evaluate, type Issue, isTruthy, type Node, parseExpressionField } from '../../core/index.ts';
 import type { Plan } from '../../schemas/plan.ts';
+import type { Action, AutonomyTier, EnvironmentName, PolicyDecision, Principal, Role } from '../../schemas/policy.ts';
 import type { PolicyDocument } from '../../schemas/policy-manifest.ts';
-import type {
-  Action,
-  AutonomyTier,
-  EnvironmentName,
-  PolicyDecision,
-  Principal,
-  Role,
-} from '../../schemas/policy.ts';
 
 /**
  * Policy Engine (architecture §5.1 #4): may this principal do this, in this environment, against
@@ -29,7 +15,14 @@ const VIEW: Action[] = ['workflow.read', 'run.read'];
 
 export const ROLE_ACTIONS: Record<Role, ReadonlySet<Action> | 'all'> = {
   admin: 'all',
-  author: new Set<Action>([...VIEW, 'workflow.draft', 'workflow.publish', 'workflow.run', 'agent.invoke', 'secret.read-names']),
+  author: new Set<Action>([
+    ...VIEW,
+    'workflow.draft',
+    'workflow.publish',
+    'workflow.run',
+    'agent.invoke',
+    'secret.read-names',
+  ]),
   operator: new Set<Action>([
     ...VIEW,
     'workflow.run',
@@ -46,7 +39,12 @@ export const ROLE_ACTIONS: Record<Role, ReadonlySet<Action> | 'all'> = {
 };
 
 /** Agents may read and draft. They can never publish, run, approve or manage — ADR-0002 D4. */
-export const AGENT_ACTIONS: ReadonlySet<Action> = new Set<Action>(['workflow.read', 'run.read', 'workflow.draft', 'agent.invoke']);
+export const AGENT_ACTIONS: ReadonlySet<Action> = new Set<Action>([
+  'workflow.read',
+  'run.read',
+  'workflow.draft',
+  'agent.invoke',
+]);
 
 export function roleAllows(roles: readonly Role[], action: Action): boolean {
   return roles.some((r) => {
@@ -65,10 +63,26 @@ export interface ScopeRule {
 
 /** Default cumulative-scope rules: combinations that make exfiltration or lateral movement possible. */
 export const DEFAULT_SCOPE_RULES: ScopeRule[] = [
-  { scopes: ['db:read', 'network:http'], effect: 'require-approval', reason: 'reads database content and can send it over the network (exfiltration path)' },
-  { scopes: ['storage:read', 'network:http'], effect: 'require-approval', reason: 'reads stored files and can send them over the network (exfiltration path)' },
-  { scopes: ['process:exec', 'network:http'], effect: 'require-approval', reason: 'runs local processes and can reach the network' },
-  { scopes: ['process:exec', 'db:write'], effect: 'require-approval', reason: 'runs local processes and can modify database content' },
+  {
+    scopes: ['db:read', 'network:http'],
+    effect: 'require-approval',
+    reason: 'reads database content and can send it over the network (exfiltration path)',
+  },
+  {
+    scopes: ['storage:read', 'network:http'],
+    effect: 'require-approval',
+    reason: 'reads stored files and can send them over the network (exfiltration path)',
+  },
+  {
+    scopes: ['process:exec', 'network:http'],
+    effect: 'require-approval',
+    reason: 'runs local processes and can reach the network',
+  },
+  {
+    scopes: ['process:exec', 'db:write'],
+    effect: 'require-approval',
+    reason: 'runs local processes and can modify database content',
+  },
 ];
 
 export interface PolicyConfig {
@@ -166,7 +180,11 @@ export class PolicyEngine {
             approvals: r.approvals ?? 1,
           });
         } catch (e) {
-          issues.push({ path: `${doc.metadata.name}/${r.id}`, code: 'POLICY_EXPRESSION', message: (e as Error).message });
+          issues.push({
+            path: `${doc.metadata.name}/${r.id}`,
+            code: 'POLICY_EXPRESSION',
+            message: (e as Error).message,
+          });
         }
       }
     }
@@ -196,7 +214,10 @@ export class PolicyEngine {
 
     // 1. Tenant isolation
     if (res.tenant && res.tenant !== principal.tenant) {
-      const platformAdmin = principal.tenant === this.config.platformTenant && principal.roles.includes('admin') && action === 'tenant.manage';
+      const platformAdmin =
+        principal.tenant === this.config.platformTenant &&
+        principal.roles.includes('admin') &&
+        action === 'tenant.manage';
       if (!platformAdmin) return deny('TENANT_MISMATCH', 'The resource belongs to another tenant');
     }
     // 2. Agents hold no execution authority
@@ -224,21 +245,40 @@ export class PolicyEngine {
     // 5. Publish gates
     if (action === 'workflow.publish') {
       if (res.risk?.blocking) {
-        denials.push({ code: 'BLOCKING_FINDINGS', reason: 'The pentest review raised blocking findings; resolve them before publishing' });
+        denials.push({
+          code: 'BLOCKING_FINDINGS',
+          reason: 'The pentest review raised blocking findings; resolve them before publishing',
+        });
       }
       if (plan && env === 'production') {
         if (plan.analysis.effects.effectful > 0) {
-          approvalReasons.push({ code: 'PROD_EFFECTFUL_NEEDS_APPROVAL', reason: 'Production workflows with effectful steps need a second pair of eyes', approvals: this.config.publishApprovals });
+          approvalReasons.push({
+            code: 'PROD_EFFECTFUL_NEEDS_APPROVAL',
+            reason: 'Production workflows with effectful steps need a second pair of eyes',
+            approvals: this.config.publishApprovals,
+          });
         }
         if (plan.analysis.families.includes('shell')) {
-          approvalReasons.push({ code: 'PROD_SHELL_NEEDS_APPROVAL', reason: 'Shell steps are the largest risk surface and need human approval', approvals: this.config.publishApprovals });
+          approvalReasons.push({
+            code: 'PROD_SHELL_NEEDS_APPROVAL',
+            reason: 'Shell steps are the largest risk surface and need human approval',
+            approvals: this.config.publishApprovals,
+          });
         }
         if (res.criticality === 'high' || res.criticality === 'critical') {
-          approvalReasons.push({ code: 'PROD_CRITICAL_NEEDS_APPROVAL', reason: `Workflow criticality is ${res.criticality}`, approvals: this.config.publishApprovals });
+          approvalReasons.push({
+            code: 'PROD_CRITICAL_NEEDS_APPROVAL',
+            reason: `Workflow criticality is ${res.criticality}`,
+            approvals: this.config.publishApprovals,
+          });
         }
       }
       if (res.risk && (res.risk.level === 'high' || res.risk.level === 'critical') && env === 'production') {
-        approvalReasons.push({ code: 'HIGH_RISK_NEEDS_APPROVAL', reason: `Risk level is ${res.risk.level} (score ${res.risk.score})`, approvals: this.config.publishApprovals });
+        approvalReasons.push({
+          code: 'HIGH_RISK_NEEDS_APPROVAL',
+          reason: `Risk level is ${res.risk.level} (score ${res.risk.score})`,
+          approvals: this.config.publishApprovals,
+        });
       }
     }
 
@@ -247,10 +287,14 @@ export class PolicyEngine {
       const scopes = new Set(plan.analysis.scopes);
       for (const rule of this.config.scopeRules) {
         if (rule.scopes.every((s) => scopes.has(s))) {
-          const code = `SCOPE_COMBINATION_${rule.scopes.join('+').toUpperCase().replace(/[^A-Z0-9+]/g, '_')}`;
+          const code = `SCOPE_COMBINATION_${rule.scopes
+            .join('+')
+            .toUpperCase()
+            .replace(/[^A-Z0-9+]/g, '_')}`;
           const reason = `Combined scopes ${rule.scopes.join(' + ')}: ${rule.reason}`;
           if (rule.effect === 'deny') denials.push({ code, reason });
-          else if (env === 'production' || action === 'workflow.publish') approvalReasons.push({ code, reason, approvals: this.config.publishApprovals });
+          else if (env === 'production' || action === 'workflow.publish')
+            approvalReasons.push({ code, reason, approvals: this.config.publishApprovals });
         }
       }
     }
@@ -269,13 +313,23 @@ export class PolicyEngine {
         }
         if (!hit) continue;
         if (rule.effect === 'deny') denials.push({ code: 'POLICY_RULE_DENIED', reason: rule.reason, rule: rule.id });
-        else approvalReasons.push({ code: 'POLICY_RULE_NEEDS_APPROVAL', reason: rule.reason, approvals: rule.approvals, rule: rule.id });
+        else
+          approvalReasons.push({
+            code: 'POLICY_RULE_NEEDS_APPROVAL',
+            reason: rule.reason,
+            approvals: rule.approvals,
+            rule: rule.id,
+          });
       }
     }
 
     if (denials.length > 0) {
       const first = denials[0]!;
-      return deny(first.code, denials.map((d) => d.reason).join('; '), denials.flatMap((d) => (d.rule ? [d.rule] : [])));
+      return deny(
+        first.code,
+        denials.map((d) => d.reason).join('; '),
+        denials.flatMap((d) => (d.rule ? [d.rule] : [])),
+      );
     }
     if (approvalReasons.length > 0) {
       const first = approvalReasons[0]!;
@@ -296,9 +350,17 @@ export class PolicyEngine {
     return {
       action,
       environment: env,
-      principal: { id: principal.id, type: principal.type, name: principal.name, tenant: principal.tenant, roles: principal.roles },
+      principal: {
+        id: principal.id,
+        type: principal.type,
+        name: principal.name,
+        tenant: principal.tenant,
+        roles: principal.roles,
+      },
       workflow: { name: r.workflow ?? null, version: r.version ?? null, criticality: r.criticality ?? null },
-      plan: r.plan ? { analysis: r.plan.analysis, environment: r.plan.environment, stepCount: r.plan.steps.length } : null,
+      plan: r.plan
+        ? { analysis: r.plan.analysis, environment: r.plan.environment, stepCount: r.plan.steps.length }
+        : null,
       risk: r.risk ?? null,
       resource: { origin: r.origin ?? 'human', dryRun: r.dryRun ?? false, tenant: r.tenant ?? principal.tenant },
       autonomy: { tier: r.autonomyTier ?? 'T1' },

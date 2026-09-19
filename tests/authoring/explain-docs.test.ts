@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import {
+  capabilityMarkdown,
+  describeCron,
+  explainPlan,
+  explainRun,
+  indexMarkdown,
+  workflowMarkdown,
+  workflowMermaid,
+} from '../../authoring/index.ts';
 import { createDefaultRegistry, defaultAdapterConfig } from '../../capabilities/index.ts';
-import { capabilityMarkdown, describeCron, explainPlan, explainRun, indexMarkdown, workflowMarkdown, workflowMermaid } from '../../authoring/index.ts';
 import { addRun, bad, compileWf, echo, ok, skipped } from '../helpers/history.ts';
 import { makeState } from '../helpers/state.ts';
 
@@ -30,12 +38,44 @@ const wf = () =>
     'order-flow',
     [
       echo('check', 1),
-      { id: 'decide', type: 'branch', dependsOn: ['check'], cases: [{ name: 'big', when: "steps.check.output.value > 0" }], default: 'small' },
+      {
+        id: 'decide',
+        type: 'branch',
+        dependsOn: ['check'],
+        cases: [{ name: 'big', when: 'steps.check.output.value > 0' }],
+        default: 'small',
+      },
       { id: 'gate', type: 'approval', dependsOn: ['decide'], message: 'Ship it?', timeout: '2h', onTimeout: 'deny' },
-      { id: 'charge', type: 'capability', uses: 'notify-webhook@^1', dependsOn: ['gate'], egress: ['hooks.example.com'], with: { url: 'https://hooks.example.com/x', text: 'go' }, idempotencyKey: 'k-${{ run.id }}', retry: { attempts: 3, retryOn: ['transient'] }, timeout: '30s' },
-      { id: 'fallback', type: 'capability', uses: 'util-noop@^1', dependsOn: ['decide'], when: "steps.decide.output.case == 'small'" },
+      {
+        id: 'charge',
+        type: 'capability',
+        uses: 'notify-webhook@^1',
+        dependsOn: ['gate'],
+        egress: ['hooks.example.com'],
+        with: { url: 'https://hooks.example.com/x', text: 'go' },
+        idempotencyKey: 'k-${{ run.id }}',
+        retry: { attempts: 3, retryOn: ['transient'] },
+        timeout: '30s',
+      },
+      {
+        id: 'fallback',
+        type: 'capability',
+        uses: 'util-noop@^1',
+        dependsOn: ['decide'],
+        when: "steps.decide.output.case == 'small'",
+      },
     ],
-    { triggers: [{ type: 'schedule', name: 'daily', cron: '0 3 * * *' }, { type: 'webhook', name: 'incoming' }], inputs: { orderId: { type: 'string', required: true, description: 'The order' }, note: { type: 'string', default: 'hi' } }, policy: { maxRunCost: 50, concurrency: 1, concurrencyPolicy: 'skip' } },
+    {
+      triggers: [
+        { type: 'schedule', name: 'daily', cron: '0 3 * * *' },
+        { type: 'webhook', name: 'incoming' },
+      ],
+      inputs: {
+        orderId: { type: 'string', required: true, description: 'The order' },
+        note: { type: 'string', default: 'hi' },
+      },
+      policy: { maxRunCost: 50, concurrency: 1, concurrencyPolicy: 'skip' },
+    },
   );
 
 describe('explaining a plan', () => {
@@ -91,7 +131,11 @@ describe('explaining a run', () => {
   };
 
   it('narrates a success', () => {
-    const r = run({ workflow: 'order-flow', stepIds: ['check', 'fallback'], steps: { check: ok({ completedSeq: 1 }), fallback: skipped() } });
+    const r = run({
+      workflow: 'order-flow',
+      stepIds: ['check', 'fallback'],
+      steps: { check: ok({ completedSeq: 1 }), fallback: skipped() },
+    });
     const e = explainRun({ ...r });
     expect(e.headline).toBe('Succeeded in 1 s.');
     expect(e.narrative[0]).toContain('Run of order-flow 1.0.0, started by Test User by hand');
@@ -108,7 +152,12 @@ describe('explaining a run', () => {
     ['systemic', 'Capabilities page'],
     ['catastrophic', 'report it, with the run id'],
   ] as const)('explains a %s failure with advice that fits', (cls, advice) => {
-    const r = run({ workflow: 'order-flow', status: 'failed', stepIds: ['check', 'charge'], steps: { check: ok({ completedSeq: 1 }), charge: bad('PAY_DECLINED', cls, { attempt: 3 }) } });
+    const r = run({
+      workflow: 'order-flow',
+      status: 'failed',
+      stepIds: ['check', 'charge'],
+      steps: { check: ok({ completedSeq: 1 }), charge: bad('PAY_DECLINED', cls, { attempt: 3 }) },
+    });
     const e = explainRun({ ...r, plan });
     expect(e.headline).toBe('Failed at “charge”.');
     expect(e.failure).toMatchObject({ stepId: 'charge', code: 'PAY_DECLINED', errorClass: cls });
@@ -119,16 +168,38 @@ describe('explaining a run', () => {
   });
 
   it('reports rollbacks and failed rollbacks', () => {
-    const undone = run({ workflow: 'order-flow', status: 'failed', stepIds: ['check', 'charge'], steps: { check: ok({ completedSeq: 1, compensationStatus: 'done' }), charge: bad('X', 'business') } });
+    const undone = run({
+      workflow: 'order-flow',
+      status: 'failed',
+      stepIds: ['check', 'charge'],
+      steps: { check: ok({ completedSeq: 1, compensationStatus: 'done' }), charge: bad('X', 'business') },
+    });
     expect(explainRun({ ...undone, plan }).failure!.whatHappenedNext).toBe('1 earlier step was undone.');
-    const stuck = run({ workflow: 'order-flow', status: 'failed', stepIds: ['check', 'charge'], steps: { check: ok({ completedSeq: 1, compensationStatus: 'failed', compensationError: { code: 'UNDO', message: 'cannot undo', class: 'business', retryable: false } }), charge: bad('X', 'business') } });
+    const stuck = run({
+      workflow: 'order-flow',
+      status: 'failed',
+      stepIds: ['check', 'charge'],
+      steps: {
+        check: ok({
+          completedSeq: 1,
+          compensationStatus: 'failed',
+          compensationError: { code: 'UNDO', message: 'cannot undo', class: 'business', retryable: false },
+        }),
+        charge: bad('X', 'business'),
+      },
+    });
     const e = explainRun({ ...stuck, plan });
     expect(e.failure!.whatHappenedNext).toBe('Rollback started, but 1 compensation failed.');
     expect(e.narrative.join(' ')).toContain('FAILED: cannot undo');
   });
 
   it('points at what a paused run is waiting for', () => {
-    const r = run({ workflow: 'order-flow', status: 'running', stepIds: ['check', 'gate'], steps: { check: ok({ completedSeq: 1 }), gate: { status: 'waiting-approval' } } });
+    const r = run({
+      workflow: 'order-flow',
+      status: 'running',
+      stepIds: ['check', 'gate'],
+      steps: { check: ok({ completedSeq: 1 }), gate: { status: 'waiting-approval' } },
+    });
     s.runs.transition(r.run.id, 'waiting-approval');
     const e = explainRun({ run: s.runs.getRun(r.run.id)!, steps: s.runs.getSteps(r.run.id), plan });
     expect(e.headline).toBe('Paused, waiting for approval at “gate”.');
@@ -136,7 +207,14 @@ describe('explaining a run', () => {
   });
 
   it('says when an absorbed failure did not stop the run', () => {
-    const r = run({ workflow: 'order-flow', stepIds: ['check', 'fallback'], steps: { check: bad('E', 'transient', { handled: 'continue', completedSeq: 1 }), fallback: ok({ completedSeq: 2 }) } });
+    const r = run({
+      workflow: 'order-flow',
+      stepIds: ['check', 'fallback'],
+      steps: {
+        check: bad('E', 'transient', { handled: 'continue', completedSeq: 1 }),
+        fallback: ok({ completedSeq: 2 }),
+      },
+    });
     expect(explainRun({ ...r, plan }).narrative.join(' ')).toContain('The workflow carried on anyway.');
   });
 });
@@ -146,7 +224,9 @@ describe('generated documentation', () => {
     const m = workflowMermaid(wf().plan);
     const lines = m.split('\n');
     expect(lines[0]).toBe('flowchart TD');
-    const declared = new Set(lines.flatMap((l) => (/^ {2}(s\d+|start)[[({]/.exec(l) ? [/^ {2}(\w+)/.exec(l)![1]!] : [])));
+    const declared = new Set(
+      lines.flatMap((l) => (/^ {2}(s\d+|start)[[({]/.exec(l) ? [/^ {2}(\w+)/.exec(l)![1]!] : [])),
+    );
     expect(declared.size).toBe(6); // five steps + start
     for (const l of lines.filter((x) => /-->|-\.->|-\. /.test(x))) {
       const ids = [...l.matchAll(/\b(s\d+|start)\b/g)].map((x) => x[1]!);
@@ -178,11 +258,25 @@ describe('generated documentation', () => {
   it('writes a Markdown page with flow, triggers, inputs, steps, analysis, risk and versions', () => {
     const md = workflowMarkdown(wf().plan, {
       settings: { enabled: true, killed: false, autonomyTier: 'T1', stableVersion: '1.0.0' },
-      risk: { level: 'medium', score: 25, findings: [{ severity: 'medium', message: 'Effectful step without compensation', stepId: 'charge' }] },
+      risk: {
+        level: 'medium',
+        score: 25,
+        findings: [{ severity: 'medium', message: 'Effectful step without compensation', stepId: 'charge' }],
+      },
       versions: [{ version: '1.0.0', status: 'published', publishedAt: '2026-06-01T00:00:00Z', publishedBy: 'alice' }],
     });
     expect(md).toMatch(/^# order-flow/);
-    for (const h of ['## Flow', '```mermaid', '## Triggers', '## Inputs', '## Steps', '## Analysis', '## Risk review — medium (25/100)', '## Versions']) expect(md).toContain(h);
+    for (const h of [
+      '## Flow',
+      '```mermaid',
+      '## Triggers',
+      '## Inputs',
+      '## Steps',
+      '## Analysis',
+      '## Risk review — medium (25/100)',
+      '## Versions',
+    ])
+      expect(md).toContain(h);
     expect(md).toContain('- **schedule** — every day at 03:00 (UTC) (`0 3 * * *`)');
     expect(md).toContain('| `orderId` | string | yes |');
     expect(md).toContain('| 5 | `charge` | capability | notify-webhook@1.0.0 | effectful | `gate` | 30s | 2 |');
@@ -191,13 +285,18 @@ describe('generated documentation', () => {
   });
 
   it('documents the capability catalogue and an index', () => {
-    const caps = createDefaultRegistry(defaultAdapterConfig()).list().map((c) => c.declaration);
+    const caps = createDefaultRegistry(defaultAdapterConfig())
+      .list()
+      .map((c) => c.declaration);
     const md = capabilityMarkdown(caps);
     expect(md).toContain('## http-get@1.0.0');
     expect(md).toContain('## util-echo@1.0.0');
     expect(md).toMatch(/\| `url` \| string \| yes \|/);
     expect(md.indexOf('## http-get')).toBeLessThan(md.indexOf('## util-echo')); // sorted
-    const idx = indexMarkdown([{ name: 'b', description: 'Second | with pipe', stableVersion: '1.0.0' }, { name: 'a', description: 'First', criticality: 'high', owner: 'x' }]);
+    const idx = indexMarkdown([
+      { name: 'b', description: 'Second | with pipe', stableVersion: '1.0.0' },
+      { name: 'a', description: 'First', criticality: 'high', owner: 'x' },
+    ]);
     expect(idx.indexOf('[a]')).toBeLessThan(idx.indexOf('[b]'));
     expect(idx).toContain('Second \\| with pipe');
   });

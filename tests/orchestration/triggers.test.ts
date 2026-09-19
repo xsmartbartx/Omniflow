@@ -8,7 +8,12 @@ afterEach(async () => {
   await p?.stop();
 });
 
-const workflow = (name: string, triggers: unknown[], extra: Record<string, unknown> = {}, steps: unknown[] = [echo('a', 1)]) => {
+const workflow = (
+  name: string,
+  triggers: unknown[],
+  extra: Record<string, unknown> = {},
+  steps: unknown[] = [echo('a', 1)],
+) => {
   const m = wf(steps, { triggers, ...extra }, name);
   return m;
 };
@@ -19,7 +24,10 @@ const publish = (m: unknown) => {
 const runsOf = (name: string) => p.state.runs.listRuns({ tenant: 'default', workflow: name });
 const settle = async (name: string, n: number) => {
   const t0 = Date.now();
-  while (runsOf(name).length < n || runsOf(name).some((r) => !['succeeded', 'failed', 'cancelled'].includes(r.status))) {
+  while (
+    runsOf(name).length < n ||
+    runsOf(name).some((r) => !['succeeded', 'failed', 'cancelled'].includes(r.status))
+  ) {
     if (Date.now() - t0 > 5000) throw new Error(`runs of ${name} did not settle`);
     await new Promise((r) => setTimeout(r, 10));
   }
@@ -27,7 +35,12 @@ const settle = async (name: string, n: number) => {
 };
 
 describe('schedule triggers', () => {
-  const sched = (extra: Record<string, unknown> = {}) => ({ type: 'schedule', name: 'every-five', cron: '*/5 * * * *', ...extra });
+  const sched = (extra: Record<string, unknown> = {}) => ({
+    type: 'schedule',
+    name: 'every-five',
+    cron: '*/5 * * * *',
+    ...extra,
+  });
 
   it('registers on publish, fires each slot exactly once, and never double-fires', async () => {
     p = makePlatform();
@@ -61,8 +74,12 @@ describe('schedule triggers', () => {
     p.triggers.runDue();
     await new Promise((r) => setTimeout(r, 50));
     expect(runsOf('cron')).toHaveLength(0);
-    expect(new Date(p.state.triggers.get(t!.id)!.nextFireAt!).getTime()).toBeGreaterThan(p.triggerClock.now().getTime());
-    expect(p.state.events.list({ tenant: 'default', types: ['trigger.rejected'] })[0]!.data.reason).toMatch(/missed slot .* skipped/);
+    expect(new Date(p.state.triggers.get(t!.id)!.nextFireAt!).getTime()).toBeGreaterThan(
+      p.triggerClock.now().getTime(),
+    );
+    expect(p.state.events.list({ tenant: 'default', types: ['trigger.rejected'] })[0]!.data.reason).toMatch(
+      /missed slot .* skipped/,
+    );
   });
 
   it('with catchup: latest fires once for the missed period', async () => {
@@ -99,25 +116,45 @@ describe('schedule triggers', () => {
     p.triggerClock.set(new Date(new Date(t!.nextFireAt!).getTime() + 1000));
     p.triggers.runDue();
     expect(runsOf('cron')).toHaveLength(0);
-    expect(p.state.events.list({ tenant: 'default', types: ['trigger.rejected'] }).some((e) => String(e.data.reason).includes('kill switch'))).toBe(true);
+    expect(
+      p.state.events
+        .list({ tenant: 'default', types: ['trigger.rejected'] })
+        .some((e) => String(e.data.reason).includes('kill switch')),
+    ).toBe(true);
   });
 });
 
 describe('webhook triggers (T6: replay and forgery)', () => {
   const hook = () =>
-    workflow('hooked', [{ type: 'webhook', name: 'incoming', inputs: { order: '${{ event.payload.id }}' } }], { inputs: { order: { type: 'string', required: true } } });
+    workflow('hooked', [{ type: 'webhook', name: 'incoming', inputs: { order: '${{ event.payload.id }}' } }], {
+      inputs: { order: { type: 'string', required: true } },
+    });
   const setup = () => {
     p = makePlatform();
     publish(hook());
     const secret = p.triggers.rotateWebhookSecret('default', 'hooked', 'incoming').secret;
-    const send = (body: string, over: { secret?: string; ts?: number; delivery?: string; workflow?: string; trigger?: string; signature?: string } = {}) => {
+    const send = (
+      body: string,
+      over: {
+        secret?: string;
+        ts?: number;
+        delivery?: string;
+        workflow?: string;
+        trigger?: string;
+        signature?: string;
+      } = {},
+    ) => {
       const ts = over.ts ?? Math.floor(p.triggerClock.now().getTime() / 1000);
       return p.triggers.handleWebhook({
         tenant: 'default',
         workflow: over.workflow ?? 'hooked',
         trigger: over.trigger ?? 'incoming',
         rawBody: body,
-        headers: { timestamp: String(ts), signature: over.signature ?? signWebhook(over.secret ?? secret, ts, body), delivery: over.delivery ?? `d-${Math.random()}` },
+        headers: {
+          timestamp: String(ts),
+          signature: over.signature ?? signWebhook(over.secret ?? secret, ts, body),
+          delivery: over.delivery ?? `d-${Math.random()}`,
+        },
       });
     };
     return { secret, send };
@@ -136,7 +173,11 @@ describe('webhook triggers (T6: replay and forgery)', () => {
     const { send } = setup();
     expect(send('{"id":"o-1"}', { delivery: 'same' }).status).toBe('queued');
     expect(() => send('{"id":"o-1"}', { delivery: 'same' })).toThrow('Webhook authentication failed');
-    expect(p.state.events.list({ tenant: 'default', types: ['trigger.rejected'] }).some((e) => e.data.reason === 'webhook replay')).toBe(true);
+    expect(
+      p.state.events
+        .list({ tenant: 'default', types: ['trigger.rejected'] })
+        .some((e) => e.data.reason === 'webhook replay'),
+    ).toBe(true);
   });
 
   it('rejects forged, stale and malformed deliveries with one uniform error (no oracle)', () => {
@@ -148,7 +189,13 @@ describe('webhook triggers (T6: replay and forgery)', () => {
     expect(() => send('{"id":"x"}', { trigger: 'nonexistent' })).toThrow(uniform); // unknown webhook = wrong signature
     expect(() => send('{"id":"x"}', { workflow: 'ghost' })).toThrow(uniform);
     expect(() =>
-      p.triggers.handleWebhook({ tenant: 'default', workflow: 'hooked', trigger: 'incoming', rawBody: '{}', headers: { timestamp: undefined, signature: undefined } }),
+      p.triggers.handleWebhook({
+        tenant: 'default',
+        workflow: 'hooked',
+        trigger: 'incoming',
+        rawBody: '{}',
+        headers: { timestamp: undefined, signature: undefined },
+      }),
     ).toThrow(uniform);
     expect(runsOf('hooked')).toHaveLength(0);
   });
@@ -173,7 +220,10 @@ describe('webhook triggers (T6: replay and forgery)', () => {
     expect(rotated).not.toBe(secret);
     expect(() => send('{"id":"a"}', { secret })).toThrow('Webhook authentication failed');
     expect(send('{"id":"a"}', { secret: rotated }).status).toBe('queued');
-    const dump = p.state.db.all('SELECT * FROM secrets').map((r) => JSON.stringify(r)).join('');
+    const dump = p.state.db
+      .all('SELECT * FROM secrets')
+      .map((r) => JSON.stringify(r))
+      .join('');
     expect(dump).not.toContain(rotated);
     expect(dump).not.toContain(secret);
   });
@@ -191,11 +241,22 @@ describe('event and completion triggers', () => {
     publish(
       workflow(
         'on-order',
-        [{ type: 'event', name: 'big-order', event: 'order.created', filter: 'event.payload.total > 100', inputs: { order: '${{ event.payload.id }}' } }],
+        [
+          {
+            type: 'event',
+            name: 'big-order',
+            event: 'order.created',
+            filter: 'event.payload.total > 100',
+            inputs: { order: '${{ event.payload.id }}' },
+          },
+        ],
         { inputs: { order: { type: 'string', required: true } } },
       ),
     );
-    expect(p.triggers.publishEvent('default', 'order.created', { id: 'o-1', total: 50 }, 'c1')).toEqual({ resumed: 0, runs: [] });
+    expect(p.triggers.publishEvent('default', 'order.created', { id: 'o-1', total: 50 }, 'c1')).toEqual({
+      resumed: 0,
+      runs: [],
+    });
     const hit = p.triggers.publishEvent('default', 'order.created', { id: 'o-2', total: 500 }, 'c2');
     expect(hit.runs).toHaveLength(1);
     expect(p.triggers.publishEvent('default', 'order.created', { id: 'o-2', total: 500 }, 'c2').runs).toEqual([]); // same delivery
@@ -207,10 +268,22 @@ describe('event and completion triggers', () => {
 
   it('resumes workflows waiting for the same event', async () => {
     p = makePlatform();
-    publish(workflow('waiter', [{ type: 'manual' }], { inputs: { order: { type: 'string', required: true } } }, [
-      { id: 'w', type: 'wait', until: { event: 'payment.settled', correlation: '${{ inputs.order }}' }, timeout: '5s' },
-    ]));
-    const r = p.runs.trigger({ principal: p.users.operator, workflow: 'waiter', inputs: { order: 'o-9' }, trigger: { type: 'manual' } });
+    publish(
+      workflow('waiter', [{ type: 'manual' }], { inputs: { order: { type: 'string', required: true } } }, [
+        {
+          id: 'w',
+          type: 'wait',
+          until: { event: 'payment.settled', correlation: '${{ inputs.order }}' },
+          timeout: '5s',
+        },
+      ]),
+    );
+    const r = p.runs.trigger({
+      principal: p.users.operator,
+      workflow: 'waiter',
+      inputs: { order: 'o-9' },
+      trigger: { type: 'manual' },
+    });
     if (r.status !== 'queued') throw new Error('expected queued');
     await p.orch.waitForRun(r.run.id, 3000, (x) => x.status === 'waiting-event');
     expect(p.triggers.publishEvent('default', 'payment.settled', { amount: 1 }, 'o-9').resumed).toBe(1);
@@ -223,11 +296,24 @@ describe('event and completion triggers', () => {
     publish(
       workflow(
         'second',
-        [{ type: 'workflow-completion', name: 'after-first', workflow: 'first', status: 'succeeded', inputs: { from: '${{ event.payload.outputs.result }}' } }],
+        [
+          {
+            type: 'workflow-completion',
+            name: 'after-first',
+            workflow: 'first',
+            status: 'succeeded',
+            inputs: { from: '${{ event.payload.outputs.result }}' },
+          },
+        ],
         { inputs: { from: { type: 'integer', required: true } } },
       ),
     );
-    const r = p.runs.trigger({ principal: p.users.operator, workflow: 'first', inputs: {}, trigger: { type: 'manual' } });
+    const r = p.runs.trigger({
+      principal: p.users.operator,
+      workflow: 'first',
+      inputs: {},
+      trigger: { type: 'manual' },
+    });
     if (r.status !== 'queued') throw new Error('expected queued');
     await p.wait(r.run);
     const [second] = await settle('second', 1);
@@ -237,10 +323,21 @@ describe('event and completion triggers', () => {
 
   it('completion triggers respect the status filter', async () => {
     p = makePlatform();
-    publish(workflow('flaky', [{ type: 'manual' }], {}, [{ id: 'boom', type: 'capability', uses: 'util-fail@^1', retry: { attempts: 1 } }]));
-    publish(workflow('on-success', [{ type: 'workflow-completion', name: 'ok', workflow: 'flaky', status: 'succeeded' }]));
+    publish(
+      workflow('flaky', [{ type: 'manual' }], {}, [
+        { id: 'boom', type: 'capability', uses: 'util-fail@^1', retry: { attempts: 1 } },
+      ]),
+    );
+    publish(
+      workflow('on-success', [{ type: 'workflow-completion', name: 'ok', workflow: 'flaky', status: 'succeeded' }]),
+    );
     publish(workflow('on-failure', [{ type: 'workflow-completion', name: 'ko', workflow: 'flaky', status: 'failed' }]));
-    const r = p.runs.trigger({ principal: p.users.operator, workflow: 'flaky', inputs: {}, trigger: { type: 'manual' } });
+    const r = p.runs.trigger({
+      principal: p.users.operator,
+      workflow: 'flaky',
+      inputs: {},
+      trigger: { type: 'manual' },
+    });
     if (r.status !== 'queued') throw new Error('expected queued');
     await p.wait(r.run);
     await settle('on-failure', 1);

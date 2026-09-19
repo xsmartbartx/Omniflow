@@ -1,15 +1,22 @@
-import { type Clock, ConflictError, NotFoundError, OmniflowError, systemClock, ValidationError } from '../core/index.ts';
-import type { RegistryService, SubmitResult } from '../orchestration/registry/index.ts';
 import type { CapabilityRegistry } from '../capabilities/index.ts';
+import {
+  type Clock,
+  ConflictError,
+  NotFoundError,
+  OmniflowError,
+  systemClock,
+  ValidationError,
+} from '../core/index.ts';
+import type { RegistryService, SubmitResult } from '../orchestration/registry/index.ts';
 import type { Principal } from '../schemas/index.ts';
 import type { PolicyEngine, RiskSummary } from '../security/policy/index.ts';
-import { autonomyVerdict, type AutonomyVerdict } from '../security/policy/index.ts';
+import { type AutonomyVerdict, autonomyVerdict } from '../security/policy/index.ts';
 import type { DraftRecord, DraftStatus, State } from '../state/index.ts';
-import { type ImportResult, importCrontab } from './agents/importer.ts';
 import { explainPlan, explainRun, type PlanExplanation, type RunExplanation } from './agents/explainer.ts';
+import { type ImportResult, importCrontab } from './agents/importer.ts';
 import { Planner, type PlanResult, type ValidationOutcome } from './agents/planner.ts';
-import type { LlmClient } from './llm.ts';
 import { capabilityMarkdown, indexMarkdown, workflowMarkdown, workflowMermaid } from './docs/generator.ts';
+import type { LlmClient } from './llm.ts';
 
 export interface AuthoringServiceDeps {
   state: State;
@@ -77,20 +84,42 @@ export class AuthoringService {
 
   // ------------------------------------------------------------ validation
   /** Read-only: parse, compile and risk-review. */
-  validateText(tenant: string, text: string, origin: 'human' | 'agent' = 'human'): ValidationOutcome & { planHash?: string; workflow?: string; version?: string } {
+  validateText(
+    tenant: string,
+    text: string,
+    origin: 'human' | 'agent' = 'human',
+  ): ValidationOutcome & { planHash?: string; workflow?: string; version?: string } {
     const r = this.registry.inspect(tenant, text, origin);
     return {
       ok: r.ok && !r.risk?.blocking,
       errors: r.errors,
       warnings: r.warnings,
-      ...(r.risk ? { risk: { score: r.risk.score, level: r.risk.level, blocking: r.risk.blocking, findings: r.risk.findings.map((f) => ({ ruleId: f.ruleId, severity: f.severity, blocking: f.blocking, message: f.message, ...(f.stepId ? { stepId: f.stepId } : {}) })) } } : {}),
+      ...(r.risk
+        ? {
+            risk: {
+              score: r.risk.score,
+              level: r.risk.level,
+              blocking: r.risk.blocking,
+              findings: r.risk.findings.map((f) => ({
+                ruleId: f.ruleId,
+                severity: f.severity,
+                blocking: f.blocking,
+                message: f.message,
+                ...(f.stepId ? { stepId: f.stepId } : {}),
+              })),
+            },
+          }
+        : {}),
       ...(r.planHash ? { planHash: r.planHash } : {}),
       ...(r.plan ? { workflow: r.plan.workflow.name, version: r.plan.workflow.version } : {}),
     };
   }
 
   // ---------------------------------------------------------------- drafts
-  createDraft(principal: Principal, input: { manifest: string; origin?: 'human' | 'agent' | 'import'; notes?: Record<string, unknown> }): DraftRecord {
+  createDraft(
+    principal: Principal,
+    input: { manifest: string; origin?: 'human' | 'agent' | 'import'; notes?: Record<string, unknown> },
+  ): DraftRecord {
     const origin = input.origin ?? 'human';
     const v = this.validateText(principal.tenant, input.manifest, origin === 'agent' ? 'agent' : 'human');
     return this.st.authoring.createDraft({
@@ -116,25 +145,38 @@ export class AuthoringService {
 
   updateDraft(principal: Principal, id: string, manifest: string): DraftRecord {
     const d = this.getDraft(principal, id);
-    if (d.status === 'published') throw new ConflictError('A published draft cannot be edited; create a new draft or a new version');
+    if (d.status === 'published')
+      throw new ConflictError('A published draft cannot be edited; create a new draft or a new version');
     const v = this.validateText(principal.tenant, manifest, d.origin === 'agent' ? 'agent' : 'human');
-    return this.st.authoring.updateDraft(id, { manifestText: manifest, ...(v.workflow ? { workflowName: v.workflow } : {}), status: 'open', validation: v });
+    return this.st.authoring.updateDraft(id, {
+      manifestText: manifest,
+      ...(v.workflow ? { workflowName: v.workflow } : {}),
+      status: 'open',
+      validation: v,
+    });
   }
 
   revalidate(principal: Principal, id: string): DraftRecord {
     const d = this.getDraft(principal, id);
-    return this.st.authoring.updateDraft(id, { validation: this.validateText(principal.tenant, d.manifestText, d.origin === 'agent' ? 'agent' : 'human') });
+    return this.st.authoring.updateDraft(id, {
+      validation: this.validateText(principal.tenant, d.manifestText, d.origin === 'agent' ? 'agent' : 'human'),
+    });
   }
 
   deleteDraft(principal: Principal, id: string): void {
     this.getDraft(principal, id);
-    if (!this.st.authoring.deleteDraft(principal.tenant, id)) throw new ConflictError('A published draft cannot be deleted');
+    if (!this.st.authoring.deleteDraft(principal.tenant, id))
+      throw new ConflictError('A published draft cannot be deleted');
   }
 
   // -------------------------------------------------------------- AI drafting
   private requirePlanner(): Planner {
     if (!this.planner) {
-      throw new OmniflowError('AI_NOT_CONFIGURED', 'AI authoring is not configured. Set OMNIFLOW_LLM_API_KEY (or ANTHROPIC_API_KEY) and restart. Everything else works without it.', { errorClass: 'systemic', retryable: false });
+      throw new OmniflowError(
+        'AI_NOT_CONFIGURED',
+        'AI authoring is not configured. Set OMNIFLOW_LLM_API_KEY (or ANTHROPIC_API_KEY) and restart. Everything else works without it.',
+        { errorClass: 'systemic', retryable: false },
+      );
     }
     return this.planner;
   }
@@ -148,9 +190,18 @@ export class AuthoringService {
       const settings = this.st.registry.getSettings(principal.tenant, req.workflow);
       if (!settings?.stableVersion) throw new NotFoundError('Workflow', req.workflow);
       tier = settings.autonomyTier;
-      baseManifest = this.registry.getVersionPlan(principal.tenant, req.workflow, settings.stableVersion).version.manifestText;
+      baseManifest = this.registry.getVersionPlan(principal.tenant, req.workflow, settings.stableVersion).version
+        .manifestText;
     }
-    const result = await planner.plan({ tenant: principal.tenant, intent: req.intent, ...(baseManifest ? { baseManifest } : {}), ...(req.untrusted ? { untrusted: req.untrusted } : {}) }, signal);
+    const result = await planner.plan(
+      {
+        tenant: principal.tenant,
+        intent: req.intent,
+        ...(baseManifest ? { baseManifest } : {}),
+        ...(req.untrusted ? { untrusted: req.untrusted } : {}),
+      },
+      signal,
+    );
     const { manifest, ...summary } = result;
 
     if (tier === 'T0' && req.workflow) {
@@ -179,7 +230,15 @@ export class AuthoringService {
       tenant: principal.tenant,
       type: 'agent.draft-created',
       actor: { ...AGENT },
-      data: { agent: 'planner', draftId: draft.id, requestedBy: principal.id, valid: result.ok, attempts: result.attempts, ...(req.workflow ? { workflow: req.workflow } : {}), ...(result.injectionSignals.length ? { injectionSignals: result.injectionSignals.length } : {}) },
+      data: {
+        agent: 'planner',
+        draftId: draft.id,
+        requestedBy: principal.id,
+        valid: result.ok,
+        attempts: result.attempts,
+        ...(req.workflow ? { workflow: req.workflow } : {}),
+        ...(result.injectionSignals.length ? { injectionSignals: result.injectionSignals.length } : {}),
+      },
     });
     return { mode: 'draft', draft, plan: { ...summary, manifest } };
   }
@@ -188,22 +247,37 @@ export class AuthoringService {
   async draftFromProposal(principal: Principal, proposalId: string, signal?: AbortSignal): Promise<PlanOutcome> {
     const p = this.st.authoring.getProposal(proposalId, principal.tenant);
     if (!p) throw new NotFoundError('Proposal', proposalId);
-    if (!p.workflowName) throw new ConflictError('This proposal is not about a specific workflow, so there is nothing to revise');
-    const body = (p.body ?? {}) as { summary?: string; recommendation?: string; evidence?: unknown; stepId?: string | null };
+    if (!p.workflowName)
+      throw new ConflictError('This proposal is not about a specific workflow, so there is nothing to revise');
+    const body = (p.body ?? {}) as {
+      summary?: string;
+      recommendation?: string;
+      evidence?: unknown;
+      stepId?: string | null;
+    };
     return this.plan(
       principal,
       {
         workflow: p.workflowName,
         proposalId,
         intent: `Apply this improvement to the workflow "${p.workflowName}": ${p.title}${body.stepId ? ` (step "${body.stepId}")` : ''}.\nRecommendation: ${body.recommendation ?? ''}\nMake the smallest change that addresses it.`,
-        untrusted: [{ label: 'analysis evidence', content: JSON.stringify({ summary: body.summary, evidence: body.evidence }, null, 2) }],
+        untrusted: [
+          {
+            label: 'analysis evidence',
+            content: JSON.stringify({ summary: body.summary, evidence: body.evidence }, null, 2),
+          },
+        ],
       },
       signal,
     );
   }
 
   /** Legacy script → decomposed draft. The script is third-party content: framed as data, never as instructions. */
-  async importScript(principal: Principal, input: { script: string; name?: string; description?: string }, signal?: AbortSignal): Promise<PlanOutcome> {
+  async importScript(
+    principal: Principal,
+    input: { script: string; name?: string; description?: string },
+    signal?: AbortSignal,
+  ): Promise<PlanOutcome> {
     return this.plan(
       principal,
       {
@@ -215,9 +289,35 @@ export class AuthoringService {
   }
 
   /** Crontab → one Lift draft per job. Deterministic. */
-  importCrontab(principal: Principal, input: { text: string; owner?: string; timezone?: string }): { drafts: Array<{ draft: DraftRecord; notes: string[]; line: number; script?: { path: string; content: string } }>; skipped: ImportResult['skipped']; environment: ImportResult['environment'] } {
-    const r = importCrontab(input.text, { owner: input.owner ?? principal.name, today: this.clock.now().toISOString().slice(0, 10), ...(input.timezone ? { timezone: input.timezone } : {}) });
-    const drafts = r.workflows.map((w) => ({ draft: this.createDraft(principal, { manifest: w.manifest, origin: 'import', notes: { importedFrom: 'crontab', line: w.line, source: w.source, notes: w.notes, ...(w.script ? { script: w.script } : {}) } }), notes: w.notes, line: w.line, ...(w.script ? { script: w.script } : {}) }));
+  importCrontab(
+    principal: Principal,
+    input: { text: string; owner?: string; timezone?: string },
+  ): {
+    drafts: Array<{ draft: DraftRecord; notes: string[]; line: number; script?: { path: string; content: string } }>;
+    skipped: ImportResult['skipped'];
+    environment: ImportResult['environment'];
+  } {
+    const r = importCrontab(input.text, {
+      owner: input.owner ?? principal.name,
+      today: this.clock.now().toISOString().slice(0, 10),
+      ...(input.timezone ? { timezone: input.timezone } : {}),
+    });
+    const drafts = r.workflows.map((w) => ({
+      draft: this.createDraft(principal, {
+        manifest: w.manifest,
+        origin: 'import',
+        notes: {
+          importedFrom: 'crontab',
+          line: w.line,
+          source: w.source,
+          notes: w.notes,
+          ...(w.script ? { script: w.script } : {}),
+        },
+      }),
+      notes: w.notes,
+      line: w.line,
+      ...(w.script ? { script: w.script } : {}),
+    }));
     return { drafts, skipped: r.skipped, environment: r.environment };
   }
 
@@ -226,10 +326,20 @@ export class AuthoringService {
   submitDraft(principal: Principal, id: string, opts: { canaryPercent?: number } = {}): SubmitResult {
     const d = this.getDraft(principal, id);
     if (d.status === 'published') throw new ConflictError('This draft has already been published');
-    const result = this.registry.submit(principal, d.manifestText, { origin: d.origin === 'agent' ? 'agent' : 'human', ...(opts.canaryPercent ? { canaryPercent: opts.canaryPercent } : {}) });
+    const result = this.registry.submit(principal, d.manifestText, {
+      origin: d.origin === 'agent' ? 'agent' : 'human',
+      ...(opts.canaryPercent ? { canaryPercent: opts.canaryPercent } : {}),
+    });
     this.st.authoring.updateDraft(id, {
       status: result.status === 'published' ? 'published' : 'submitted',
-      notes: { ...(d.notes as object), submittedBy: principal.id, outcome: result.status, ...(result.status === 'pending-approval' ? { changeId: result.change.id } : { version: result.version.version }) },
+      notes: {
+        ...(d.notes as object),
+        submittedBy: principal.id,
+        outcome: result.status,
+        ...(result.status === 'pending-approval'
+          ? { changeId: result.change.id }
+          : { version: result.version.version }),
+      },
     });
     return result;
   }
@@ -242,34 +352,72 @@ export class AuthoringService {
    */
   applyDraft(principal: Principal, id: string): { verdict: AutonomyVerdict; tier: string; result?: SubmitResult } {
     const d = this.getDraft(principal, id);
-    if (d.origin !== 'agent') throw new ConflictError('Autonomy tiers govern agent-authored drafts. Submit a human-authored draft directly.');
+    if (d.origin !== 'agent')
+      throw new ConflictError('Autonomy tiers govern agent-authored drafts. Submit a human-authored draft directly.');
     if (d.status === 'published') throw new ConflictError('This draft has already been published');
     const inspected = this.registry.inspect(principal.tenant, d.manifestText, 'agent');
-    if (!inspected.ok || !inspected.plan || !inspected.risk) throw new ValidationError('The draft does not validate', inspected.errors);
+    if (!inspected.ok || !inspected.plan || !inspected.risk)
+      throw new ValidationError('The draft does not validate', inspected.errors);
 
     const settings = this.st.registry.getSettings(principal.tenant, inspected.plan.workflow.name);
     const tier = settings?.autonomyTier ?? 'T1';
-    const risk: RiskSummary = { score: inspected.risk.score, level: inspected.risk.level, blocking: inspected.risk.blocking, findings: inspected.risk.findings.length };
-    const verdict = autonomyVerdict(tier, this.policy.environment, inspected.plan, risk, this.policy.blastRadius.maxRunCost);
-    this.st.events.append({ tenant: principal.tenant, type: 'authoring.autonomy-applied', actor: { type: principal.type, id: principal.id, name: principal.name }, data: { draftId: id, workflow: inspected.plan.workflow.name, tier, mode: verdict.mode, reason: verdict.reason } });
+    const risk: RiskSummary = {
+      score: inspected.risk.score,
+      level: inspected.risk.level,
+      blocking: inspected.risk.blocking,
+      findings: inspected.risk.findings.length,
+    };
+    const verdict = autonomyVerdict(
+      tier,
+      this.policy.environment,
+      inspected.plan,
+      risk,
+      this.policy.blastRadius.maxRunCost,
+    );
+    this.st.events.append({
+      tenant: principal.tenant,
+      type: 'authoring.autonomy-applied',
+      actor: { type: principal.type, id: principal.id, name: principal.name },
+      data: { draftId: id, workflow: inspected.plan.workflow.name, tier, mode: verdict.mode, reason: verdict.reason },
+    });
     if (verdict.mode === 'proposal-only' || verdict.mode === 'draft') return { verdict, tier };
 
     // The governed principal is a system identity with author rights only: the human who asked is recorded in the draft's notes.
-    const governed: Principal = { id: 'system:authoring', type: 'system', name: 'Authoring Service', tenant: principal.tenant, roles: ['author'] };
+    const governed: Principal = {
+      id: 'system:authoring',
+      type: 'system',
+      name: 'Authoring Service',
+      tenant: principal.tenant,
+      roles: ['author'],
+    };
     const result = this.registry.submit(governed, d.manifestText, {
       origin: 'agent',
-      ...(verdict.mode === 'change-request' ? { forceApproval: { code: 'AUTONOMY_REQUIRES_APPROVAL', reason: verdict.reason } } : {}),
+      ...(verdict.mode === 'change-request'
+        ? { forceApproval: { code: 'AUTONOMY_REQUIRES_APPROVAL', reason: verdict.reason } }
+        : {}),
     });
     this.st.authoring.updateDraft(id, {
       status: result.status === 'published' ? 'published' : 'submitted',
-      notes: { ...(d.notes as object), appliedBy: principal.id, tier, verdict: verdict.mode, outcome: result.status, ...(result.status === 'pending-approval' ? { changeId: result.change.id } : { version: result.version.version }) },
+      notes: {
+        ...(d.notes as object),
+        appliedBy: principal.id,
+        tier,
+        verdict: verdict.mode,
+        outcome: result.status,
+        ...(result.status === 'pending-approval'
+          ? { changeId: result.change.id }
+          : { version: result.version.version }),
+      },
     });
     return { verdict, tier, result };
   }
 
   // -------------------------------------------------------- explain and document
   private planFor(principal: Principal, name: string, version?: string) {
-    const v = version ?? this.st.registry.getSettings(principal.tenant, name)?.stableVersion ?? this.st.registry.latestVersion(principal.tenant, name)?.version;
+    const v =
+      version ??
+      this.st.registry.getSettings(principal.tenant, name)?.stableVersion ??
+      this.st.registry.latestVersion(principal.tenant, name)?.version;
     if (!v) throw new NotFoundError('Workflow', name);
     return this.registry.getVersionPlan(principal.tenant, name, v);
   }
@@ -283,10 +431,19 @@ export class AuthoringService {
     const run = this.st.runs.getRun(runId, principal.tenant);
     if (!run) throw new NotFoundError('Run', runId);
     const plan = this.st.registry.getPlan(run.tenant, run.planHash);
-    return explainRun({ run, steps: this.st.runs.getSteps(run.id), ...(plan ? { plan } : {}), approvals: this.st.approvals.list({ tenant: run.tenant, runId: run.id }) });
+    return explainRun({
+      run,
+      steps: this.st.runs.getSteps(run.id),
+      ...(plan ? { plan } : {}),
+      approvals: this.st.approvals.list({ tenant: run.tenant, runId: run.id }),
+    });
   }
 
-  workflowDocs(principal: Principal, name: string, version?: string): { version: string; markdown: string; mermaid: string } {
+  workflowDocs(
+    principal: Principal,
+    name: string,
+    version?: string,
+  ): { version: string; markdown: string; mermaid: string } {
     const { plan, version: v } = this.planFor(principal, name, version);
     const settings = this.st.registry.getSettings(principal.tenant, name);
     const findings = this.st.authoring.listFindings(principal.tenant, name, v.version);
@@ -295,9 +452,39 @@ export class AuthoringService {
       version: v.version,
       mermaid: workflowMermaid(plan),
       markdown: workflowMarkdown(plan, {
-        ...(settings ? { settings: { enabled: settings.enabled, killed: settings.killed, autonomyTier: settings.autonomyTier, ...(settings.stableVersion ? { stableVersion: settings.stableVersion } : {}) } } : {}),
-        versions: this.st.registry.listVersions(principal.tenant, name).map((x) => ({ version: x.version, status: x.status, publishedAt: x.publishedAt, publishedBy: x.publishedBy })),
-        ...(risk?.level ? { risk: { level: risk.level, score: risk.score ?? 0, findings: findings.map((f) => ({ severity: f.severity, message: f.message, ...(f.detail && typeof f.detail === 'object' && 'stepId' in f.detail ? { stepId: String((f.detail as { stepId: unknown }).stepId) } : {}) })) } } : {}),
+        ...(settings
+          ? {
+              settings: {
+                enabled: settings.enabled,
+                killed: settings.killed,
+                autonomyTier: settings.autonomyTier,
+                ...(settings.stableVersion ? { stableVersion: settings.stableVersion } : {}),
+              },
+            }
+          : {}),
+        versions: this.st.registry
+          .listVersions(principal.tenant, name)
+          .map((x) => ({
+            version: x.version,
+            status: x.status,
+            publishedAt: x.publishedAt,
+            publishedBy: x.publishedBy,
+          })),
+        ...(risk?.level
+          ? {
+              risk: {
+                level: risk.level,
+                score: risk.score ?? 0,
+                findings: findings.map((f) => ({
+                  severity: f.severity,
+                  message: f.message,
+                  ...(f.detail && typeof f.detail === 'object' && 'stepId' in f.detail
+                    ? { stepId: String((f.detail as { stepId: unknown }).stepId) }
+                    : {}),
+                })),
+              },
+            }
+          : {}),
       }),
     };
   }
@@ -309,9 +496,17 @@ export class AuthoringService {
   indexDocs(principal: Principal): string {
     return indexMarkdown(
       this.st.registry.listWorkflows(principal.tenant).map((w) => {
-        const v = w.settings.stableVersion ? this.st.registry.getVersion(principal.tenant, w.name, w.settings.stableVersion) : undefined;
+        const v = w.settings.stableVersion
+          ? this.st.registry.getVersion(principal.tenant, w.name, w.settings.stableVersion)
+          : undefined;
         const plan = v ? this.st.registry.getPlan(principal.tenant, v.planHash) : undefined;
-        return { name: w.name, description: plan?.workflow.description ?? null, stableVersion: w.settings.stableVersion ?? null, criticality: plan?.workflow.criticality ?? null, owner: plan?.workflow.owner ?? null };
+        return {
+          name: w.name,
+          description: plan?.workflow.description ?? null,
+          stableVersion: w.settings.stableVersion ?? null,
+          criticality: plan?.workflow.criticality ?? null,
+          owner: plan?.workflow.owner ?? null,
+        };
       }),
     );
   }

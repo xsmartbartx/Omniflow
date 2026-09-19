@@ -21,5 +21,36 @@ export default async function account() {
       clear(slot).append(errorBox(e));
     }
   };
-  return h('div', {}, pageHeader('Account'), h('div', { class: 'grid grid-2' }, card('You', kv([['Name', me.user?.name ?? me.principal.name], ['Email', me.user?.email], ['Workspace', h('code', {}, me.principal.tenant)], ['Roles', me.principal.roles.join(', ')], ['Environment', me.environment]])), card('Change password', h('form', { class: 'form', onSubmit: change }, field('Current password', current), field('New password', next, 'At least 12 characters, not containing your email.'), field('Repeat new password', again), slot, button('Change password', { kind: 'primary', type: 'submit' }), h('p', { class: 'muted' }, 'You will be signed out everywhere and asked to sign in again.')))));
+  return h(
+    'div',
+    {},
+    pageHeader('Account'),
+    h(
+      'div',
+      { class: 'grid grid-2' },
+      card(
+        'You',
+        kv([
+          ['Name', me.user?.name ?? me.principal.name],
+          ['Email', me.user?.email],
+          ['Workspace', h('code', {}, me.principal.tenant)],
+          ['Roles', me.principal.roles.join(', ')],
+          ['Environment', me.environment],
+        ]),
+      ),
+      card(
+        'Change password',
+        h(
+          'form',
+          { class: 'form', onSubmit: change },
+          field('Current password', current),
+          field('New password', next, 'At least 12 characters, not containing your email.'),
+          field('Repeat new password', again),
+          slot,
+          button('Change password', { kind: 'primary', type: 'submit' }),
+          h('p', { class: 'muted' }, 'You will be signed out everywhere and asked to sign in again.'),
+        ),
+      ),
+    ),
+  );
 }

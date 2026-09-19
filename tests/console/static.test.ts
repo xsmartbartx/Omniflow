@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest';
  */
 
 const ROOT = resolve(import.meta.dirname, '../../console');
-const files = (dir: string): string[] => readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? files(join(dir, f)) : [join(dir, f)]));
+const files = (dir: string): string[] =>
+  readdirSync(dir).flatMap((f) => (statSync(join(dir, f)).isDirectory() ? files(join(dir, f)) : [join(dir, f)]));
 const all = files(ROOT);
 const js = all.filter((f) => f.endsWith('.js'));
 const read = (f: string) => readFileSync(f, 'utf8');
@@ -17,19 +18,24 @@ const rel = (f: string) => relative(ROOT, f);
 
 describe('console source is CSP-safe', () => {
   it('has the files it needs', () => {
-    for (const f of ['index.html', 'styles.css', 'favicon.svg', 'js/app.js']) expect(existsSync(join(ROOT, f)), f).toBe(true);
+    for (const f of ['index.html', 'styles.css', 'favicon.svg', 'js/app.js'])
+      expect(existsSync(join(ROOT, f)), f).toBe(true);
     expect(js.length).toBeGreaterThan(20);
   });
 
   it('never builds markup from strings or evaluates code', () => {
     const banned: Array<[RegExp, string]> = [
-      [/\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|createContextualFragment|DOMParser/, 'markup from strings'],
+      [
+        /\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML|document\.write|createContextualFragment|DOMParser/,
+        'markup from strings',
+      ],
       [/\beval\s*\(|new\s+Function\s*\(|setTimeout\s*\(\s*['"`]|setInterval\s*\(\s*['"`]/, 'string evaluation'],
       [/\.setAttribute\(\s*['"]style['"]/, 'inline style attribute'],
       [/\.setAttribute\(\s*['"]on/i, 'inline event handler attribute'],
       [/\bsrcdoc\b/, 'srcdoc'],
     ];
-    for (const f of js.filter((x) => !x.endsWith('dom.js'))) for (const [re, why] of banned) expect(re.test(read(f)), `${rel(f)}: ${why}`).toBe(false);
+    for (const f of js.filter((x) => !x.endsWith('dom.js')))
+      for (const [re, why] of banned) expect(re.test(read(f)), `${rel(f)}: ${why}`).toBe(false);
     // dom.js is the one place that names these — only to forbid them
     expect(read(join(ROOT, 'js/dom.js'))).toContain("'innerHTML'");
   });
@@ -48,8 +54,13 @@ describe('console source is CSP-safe', () => {
     expect(read(join(ROOT, 'styles.css'))).not.toMatch(/@import|url\(\s*['"]?(https?:)?\/\//i);
     for (const f of js) {
       const src = read(f);
-      const external = [...src.matchAll(/https?:\/\/[^\s'"`)]+/g)].map((m) => m[0]).filter((u) => !u.startsWith('http://www.w3.org/2000/svg'));
-      expect(external.filter((u) => !/example\.(com|invalid)|localhost|127\.0\.0\.1/.test(u)), `${rel(f)} mentions an external URL`).toEqual([]);
+      const external = [...src.matchAll(/https?:\/\/[^\s'"`)]+/g)]
+        .map((m) => m[0])
+        .filter((u) => !u.startsWith('http://www.w3.org/2000/svg'));
+      expect(
+        external.filter((u) => !/example\.(com|invalid)|localhost|127\.0\.0\.1/.test(u)),
+        `${rel(f)} mentions an external URL`,
+      ).toEqual([]);
     }
   });
 
@@ -73,7 +84,10 @@ describe('console source is CSP-safe', () => {
     for (const f of readdirSync(join(ROOT, 'js/views')).filter((n) => n.endsWith('.js'))) {
       const name = f.replace(/\.js$/, '');
       if (name === 'common') continue;
-      expect(views.includes(name) || read(join(ROOT, 'js/app.js')).includes(`views/${name}.js`), `${name} is not routed`).toBe(true);
+      expect(
+        views.includes(name) || read(join(ROOT, 'js/app.js')).includes(`views/${name}.js`),
+        `${name} is not routed`,
+      ).toBe(true);
     }
   });
 

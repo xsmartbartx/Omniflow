@@ -117,7 +117,15 @@ export class AnalysisAgent {
         kind: `analysis.${f.rule}`,
         ...(f.workflow ? { workflowName: f.workflow } : {}),
         title: f.title,
-        body: { key: f.key, rule: f.rule, severity: f.severity, stepId: f.stepId ?? null, summary: f.summary, recommendation: f.recommendation, evidence: f.evidence },
+        body: {
+          key: f.key,
+          rule: f.rule,
+          severity: f.severity,
+          stepId: f.stepId ?? null,
+          summary: f.summary,
+          recommendation: f.recommendation,
+          evidence: f.evidence,
+        },
         source: ANALYSIS_SOURCE,
         dedupeKey: f.key,
       });
@@ -126,7 +134,18 @@ export class AnalysisAgent {
         continue;
       }
       raised.push(p);
-      this.st.events.append({ tenant, type: 'agent.proposal-created', actor: { type: 'agent', id: ANALYSIS_SOURCE, name: 'Analysis Agent' }, data: { agent: 'analysis', proposalId: p.id, rule: f.rule, severity: f.severity, ...(f.workflow ? { workflow: f.workflow } : {}) } });
+      this.st.events.append({
+        tenant,
+        type: 'agent.proposal-created',
+        actor: { type: 'agent', id: ANALYSIS_SOURCE, name: 'Analysis Agent' },
+        data: {
+          agent: 'analysis',
+          proposalId: p.id,
+          rule: f.rule,
+          severity: f.severity,
+          ...(f.workflow ? { workflow: f.workflow } : {}),
+        },
+      });
     }
 
     // A finding that no longer holds should not keep nagging: retire the proposal we raised for it.
@@ -138,8 +157,19 @@ export class AnalysisAgent {
       resolved++;
     }
 
-    this.st.events.append({ tenant, type: 'insight.analysis-completed', actor: { type: 'agent', id: ANALYSIS_SOURCE }, data: { findings: findings.length, proposals: raised.length, suppressed, resolved, windowDays: this.windowDays } });
-    this.log.info('analysis completed', { tenant, findings: findings.length, proposals: raised.length, suppressed, resolved });
+    this.st.events.append({
+      tenant,
+      type: 'insight.analysis-completed',
+      actor: { type: 'agent', id: ANALYSIS_SOURCE },
+      data: { findings: findings.length, proposals: raised.length, suppressed, resolved, windowDays: this.windowDays },
+    });
+    this.log.info('analysis completed', {
+      tenant,
+      findings: findings.length,
+      proposals: raised.length,
+      suppressed,
+      resolved,
+    });
     return { tenant, findings, raised, suppressed, resolved };
   }
 

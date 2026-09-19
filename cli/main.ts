@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OmniflowError } from '../core/index.ts';
-import { UsageError, has, parseArgs } from './args.ts';
+import { has, parseArgs, UsageError } from './args.ts';
 import { ApiError, ConnectionError } from './client.ts';
 import { adminCommand } from './commands/admin.ts';
 import { docsCommand, draftsCommand, explainCommand, importCommand, planCommand } from './commands/authoring.ts';
@@ -83,10 +83,19 @@ export function packageVersion(): string {
  * Run the CLI. Returns the process exit code instead of exiting, so it can be driven from tests.
  * 0 = success, 1 = the operation failed, 2 = usage error.
  */
-export async function runCli(argv: readonly string[], io: CliIo, env: Env = process.env, cwd: string = process.cwd()): Promise<number> {
+export async function runCli(
+  argv: readonly string[],
+  io: CliIo,
+  env: Env = process.env,
+  cwd: string = process.cwd(),
+): Promise<number> {
   const args = parseArgs(argv);
   // Colour only when the entry point saw a terminal (it sets OMNIFLOW_COLOR_FORCE) and nobody opted out.
-  const color = env.OMNIFLOW_COLOR_FORCE !== undefined && !has(args, 'no-color') && env.NO_COLOR === undefined && env.TERM !== 'dumb';
+  const color =
+    env.OMNIFLOW_COLOR_FORCE !== undefined &&
+    !has(args, 'no-color') &&
+    env.NO_COLOR === undefined &&
+    env.TERM !== 'dumb';
   const style = makeStyle(color);
   const ctx: CliContext = {
     out: (t) => io.out(t),
@@ -123,7 +132,10 @@ export async function runCli(argv: readonly string[], io: CliIo, env: Env = proc
       return 2;
     }
     if (e instanceof ApiError) {
-      const hint = e.status === 401 ? `\n${style.dim('Check OMNIFLOW_API_KEY. Create a key with: omniflow admin create-api-key --name cli')}` : '';
+      const hint =
+        e.status === 401
+          ? `\n${style.dim('Check OMNIFLOW_API_KEY. Create a key with: omniflow admin create-api-key --name cli')}`
+          : '';
       io.err(`${style.red('error')}${style.dim(`[${e.code}]`)}: ${e.message}${hint}\n`);
       const issues = (e.details as { issues?: Array<{ path: string; message: string }> } | undefined)?.issues;
       if (issues?.length) for (const i of issues) io.err(`  - ${i.path ? `${i.path}: ` : ''}${i.message}\n`);

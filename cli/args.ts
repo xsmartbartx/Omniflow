@@ -5,7 +5,20 @@ export interface ParsedArgs {
 }
 
 /** Flags that never take a value. */
-const BOOLEAN = new Set(['json', 'dry-run', 'wait', 'help', 'version', 'force', 'no-color', 'remote', 'yes', 'quiet', 'follow', 'stdin']);
+const BOOLEAN = new Set([
+  'json',
+  'dry-run',
+  'wait',
+  'help',
+  'version',
+  'force',
+  'no-color',
+  'remote',
+  'yes',
+  'quiet',
+  'follow',
+  'stdin',
+]);
 
 /**
  * Minimal, dependency-free argument parser: `--flag`, `--flag value`, `--flag=value`, repeated flags,

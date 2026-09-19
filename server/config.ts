@@ -2,18 +2,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { AdapterConfig } from '../capabilities/index.ts';
 import { defaultAdapterConfig } from '../capabilities/index.ts';
-import { OmniflowError, type LogLevel } from '../core/index.ts';
-import type { EnvironmentName } from '../schemas/index.ts';
+import { type LogLevel, OmniflowError } from '../core/index.ts';
 import type { Config } from '../gateway/context.ts';
+import type { EnvironmentName } from '../schemas/index.ts';
 import { generateMasterKey } from '../security/secret-broker/index.ts';
 
 export type { Config };
 
-
 type Env = Record<string, string | undefined>;
 
 function fail(name: string, message: string): never {
-  throw new OmniflowError('INVALID_CONFIG', `Invalid configuration: ${name} ${message}`, { errorClass: 'catastrophic', retryable: false });
+  throw new OmniflowError('INVALID_CONFIG', `Invalid configuration: ${name} ${message}`, {
+    errorClass: 'catastrophic',
+    retryable: false,
+  });
 }
 
 function bool(env: Env, name: string, dflt: boolean): boolean {
@@ -28,7 +30,8 @@ function int(env: Env, name: string, dflt: number, min: number, max: number): nu
   const v = env[name];
   if (v === undefined || v === '') return dflt;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < min || n > max) fail(name, `must be an integer between ${min} and ${max} (got '${v}')`);
+  if (!Number.isInteger(n) || n < min || n > max)
+    fail(name, `must be an integer between ${min} and ${max} (got '${v}')`);
   return n;
 }
 
@@ -48,10 +51,18 @@ function json<T>(env: Env, name: string, dflt: T): T {
  * in the data directory so secrets survive restarts. Production deployments should supply the key
  * from a secret manager instead.
  */
-export function loadConfig(env: Env = process.env, opts: { version?: string; cwd?: string; /** Tooling that only reads must not invent and store a key. */ persistMasterKey?: boolean } = {}): Config {
+export function loadConfig(
+  env: Env = process.env,
+  opts: {
+    version?: string;
+    cwd?: string /** Tooling that only reads must not invent and store a key. */;
+    persistMasterKey?: boolean;
+  } = {},
+): Config {
   const cwd = opts.cwd ?? process.cwd();
   const environment = (env.OMNIFLOW_ENV ?? 'production') as EnvironmentName;
-  if (!['development', 'staging', 'production'].includes(environment)) fail('OMNIFLOW_ENV', 'must be development, staging or production');
+  if (!['development', 'staging', 'production'].includes(environment))
+    fail('OMNIFLOW_ENV', 'must be development, staging or production');
 
   const dataDir = resolve(cwd, env.OMNIFLOW_DATA_DIR ?? './data');
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -74,7 +85,10 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
   }
 
   const defaults = defaultAdapterConfig();
-  const allowedCommands = (env.OMNIFLOW_SHELL_ALLOWED_COMMANDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  const allowedCommands = (env.OMNIFLOW_SHELL_ALLOWED_COMMANDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const llmKey = env.OMNIFLOW_LLM_API_KEY ?? env.ANTHROPIC_API_KEY;
 
   const adapters: AdapterConfig = {
@@ -84,7 +98,10 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
     storage: { ...defaults.storage, root: resolve(cwd, env.OMNIFLOW_STORAGE_DIR ?? join(dataDir, 'files')) },
     datasources: json<Record<string, string>>(env, 'OMNIFLOW_DATASOURCES', {}),
     channels: json<Record<string, string>>(env, 'OMNIFLOW_CHANNELS', {}),
-    email: { ...(env.OMNIFLOW_SMTP_URL ? { smtpUrl: env.OMNIFLOW_SMTP_URL } : {}), ...(env.OMNIFLOW_SMTP_FROM ? { from: env.OMNIFLOW_SMTP_FROM } : {}) },
+    email: {
+      ...(env.OMNIFLOW_SMTP_URL ? { smtpUrl: env.OMNIFLOW_SMTP_URL } : {}),
+      ...(env.OMNIFLOW_SMTP_FROM ? { from: env.OMNIFLOW_SMTP_FROM } : {}),
+    },
     llm: {
       ...defaults.llm,
       ...(llmKey ? { apiKey: llmKey } : {}),
@@ -92,14 +109,22 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
       ...(env.OMNIFLOW_LLM_BASE_URL ? { baseUrl: env.OMNIFLOW_LLM_BASE_URL } : {}),
     },
   };
-  for (const [name, cmd] of Object.entries(allowedCommands)) if (!cmd.startsWith('/')) fail('OMNIFLOW_SHELL_ALLOWED_COMMANDS', `entry ${name} ('${cmd}') must be an absolute path`);
+  for (const [name, cmd] of Object.entries(allowedCommands))
+    if (!cmd.startsWith('/'))
+      fail('OMNIFLOW_SHELL_ALLOWED_COMMANDS', `entry ${name} ('${cmd}') must be an absolute path`);
 
-  const alertChannels = (env.OMNIFLOW_ALERT_CHANNELS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  for (const c of alertChannels) if (!(c in adapters.channels)) fail('OMNIFLOW_ALERT_CHANNELS', `names channel '${c}', which is not defined in OMNIFLOW_CHANNELS`);
+  const alertChannels = (env.OMNIFLOW_ALERT_CHANNELS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const c of alertChannels)
+    if (!(c in adapters.channels))
+      fail('OMNIFLOW_ALERT_CHANNELS', `names channel '${c}', which is not defined in OMNIFLOW_CHANNELS`);
 
   const port = int(env, 'OMNIFLOW_PORT', 8080, 1, 65535);
   const logLevel = (env.OMNIFLOW_LOG_LEVEL ?? 'info') as LogLevel;
-  if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel)) fail('OMNIFLOW_LOG_LEVEL', 'must be debug, info, warn, error or silent');
+  if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel))
+    fail('OMNIFLOW_LOG_LEVEL', 'must be debug, info, warn, error or silent');
 
   return {
     environment,
@@ -110,7 +135,10 @@ export function loadConfig(env: Env = process.env, opts: { version?: string; cwd
     logLevel,
     masterKey,
     masterKeySource,
-    previousMasterKeys: (env.OMNIFLOW_PREVIOUS_MASTER_KEYS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    previousMasterKeys: (env.OMNIFLOW_PREVIOUS_MASTER_KEYS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
     admin: { email: env.OMNIFLOW_ADMIN_EMAIL ?? 'admin@omniflow.local', password: env.OMNIFLOW_ADMIN_PASSWORD },
     adapters,
     policyDir: resolve(cwd, env.OMNIFLOW_POLICY_DIR ?? './policies'),

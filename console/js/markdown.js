@@ -52,7 +52,9 @@ const splitRow = (line) =>
     .map((c) => c.trim().replace(/\\\|/g, '|'));
 
 export function markdownToAst(src) {
-  const lines = String(src ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const lines = String(src ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
   const blocks = [];
   let i = 0;
   while (i < lines.length) {
@@ -94,7 +96,12 @@ export function markdownToAst(src) {
       blocks.push({ t: 'quote', c: parseInline(q.join(' ')) });
     } else {
       const p = [];
-      while (i < lines.length && lines[i].trim() !== '' && !/^(#{1,4}\s|```|>|\s*[-*]\s+|\s*\d+\.\s+|\|)/.test(lines[i])) p.push(lines[i++]);
+      while (
+        i < lines.length &&
+        lines[i].trim() !== '' &&
+        !/^(#{1,4}\s|```|>|\s*[-*]\s+|\s*\d+\.\s+|\|)/.test(lines[i])
+      )
+        p.push(lines[i++]);
       if (p.length === 0) p.push(lines[i++]);
       blocks.push({ t: 'p', c: parseInline(p.join(' ')) });
     }
@@ -114,7 +121,15 @@ function inline(nodes) {
       case 'em':
         return h('em', {}, inline(n.c));
       case 'link':
-        return h('a', { href: n.href, rel: 'noopener noreferrer', ...(n.href.startsWith('#') || n.href.startsWith('/') ? {} : { target: '_blank' }) }, inline(n.c));
+        return h(
+          'a',
+          {
+            href: n.href,
+            rel: 'noopener noreferrer',
+            ...(n.href.startsWith('#') || n.href.startsWith('/') ? {} : { target: '_blank' }),
+          },
+          inline(n.c),
+        );
       default:
         return '';
     }
@@ -142,10 +157,45 @@ export function renderMarkdown(src, opts = {}) {
         root.append(opts.onCode?.(b.lang, b.v) ?? h('pre', { class: 'code' }, h('code', {}, b.v)));
         break;
       case 'list':
-        root.append(h(b.ordered ? 'ol' : 'ul', {}, b.items.map((it) => h('li', {}, inline(it)))));
+        root.append(
+          h(
+            b.ordered ? 'ol' : 'ul',
+            {},
+            b.items.map((it) => h('li', {}, inline(it))),
+          ),
+        );
         break;
       case 'table':
-        root.append(h('div', { class: 'table-wrap' }, h('table', { class: 'table' }, h('thead', {}, h('tr', {}, b.head.map((c) => h('th', {}, inline(c))))), h('tbody', {}, b.rows.map((r) => h('tr', {}, r.map((c) => h('td', {}, inline(c)))))))));
+        root.append(
+          h(
+            'div',
+            { class: 'table-wrap' },
+            h(
+              'table',
+              { class: 'table' },
+              h(
+                'thead',
+                {},
+                h(
+                  'tr',
+                  {},
+                  b.head.map((c) => h('th', {}, inline(c))),
+                ),
+              ),
+              h(
+                'tbody',
+                {},
+                b.rows.map((r) =>
+                  h(
+                    'tr',
+                    {},
+                    r.map((c) => h('td', {}, inline(c))),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
         break;
       default:
         break;

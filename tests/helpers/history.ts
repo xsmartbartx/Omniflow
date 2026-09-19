@@ -1,12 +1,10 @@
 import { stringify } from 'yaml';
-import { createDefaultRegistry } from '../../capabilities/index.ts';
-import type { ErrorInfo } from '../../core/index.ts';
+import { createDefaultRegistry, defaultAdapterConfig } from '../../capabilities/index.ts';
+import type { ErrorInfo, ManualClock } from '../../core/index.ts';
 import { contentHash } from '../../core/index.ts';
 import { compile } from '../../orchestration/compiler/index.ts';
 import type { Plan } from '../../schemas/index.ts';
 import type { State, StepPatch } from '../../state/index.ts';
-import { defaultAdapterConfig } from '../../capabilities/index.ts';
-import type { ManualClock } from '../../core/index.ts';
 import { principal } from './state.ts';
 
 const caps = createDefaultRegistry(defaultAdapterConfig());
@@ -21,9 +19,19 @@ export const manifestOf = (name: string, steps: unknown[], extra: Record<string,
   ...extra,
 });
 
-export const echo = (id: string, value: unknown = 1, extra: Record<string, unknown> = {}) => ({ id, type: 'capability', uses: 'util-echo@^1', with: { value }, ...extra });
+export const echo = (id: string, value: unknown = 1, extra: Record<string, unknown> = {}) => ({
+  id,
+  type: 'capability',
+  uses: 'util-echo@^1',
+  with: { value },
+  ...extra,
+});
 
-export function compileWf(name: string, steps: unknown[], extra: Record<string, unknown> = {}): { plan: Plan; hash: string; text: string } {
+export function compileWf(
+  name: string,
+  steps: unknown[],
+  extra: Record<string, unknown> = {},
+): { plan: Plan; hash: string; text: string } {
   const text = stringify(manifestOf(name, steps, extra));
   const r = compile(text, { environment: 'production', capabilities: caps, today: '2026-06-01' });
   if (!r.ok || !r.plan || !r.hash) throw new Error(`fixture does not compile: ${JSON.stringify(r.errors)}`);
@@ -31,10 +39,26 @@ export function compileWf(name: string, steps: unknown[], extra: Record<string, 
 }
 
 /** Publish a compiled workflow straight into the registry store and make it stable. */
-export function publish(state: State, name: string, steps: unknown[], extra: Record<string, unknown> = {}, mutate?: (p: Plan) => void): Plan {
+export function publish(
+  state: State,
+  name: string,
+  steps: unknown[],
+  extra: Record<string, unknown> = {},
+  mutate?: (p: Plan) => void,
+): Plan {
   const { plan, hash, text } = compileWf(name, steps, extra);
   mutate?.(plan);
-  state.registry.insertVersion({ tenant: 'default', name, version: '1.0.0', manifestText: text, manifestHash: contentHash(text), planHash: hash, plan, environment: 'production', publishedBy: 'test' });
+  state.registry.insertVersion({
+    tenant: 'default',
+    name,
+    version: '1.0.0',
+    manifestText: text,
+    manifestHash: contentHash(text),
+    planHash: hash,
+    plan,
+    environment: 'production',
+    publishedBy: 'test',
+  });
   state.registry.patchSettings('default', name, { stableVersion: '1.0.0' }, 'test');
   return plan;
 }
@@ -79,7 +103,13 @@ export function addRun(state: State & { clock: ManualClock }, spec: RunSpec): st
   if (spec.cost) state.runs.patchRun(run.id, { cost: spec.cost });
   if (status === 'running') return run.id;
   state.clock.advance(spec.durationMs ?? 1000);
-  state.runs.transition(run.id, status, status === 'failed' ? { error: spec.error ?? { code: 'BOOM', message: 'boom', class: 'systemic', retryable: false } } : {});
+  state.runs.transition(
+    run.id,
+    status,
+    status === 'failed'
+      ? { error: spec.error ?? { code: 'BOOM', message: 'boom', class: 'systemic', retryable: false } }
+      : {},
+  );
   return run.id;
 }
 

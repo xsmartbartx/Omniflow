@@ -38,7 +38,11 @@ export function number(n) {
 }
 
 export function shortHash(hash, n = 12) {
-  return hash ? String(hash).replace(/^sha256:/, '').slice(0, n) : '—';
+  return hash
+    ? String(hash)
+        .replace(/^sha256:/, '')
+        .slice(0, n)
+    : '—';
 }
 
 export function truncate(s, n = 80) {
@@ -49,7 +53,9 @@ export function truncate(s, n = 80) {
 export function timestamp(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
+  return Number.isNaN(d.getTime())
+    ? String(iso)
+    : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 }
 
 /** How a status (or severity) should be coloured. */

@@ -95,11 +95,24 @@ export class AlertManager {
   restore(): void {
     this.open.clear();
     for (const t of this.st.identity.listTenants()) {
-      const events = this.st.events.list({ tenant: t.id, types: ['alert.raised', 'alert.resolved'], order: 'asc', limit: 5000 });
+      const events = this.st.events.list({
+        tenant: t.id,
+        types: ['alert.raised', 'alert.resolved'],
+        order: 'asc',
+        limit: 5000,
+      });
       for (const e of events) {
         const d = e.data as { key: string; severity?: AlertSeverity; title?: string; message?: string };
         if (e.type === 'alert.raised') {
-          this.open.set(idOf(t.id, d.key), { tenant: t.id, key: d.key, severity: d.severity ?? 'warning', title: d.title ?? d.key, message: d.message ?? '', raisedAt: e.ts, lastNotifiedAt: e.ts });
+          this.open.set(idOf(t.id, d.key), {
+            tenant: t.id,
+            key: d.key,
+            severity: d.severity ?? 'warning',
+            title: d.title ?? d.key,
+            message: d.message ?? '',
+            raisedAt: e.ts,
+            lastNotifiedAt: e.ts,
+          });
         } else this.open.delete(idOf(t.id, d.key));
       }
     }
@@ -109,7 +122,10 @@ export class AlertManager {
     if (this.timer) return;
     this.restore();
     this.nextAuditCheck = this.clock.now().getTime() + this.cfg.auditVerifyEveryMs;
-    this.timer = setInterval(() => void this.tick().catch((e) => this.log.error('alert tick failed', { error: e })), this.cfg.intervalMs);
+    this.timer = setInterval(
+      () => void this.tick().catch((e) => this.log.error('alert tick failed', { error: e })),
+      this.cfg.intervalMs,
+    );
     this.timer.unref();
   }
 
@@ -121,7 +137,9 @@ export class AlertManager {
   active(tenant: string): Alert[] {
     return [...this.open.values()]
       .filter((a) => a.tenant === tenant)
-      .sort((a, b) => (a.severity === b.severity ? a.raisedAt.localeCompare(b.raisedAt) : a.severity === 'critical' ? -1 : 1))
+      .sort((a, b) =>
+        a.severity === b.severity ? a.raisedAt.localeCompare(b.raisedAt) : a.severity === 'critical' ? -1 : 1,
+      )
       .map((a) => ({ ...a }));
   }
 
@@ -151,7 +169,12 @@ export class AlertManager {
           if (!existing) {
             const alert: Alert = { tenant: t.id, ...c, raisedAt: now, lastNotifiedAt: now };
             this.open.set(idOf(t.id, c.key), alert);
-            this.st.events.append({ tenant: t.id, type: 'alert.raised', actor: { type: 'system', id: 'alert-manager' }, data: { key: c.key, severity: c.severity, title: c.title, message: c.message } });
+            this.st.events.append({
+              tenant: t.id,
+              type: 'alert.raised',
+              actor: { type: 'system', id: 'alert-manager' },
+              data: { key: c.key, severity: c.severity, title: c.title, message: c.message },
+            });
             raised++;
             await this.deliver(alert, 'raised');
           } else {
@@ -169,7 +192,12 @@ export class AlertManager {
           // The audit check runs rarely; do not "resolve" an integrity alert just because we did not look this tick.
           if (alert.key === 'audit-integrity' && !auditDue) continue;
           this.open.delete(id);
-          this.st.events.append({ tenant: t.id, type: 'alert.resolved', actor: { type: 'system', id: 'alert-manager' }, data: { key: alert.key, openForMs: this.clock.now().getTime() - Date.parse(alert.raisedAt) } });
+          this.st.events.append({
+            tenant: t.id,
+            type: 'alert.resolved',
+            actor: { type: 'system', id: 'alert-manager' },
+            data: { key: alert.key, openForMs: this.clock.now().getTime() - Date.parse(alert.raisedAt) },
+          });
           resolved++;
           await this.deliver(alert, 'resolved');
         }
@@ -188,7 +216,12 @@ export class AlertManager {
 
     for (const o of this.st.analytics.recentOutcomes(tenant, iso(now - this.cfg.failureWindowMs))) {
       if (o.finished < this.cfg.failureMinRuns || ratio(o.failed, o.finished) < this.cfg.failureRate) continue;
-      const last = this.st.runs.listRuns({ tenant, workflow: o.workflow, status: ['failed', 'rolled-back', 'compensation-failed'], limit: 1 })[0];
+      const last = this.st.runs.listRuns({
+        tenant,
+        workflow: o.workflow,
+        status: ['failed', 'rolled-back', 'compensation-failed'],
+        limit: 1,
+      })[0];
       out.push({
         key: `workflow-failing:${o.workflow}`,
         severity: ratio(o.failed, o.finished) >= 0.8 ? 'critical' : 'warning',
@@ -209,7 +242,8 @@ export class AlertManager {
     }
 
     const byWorkflow = new Map<string, number>();
-    for (const r of this.st.analytics.stalledRuns(tenant, iso(now - this.cfg.stalledMs))) byWorkflow.set(r.workflow, (byWorkflow.get(r.workflow) ?? 0) + 1);
+    for (const r of this.st.analytics.stalledRuns(tenant, iso(now - this.cfg.stalledMs)))
+      byWorkflow.set(r.workflow, (byWorkflow.get(r.workflow) ?? 0) + 1);
     for (const [workflow, n] of byWorkflow) {
       out.push({
         key: `runs-stalled:${workflow}`,
@@ -261,7 +295,11 @@ export class AlertManager {
   }
 
   private async deliver(alert: Alert, event: AlertEvent): Promise<void> {
-    this.log[alert.severity === 'critical' ? 'error' : 'warn'](`alert ${event}`, { key: alert.key, tenant: alert.tenant, title: alert.title });
+    this.log[alert.severity === 'critical' ? 'error' : 'warn'](`alert ${event}`, {
+      key: alert.key,
+      tenant: alert.tenant,
+      title: alert.title,
+    });
     if (!this.notify) return;
     try {
       await this.notify({ ...alert }, event);
@@ -273,6 +311,11 @@ export class AlertManager {
 
 /** Plain-text rendering shared by every channel. */
 export function formatAlert(alert: Alert, event: AlertEvent): string {
-  const tag = event === 'resolved' ? 'RESOLVED' : event === 'reminder' ? `STILL ${alert.severity.toUpperCase()}` : alert.severity.toUpperCase();
+  const tag =
+    event === 'resolved'
+      ? 'RESOLVED'
+      : event === 'reminder'
+        ? `STILL ${alert.severity.toUpperCase()}`
+        : alert.severity.toUpperCase();
   return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(OmniFlow, tenant ${alert.tenant})`;
 }

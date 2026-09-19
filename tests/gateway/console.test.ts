@@ -18,7 +18,15 @@ describe('the web console is served by the gateway', () => {
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.text).toContain('<div id="app">');
     const csp = String(res.headers['content-security-policy']);
-    for (const directive of ["default-src 'self'", "script-src 'self'", "style-src 'self'", "object-src 'none'", "frame-ancestors 'none'", "base-uri 'none'"]) expect(csp).toContain(directive);
+    for (const directive of [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "base-uri 'none'",
+    ])
+      expect(csp).toContain(directive);
     expect(csp).not.toContain('unsafe-inline');
     expect(csp).not.toContain('unsafe-eval');
     expect(res.headers['cache-control']).toBe('no-cache');
@@ -56,7 +64,13 @@ describe('the web console is served by the gateway', () => {
   });
 
   it('cannot be used to read files outside the console directory', async () => {
-    for (const path of ['/../package.json', '/%2e%2e/package.json', '/js/../../package.json', '/..%2fpackage.json', '/js/%2e%2e/%2e%2e/server/config.ts']) {
+    for (const path of [
+      '/../package.json',
+      '/%2e%2e/package.json',
+      '/js/../../package.json',
+      '/..%2fpackage.json',
+      '/js/%2e%2e/%2e%2e/server/config.ts',
+    ]) {
       const res = await api.anon.get(path);
       expect(res.text, path).not.toContain('"name": "omniflow"');
       expect(res.text, path).not.toContain('loadConfig');

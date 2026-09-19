@@ -1,6 +1,9 @@
+import type { RegisteredCapability } from '../../capabilities/contract/types.ts';
+import { type CapabilityRegistry, exampleFromSchema } from '../../capabilities/index.ts';
 import {
   type Clock,
   collectReferences,
+  createRng,
   type ErrorInfo,
   evaluate,
   type Logger,
@@ -12,10 +15,7 @@ import {
   scanTemplates,
   scrubString,
   systemClock,
-  createRng,
 } from '../../core/index.ts';
-import { type CapabilityRegistry, exampleFromSchema } from '../../capabilities/index.ts';
-import type { RegisteredCapability } from '../../capabilities/contract/types.ts';
 import type { CapabilityContext } from '../../schemas/capability.ts';
 import type { ActiveLease, SecretBroker } from '../../security/secret-broker/index.ts';
 import { validateValue } from '../../security/validator/index.ts';
@@ -99,7 +99,12 @@ export class StepRuntime implements StepExecutor {
   private resolveCapability(ref: { name: string; version: string; hash: string }): RegisteredCapability | StepResult {
     const cap = this.d.registry.get(ref.name, ref.version);
     if (!cap) {
-      return this.failed('prepare', 0, { code: 'CAPABILITY_MISSING', message: `Capability ${ref.name}@${ref.version} is no longer registered`, class: 'systemic', retryable: false });
+      return this.failed('prepare', 0, {
+        code: 'CAPABILITY_MISSING',
+        message: `Capability ${ref.name}@${ref.version} is no longer registered`,
+        class: 'systemic',
+        retryable: false,
+      });
     }
     if (cap.hash !== ref.hash) {
       return this.failed('prepare', 0, {
@@ -119,7 +124,13 @@ export class StepRuntime implements StepExecutor {
   // ---------------------------------------------------------------- capability step
   async executeCapability(a: StepAttempt): Promise<StepResult> {
     const ref = a.step.capability;
-    if (!ref) return this.failed('prepare', 0, { code: 'PLAN_INVALID', message: 'Step has no capability', class: 'catastrophic', retryable: false });
+    if (!ref)
+      return this.failed('prepare', 0, {
+        code: 'PLAN_INVALID',
+        message: 'Step has no capability',
+        class: 'catastrophic',
+        retryable: false,
+      });
     const cap = this.resolveCapability(ref);
     if (!('adapter' in cap)) return cap;
     return this.invoke(a, {
@@ -138,7 +149,13 @@ export class StepRuntime implements StepExecutor {
     const started = this.clock.now().getTime();
     const step = a.step;
     const ref = step.capability;
-    if (!ref || !step.items) return this.failed('prepare', 0, { code: 'PLAN_INVALID', message: 'Map step is incomplete', class: 'catastrophic', retryable: false });
+    if (!ref || !step.items)
+      return this.failed('prepare', 0, {
+        code: 'PLAN_INVALID',
+        message: 'Map step is incomplete',
+        class: 'catastrophic',
+        retryable: false,
+      });
     const cap = this.resolveCapability(ref);
     if (!('adapter' in cap)) return cap;
 
@@ -146,14 +163,29 @@ export class StepRuntime implements StepExecutor {
     try {
       items = evaluate(parseExpressionField(step.items), a.scope, { seed: a.seed });
     } catch (e) {
-      return this.failed('prepare', 0, { code: 'MAP_ITEMS_INVALID', message: `Could not evaluate 'items': ${(e as Error).message}`, class: 'contract', retryable: false });
+      return this.failed('prepare', 0, {
+        code: 'MAP_ITEMS_INVALID',
+        message: `Could not evaluate 'items': ${(e as Error).message}`,
+        class: 'contract',
+        retryable: false,
+      });
     }
     if (!Array.isArray(items)) {
-      return this.failed('prepare', 0, { code: 'MAP_ITEMS_INVALID', message: "'items' did not evaluate to an array", class: 'contract', retryable: false });
+      return this.failed('prepare', 0, {
+        code: 'MAP_ITEMS_INVALID',
+        message: "'items' did not evaluate to an array",
+        class: 'contract',
+        retryable: false,
+      });
     }
     const n = items.length;
     if (n > (step.maxItems ?? 0)) {
-      return this.failed('prepare', 0, { code: 'MAP_TOO_LARGE', message: `Collection has ${n} items; maxItems is ${step.maxItems}`, class: 'contract', retryable: false });
+      return this.failed('prepare', 0, {
+        code: 'MAP_TOO_LARGE',
+        message: `Collection has ${n} items; maxItems is ${step.maxItems}`,
+        class: 'contract',
+        retryable: false,
+      });
     }
 
     const tol = step.errorTolerance;
@@ -220,7 +252,12 @@ export class StepRuntime implements StepExecutor {
 
     const durationMs = this.clock.now().getTime() - started;
     if (a.signal.aborted) {
-      return this.failed('execute', durationMs, { code: 'CANCELLED', message: 'Map step was cancelled', class: 'systemic', retryable: false });
+      return this.failed('execute', durationMs, {
+        code: 'CANCELLED',
+        message: 'Map step was cancelled',
+        class: 'systemic',
+        retryable: false,
+      });
     }
     if (failures.length > allowed) {
       const first = failures.sort((x, y) => x.index - y.index)[0]!;
@@ -243,10 +280,23 @@ export class StepRuntime implements StepExecutor {
   // ------------------------------------------------------------------ compensation
   async executeCompensation(a: StepAttempt): Promise<StepResult> {
     const comp = a.step.compensate;
-    if (!comp) return this.failed('prepare', 0, { code: 'PLAN_INVALID', message: 'Step has no compensation', class: 'catastrophic', retryable: false });
+    if (!comp)
+      return this.failed('prepare', 0, {
+        code: 'PLAN_INVALID',
+        message: 'Step has no compensation',
+        class: 'catastrophic',
+        retryable: false,
+      });
     const cap = this.resolveCapability(comp.capability);
     if (!('adapter' in cap)) return cap;
-    const retry = a.step.retry ?? { attempts: 3, backoff: 'exponential' as const, initialDelayMs: 500, maxDelayMs: 10_000, jitter: 0.2, retryOn: ['transient' as const, 'systemic' as const] };
+    const retry = a.step.retry ?? {
+      attempts: 3,
+      backoff: 'exponential' as const,
+      initialDelayMs: 500,
+      maxDelayMs: 10_000,
+      jitter: 0.2,
+      retryOn: ['transient' as const, 'systemic' as const],
+    };
     const rng = createRng(a.seed).fork(`${a.step.id}/comp`);
     let attempt = 0;
     for (;;) {
@@ -267,7 +317,13 @@ export class StepRuntime implements StepExecutor {
       if (res.kind === 'deferred') {
         attempt--;
         await sleep(res.retryAfterMs, a.signal);
-        if (a.signal.aborted) return this.failed('execute', 0, { code: 'CANCELLED', message: 'Compensation cancelled', class: 'systemic', retryable: false });
+        if (a.signal.aborted)
+          return this.failed('execute', 0, {
+            code: 'CANCELLED',
+            message: 'Compensation cancelled',
+            class: 'systemic',
+            retryable: false,
+          });
         continue;
       }
       if (shouldRetry(retry, attempt, res.error).retry) {
@@ -279,7 +335,17 @@ export class StepRuntime implements StepExecutor {
   }
 
   // --------------------------------------------------------------------- one call
-  private emit(a: StepAttempt, type: 'step.item.succeeded' | 'step.item.failed' | 'step.dry-run' | 'step.idempotent-replay' | 'secret.lease.issued' | 'secret.lease.revoked', data: Record<string, unknown>): void {
+  private emit(
+    a: StepAttempt,
+    type:
+      | 'step.item.succeeded'
+      | 'step.item.failed'
+      | 'step.dry-run'
+      | 'step.idempotent-replay'
+      | 'secret.lease.issued'
+      | 'secret.lease.revoked',
+    data: Record<string, unknown>,
+  ): void {
     this.d.events.append({ tenant: a.tenant, type, runId: a.runId, stepId: a.step.id, attempt: a.attempt, data });
   }
 
@@ -305,14 +371,22 @@ export class StepRuntime implements StepExecutor {
         });
       }
       const gate = this.d.breakers.check(decl.name);
-      if (!gate.allowed) return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
+      if (!gate.allowed)
+        return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
 
       // ---- Prepared: lease secrets, resolve and validate the input
       const names = secretNamesIn(p.withTemplate);
       try {
-        lease = names.length > 0
-          ? this.d.broker.lease({ tenant: a.tenant, runId: a.runId, stepId: a.step.id, names, ttlMs: p.timeoutMs + grace })
-          : this.d.broker.emptyLease();
+        lease =
+          names.length > 0
+            ? this.d.broker.lease({
+                tenant: a.tenant,
+                runId: a.runId,
+                stepId: a.step.id,
+                names,
+                ttlMs: p.timeoutMs + grace,
+              })
+            : this.d.broker.emptyLease();
       } catch (e) {
         this.d.breakers.release(decl.name);
         return this.failed('authorise', elapsed(), { ...toInfo(e), class: 'contract', retryable: false });
@@ -327,13 +401,26 @@ export class StepRuntime implements StepExecutor {
         if (p.keyTemplate !== undefined) key = String(resolveValue(p.keyTemplate, baseScope, { seed: a.seed }));
       } catch (e) {
         this.d.breakers.release(decl.name);
-        return this.failed('prepare', elapsed(), { code: 'INPUT_RESOLUTION_FAILED', message: scrubString((e as Error).message, { secretValues }), class: 'contract', retryable: false });
+        return this.failed('prepare', elapsed(), {
+          code: 'INPUT_RESOLUTION_FAILED',
+          message: scrubString((e as Error).message, { secretValues }),
+          class: 'contract',
+          retryable: false,
+        });
       }
       const valid = validateValue(decl.inputSchema, input);
       if (!valid.ok) {
         this.d.breakers.release(decl.name);
-        const msg = valid.issues.slice(0, 5).map((i) => `${i.path || 'input'}: ${i.message}`).join('; ');
-        return this.failed('prepare', elapsed(), { code: 'INPUT_INVALID', message: scrubString(`Input for '${decl.name}' is invalid — ${msg}`, { secretValues }), class: 'contract', retryable: false });
+        const msg = valid.issues
+          .slice(0, 5)
+          .map((i) => `${i.path || 'input'}: ${i.message}`)
+          .join('; ');
+        return this.failed('prepare', elapsed(), {
+          code: 'INPUT_INVALID',
+          message: scrubString(`Input for '${decl.name}' is invalid — ${msg}`, { secretValues }),
+          class: 'contract',
+          retryable: false,
+        });
       }
 
       const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
@@ -354,7 +441,9 @@ export class StepRuntime implements StepExecutor {
 
       // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
       if (a.dryRun && decl.dryRun === 'simulate') {
-        const out = p.cap.adapter.simulate ? await p.cap.adapter.simulate(ctx, valid.value) : exampleFromSchema(decl.outputSchema);
+        const out = p.cap.adapter.simulate
+          ? await p.cap.adapter.simulate(ctx, valid.value)
+          : exampleFromSchema(decl.outputSchema);
         this.emit(a, 'step.dry-run', { capability: decl.name, simulated: true });
         this.d.breakers.release(decl.name);
         return { kind: 'succeeded', output: out, cost: 0, durationMs: elapsed(), simulated: true };
@@ -370,7 +459,11 @@ export class StepRuntime implements StepExecutor {
         }
         if (claim.state === 'busy') {
           this.d.breakers.release(decl.name);
-          return { kind: 'deferred', reason: `idempotency key '${key}' is being processed by ${claim.owner}`, retryAfterMs: 1000 };
+          return {
+            kind: 'deferred',
+            reason: `idempotency key '${key}' is being processed by ${claim.owner}`,
+            retryAfterMs: 1000,
+          };
         }
         claimed = true;
       }
@@ -396,11 +489,24 @@ export class StepRuntime implements StepExecutor {
       const checked = validateValue(p.outputSchema, output);
       if (!checked.ok) {
         this.d.breakers.release(decl.name);
-        const msg = checked.issues.slice(0, 5).map((i) => `${i.path || 'output'}: ${i.message}`).join('; ');
-        return this.failed('validate', elapsed(), { code: 'OUTPUT_INVALID', message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }), class: 'contract', retryable: true });
+        const msg = checked.issues
+          .slice(0, 5)
+          .map((i) => `${i.path || 'output'}: ${i.message}`)
+          .join('; ');
+        return this.failed('validate', elapsed(), {
+          code: 'OUTPUT_INVALID',
+          message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }),
+          class: 'contract',
+          retryable: true,
+        });
       }
       this.d.breakers.success(decl.name);
-      return { kind: 'succeeded', output: redactSecrets(checked.value, secretValues), cost: decl.costModel.unitsPerInvocation, durationMs: elapsed() };
+      return {
+        kind: 'succeeded',
+        output: redactSecrets(checked.value, secretValues),
+        cost: decl.costModel.unitsPerInvocation,
+        durationMs: elapsed(),
+      };
     } catch (e) {
       if (claimed && key !== undefined) this.d.idempotency.release(a.tenant, decl.name, key, p.owner);
       const err = this.classify(e, decl, secretValues, a.signal, p.timeoutMs);
@@ -419,13 +525,24 @@ export class StepRuntime implements StepExecutor {
   }
 
   /** Map anything an adapter throws onto the failure taxonomy, honouring the capability's declared failure modes. */
-  private classify(e: unknown, decl: RegisteredCapability['declaration'], secretValues: string[], parent: AbortSignal, timeoutMs: number): ErrorInfo {
+  private classify(
+    e: unknown,
+    decl: RegisteredCapability['declaration'],
+    secretValues: string[],
+    parent: AbortSignal,
+    timeoutMs: number,
+  ): ErrorInfo {
     let info: ErrorInfo;
     const reason = (e as { name?: string } | undefined)?.name;
     if (parent.aborted) {
       info = { code: 'CANCELLED', message: 'The step was cancelled', class: 'systemic', retryable: false };
     } else if (reason === 'TimeoutError' || (e instanceof Error && e.name === 'TimeoutError')) {
-      info = { code: 'STEP_TIMEOUT', message: `Step exceeded its ${timeoutMs}ms timeout`, class: 'transient', retryable: true };
+      info = {
+        code: 'STEP_TIMEOUT',
+        message: `Step exceeded its ${timeoutMs}ms timeout`,
+        class: 'transient',
+        retryable: true,
+      };
     } else if (e instanceof OmniflowError) {
       info = e.toInfo();
     } else {
@@ -457,5 +574,10 @@ function redactSecrets(value: unknown, secretValues: string[]): unknown {
   if (secretValues.length === 0) return value;
   const json = JSON.stringify(value);
   if (!secretValues.some((s) => s.length >= 4 && json.includes(s))) return value;
-  return JSON.parse(secretValues.reduce((acc, s) => (s.length >= 4 ? acc.split(JSON.stringify(s).slice(1, -1)).join('[REDACTED]') : acc), json));
+  return JSON.parse(
+    secretValues.reduce(
+      (acc, s) => (s.length >= 4 ? acc.split(JSON.stringify(s).slice(1, -1)).join('[REDACTED]') : acc),
+      json,
+    ),
+  );
 }

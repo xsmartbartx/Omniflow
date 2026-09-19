@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createKeyring, decryptSecret, encryptSecret, generateMasterKey, SecretBroker } from '../../security/secret-broker/index.ts';
 import { redact } from '../../core/index.ts';
+import {
+  createKeyring,
+  decryptSecret,
+  encryptSecret,
+  generateMasterKey,
+  SecretBroker,
+} from '../../security/secret-broker/index.ts';
 import { makeState, type TestState } from '../helpers/state.ts';
 
 let s: TestState;
@@ -108,7 +114,10 @@ describe('secret broker', () => {
   it('scrubs leased values from anything that might be logged', () => {
     broker.put('default', 'TOKEN', 'abc123-very-secret', 'u');
     const lease = broker.lease({ tenant: 'default', names: ['TOKEN'], ttlMs: 1000 });
-    const out = redact({ message: 'upstream said: bad token abc123-very-secret' }, { secretValues: lease.values() }) as { message: string };
+    const out = redact(
+      { message: 'upstream said: bad token abc123-very-secret' },
+      { secretValues: lease.values() },
+    ) as { message: string };
     expect(out.message).not.toContain('abc123-very-secret');
   });
 
@@ -125,7 +134,10 @@ describe('secret broker', () => {
     const rotated = createKeyring(newKey, [key]);
     expect(broker.rotate(rotated)).toBe(2);
     expect(s.secrets.get('default', 'A')!.keyId).toBe(rotated.primaryId);
-    expect(broker.lease({ tenant: 'default', names: ['A', 'B'], ttlMs: 1000 }).scope()).toEqual({ A: 'value-a', B: 'value-b' });
+    expect(broker.lease({ tenant: 'default', names: ['A', 'B'], ttlMs: 1000 }).scope()).toEqual({
+      A: 'value-a',
+      B: 'value-b',
+    });
     // A fresh broker with only the new key can read them
     const fresh = new SecretBroker(s.secrets, createKeyring(newKey), s.clock);
     expect(fresh.lease({ tenant: 'default', names: ['A'], ttlMs: 1000 }).get('A')).toBe('value-a');

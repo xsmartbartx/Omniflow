@@ -14,7 +14,14 @@ const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
 
 export function makeStyle(enabled: boolean): Style {
   const wrap = (open: number, close: number) => (s: string) => (enabled ? `${ESC}[${open}m${s}${ESC}[${close}m` : s);
-  return { bold: wrap(1, 22), dim: wrap(2, 22), red: wrap(31, 39), green: wrap(32, 39), yellow: wrap(33, 39), cyan: wrap(36, 39) };
+  return {
+    bold: wrap(1, 22),
+    dim: wrap(2, 22),
+    red: wrap(31, 39),
+    green: wrap(32, 39),
+    yellow: wrap(33, 39),
+    cyan: wrap(36, 39),
+  };
 }
 
 /** Render a validation issue compiler-style, with the offending source line and a caret. */
@@ -39,7 +46,11 @@ export function renderIssue(style: Style, file: string, source: string | undefin
 export function table(rows: string[][], headers: string[], style: Style): string {
   const all = [headers, ...rows];
   const widths = headers.map((_, i) => Math.max(...all.map((r) => visibleLength(r[i] ?? ''))));
-  const line = (r: string[]) => r.map((c, i) => c + ' '.repeat(widths[i]! - visibleLength(c))).join('  ').trimEnd();
+  const line = (r: string[]) =>
+    r
+      .map((c, i) => c + ' '.repeat(widths[i]! - visibleLength(c)))
+      .join('  ')
+      .trimEnd();
   return [style.bold(line(headers)), ...rows.map(line)].join('\n');
 }
 
@@ -47,8 +58,21 @@ const visibleLength = (s: string) => s.replace(ANSI, '').length;
 
 export function statusColour(style: Style, status: string): string {
   if (['succeeded', 'approved', 'published', 'ok', 'closed'].includes(status)) return style.green(status);
-  if (['failed', 'compensation-failed', 'denied', 'rejected', 'killed', 'open'].includes(status)) return style.red(status);
-  if (['running', 'queued', 'pending', 'waiting-approval', 'waiting-event', 'compensating', 'retry-wait', 'pending-approval'].includes(status)) return style.yellow(status);
+  if (['failed', 'compensation-failed', 'denied', 'rejected', 'killed', 'open'].includes(status))
+    return style.red(status);
+  if (
+    [
+      'running',
+      'queued',
+      'pending',
+      'waiting-approval',
+      'waiting-event',
+      'compensating',
+      'retry-wait',
+      'pending-approval',
+    ].includes(status)
+  )
+    return style.yellow(status);
   return status;
 }
 

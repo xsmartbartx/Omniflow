@@ -5,10 +5,10 @@ import {
   autonomyVerdict,
   checkBlastRadius,
   defaultPolicyConfig,
-  parsePolicyDocument,
   PolicyEngine,
-  roleAllows,
+  parsePolicyDocument,
   type RiskSummary,
+  roleAllows,
 } from '../../security/policy/index.ts';
 import { testRegistry } from '../helpers/registry.ts';
 
@@ -92,14 +92,28 @@ describe('RBAC', () => {
       reasonCode: 'PLATFORM_ADMIN_ONLY',
     });
     // A platform admin may act across tenants only for tenant management
-    expect(engine.decide({ principal: P(['admin']), action: 'tenant.manage', resource: { tenant: 'acme' } }).effect).toBe('allow');
-    expect(engine.decide({ principal: P(['admin']), action: 'workflow.run', resource: { tenant: 'acme' } }).effect).toBe('deny');
+    expect(
+      engine.decide({ principal: P(['admin']), action: 'tenant.manage', resource: { tenant: 'acme' } }).effect,
+    ).toBe('allow');
+    expect(
+      engine.decide({ principal: P(['admin']), action: 'workflow.run', resource: { tenant: 'acme' } }).effect,
+    ).toBe('deny');
   });
 
   it('enforces four-eyes on change approval', () => {
-    const self = engine.decide({ principal: P(['admin'], { id: 'usr_1' }), action: 'workflow.approve-change', resource: { changeAuthor: 'usr_1' } });
+    const self = engine.decide({
+      principal: P(['admin'], { id: 'usr_1' }),
+      action: 'workflow.approve-change',
+      resource: { changeAuthor: 'usr_1' },
+    });
     expect(self).toMatchObject({ effect: 'deny', reasonCode: 'SELF_APPROVAL' });
-    expect(engine.decide({ principal: P(['approver'], { id: 'usr_2' }), action: 'workflow.approve-change', resource: { changeAuthor: 'usr_1' } }).effect).toBe('allow');
+    expect(
+      engine.decide({
+        principal: P(['approver'], { id: 'usr_2' }),
+        action: 'workflow.approve-change',
+        resource: { changeAuthor: 'usr_1' },
+      }).effect,
+    ).toBe('allow');
   });
 });
 
@@ -111,8 +125,18 @@ describe('agents hold no execution authority (ADR-0002 D4)', () => {
     for (const a of ['workflow.read', 'workflow.draft', 'agent.invoke', 'run.read'] as const) {
       expect(engine.decide({ principal: agent, action: a }).effect, a).toBe('allow');
     }
-    for (const a of ['workflow.publish', 'workflow.run', 'secret.write', 'approval.decide', 'workflow.manage', 'user.manage'] as const) {
-      expect(engine.decide({ principal: agent, action: a })).toMatchObject({ effect: 'deny', reasonCode: 'AGENT_NO_EXECUTION' });
+    for (const a of [
+      'workflow.publish',
+      'workflow.run',
+      'secret.write',
+      'approval.decide',
+      'workflow.manage',
+      'user.manage',
+    ] as const) {
+      expect(engine.decide({ principal: agent, action: a })).toMatchObject({
+        effect: 'deny',
+        reasonCode: 'AGENT_NO_EXECUTION',
+      });
     }
     expect(engine.can(agent, 'workflow.publish')).toBe(false);
   });
@@ -123,39 +147,73 @@ describe('publish gates and environment', () => {
   const author = P(['author']);
 
   it('allows a pure production workflow without ceremony', () => {
-    const d = engine.decide({ principal: author, action: 'workflow.publish', resource: { plan: compilePlan([pureStep]) } });
+    const d = engine.decide({
+      principal: author,
+      action: 'workflow.publish',
+      resource: { plan: compilePlan([pureStep]) },
+    });
     expect(d.effect).toBe('allow');
   });
 
   it('requires approval for effectful production workflows', () => {
-    const d = engine.decide({ principal: author, action: 'workflow.publish', resource: { plan: compilePlan([chargeStep()]) } });
-    expect(d).toMatchObject({ effect: 'require-approval', reasonCode: 'PROD_EFFECTFUL_NEEDS_APPROVAL', requiredApprovals: 1 });
+    const d = engine.decide({
+      principal: author,
+      action: 'workflow.publish',
+      resource: { plan: compilePlan([chargeStep()]) },
+    });
+    expect(d).toMatchObject({
+      effect: 'require-approval',
+      reasonCode: 'PROD_EFFECTFUL_NEEDS_APPROVAL',
+      requiredApprovals: 1,
+    });
   });
 
   it('does not gate the same workflow outside production', () => {
     const dev = new PolicyEngine(defaultPolicyConfig({ environment: 'development' }));
     const plan = compilePlan([chargeStep()]);
-    expect(dev.decide({ principal: author, action: 'workflow.publish', resource: { plan, environment: 'development' } }).effect).toBe('allow');
+    expect(
+      dev.decide({ principal: author, action: 'workflow.publish', resource: { plan, environment: 'development' } })
+        .effect,
+    ).toBe('allow');
   });
 
   it('requires approval for high criticality and high risk', () => {
     const plan = compilePlan([pureStep]);
-    expect(engine.decide({ principal: author, action: 'workflow.publish', resource: { plan, criticality: 'critical' } }).reasonCode).toBe('PROD_CRITICAL_NEEDS_APPROVAL');
+    expect(
+      engine.decide({ principal: author, action: 'workflow.publish', resource: { plan, criticality: 'critical' } })
+        .reasonCode,
+    ).toBe('PROD_CRITICAL_NEEDS_APPROVAL');
     const risk: RiskSummary = { score: 70, level: 'critical', blocking: false, findings: 3 };
-    expect(engine.decide({ principal: author, action: 'workflow.publish', resource: { plan, risk } }).reasonCode).toBe('HIGH_RISK_NEEDS_APPROVAL');
+    expect(engine.decide({ principal: author, action: 'workflow.publish', resource: { plan, risk } }).reasonCode).toBe(
+      'HIGH_RISK_NEEDS_APPROVAL',
+    );
   });
 
   it('denies publishing while blocking findings exist', () => {
     const risk: RiskSummary = { score: 40, level: 'high', blocking: true, findings: 1 };
-    const d = engine.decide({ principal: author, action: 'workflow.publish', resource: { plan: compilePlan([pureStep]), risk } });
+    const d = engine.decide({
+      principal: author,
+      action: 'workflow.publish',
+      resource: { plan: compilePlan([pureStep]), risk },
+    });
     expect(d).toMatchObject({ effect: 'deny', reasonCode: 'BLOCKING_FINDINGS' });
     // even an admin cannot publish through blocking findings
-    expect(engine.decide({ principal: P(['admin']), action: 'workflow.publish', resource: { plan: compilePlan([pureStep]), risk } }).effect).toBe('deny');
+    expect(
+      engine.decide({
+        principal: P(['admin']),
+        action: 'workflow.publish',
+        resource: { plan: compilePlan([pureStep]), risk },
+      }).effect,
+    ).toBe('deny');
   });
 
   it('can require more than one approver', () => {
     const strict = new PolicyEngine(defaultPolicyConfig({ publishApprovals: 2 }));
-    const d = strict.decide({ principal: author, action: 'workflow.publish', resource: { plan: compilePlan([chargeStep()]) } });
+    const d = strict.decide({
+      principal: author,
+      action: 'workflow.publish',
+      resource: { plan: compilePlan([chargeStep()]) },
+    });
     expect(d.requiredApprovals).toBe(2);
   });
 });
@@ -165,7 +223,14 @@ describe('cumulative scope analysis over the whole plan (T5)', () => {
     const engine = new PolicyEngine();
     const plan = compilePlan([
       { id: 'read', type: 'capability', uses: 'test-reader@^1' }, // db:read
-      { id: 'send', type: 'capability', uses: 'http-get@^1', dependsOn: ['read'], egress: ['x.example.com'], with: { url: 'https://x.example.com/' } }, // network:http
+      {
+        id: 'send',
+        type: 'capability',
+        uses: 'http-get@^1',
+        dependsOn: ['read'],
+        egress: ['x.example.com'],
+        with: { url: 'https://x.example.com/' },
+      }, // network:http
     ]);
     const d = engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan } });
     expect(d.effect).toBe('require-approval');
@@ -175,14 +240,27 @@ describe('cumulative scope analysis over the whole plan (T5)', () => {
 
   it('supports deny-level scope rules', () => {
     const engine = new PolicyEngine(
-      defaultPolicyConfig({ scopeRules: [{ scopes: ['db:read', 'network:http'], effect: 'deny', reason: 'forbidden here' }] }),
+      defaultPolicyConfig({
+        scopeRules: [{ scopes: ['db:read', 'network:http'], effect: 'deny', reason: 'forbidden here' }],
+      }),
     );
     const plan = compilePlan([
       { id: 'read', type: 'capability', uses: 'test-reader@^1' },
-      { id: 'send', type: 'capability', uses: 'http-get@^1', dependsOn: ['read'], egress: ['x.example.com'], with: { url: 'https://x.example.com/' } },
+      {
+        id: 'send',
+        type: 'capability',
+        uses: 'http-get@^1',
+        dependsOn: ['read'],
+        egress: ['x.example.com'],
+        with: { url: 'https://x.example.com/' },
+      },
     ]);
-    expect(engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan } }).effect).toBe('deny');
-    expect(engine.decide({ principal: P(['operator']), action: 'workflow.run', resource: { plan } }).effect).toBe('deny');
+    expect(engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan } }).effect).toBe(
+      'deny',
+    );
+    expect(engine.decide({ principal: P(['operator']), action: 'workflow.run', resource: { plan } }).effect).toBe(
+      'deny',
+    );
   });
 });
 
@@ -216,8 +294,12 @@ rules:
     expect(bad.ok).toBe(false);
     const dup = parsePolicyDocument(doc.replace('critical-needs-two', 'no-shell-in-prod'));
     expect(dup.issues.map((i) => i.code)).toContain('DUPLICATE_RULE');
-    expect(parsePolicyDocument(doc.replace('== "critical"', '== ')).issues.map((i) => i.code)).toContain('EXPRESSION_SYNTAX');
-    expect(parsePolicyDocument(doc.replace('workflow.criticality', 'process.env')).issues.map((i) => i.code)).toContain('UNKNOWN_FACT');
+    expect(parsePolicyDocument(doc.replace('== "critical"', '== ')).issues.map((i) => i.code)).toContain(
+      'EXPRESSION_SYNTAX',
+    );
+    expect(parsePolicyDocument(doc.replace('workflow.criticality', 'process.env')).issues.map((i) => i.code)).toContain(
+      'UNKNOWN_FACT',
+    );
   });
 
   it('applies deny and require-approval rules over the plan facts', () => {
@@ -226,15 +308,32 @@ rules:
     expect(engine.ruleCount).toBe(2);
 
     const shell = compilePlan([
-      { id: 'legacy', type: 'capability', uses: 'test-shell@^1', with: { argv: ['/bin/true'] }, idempotencyKey: 'k', sunset: '2026-12-31' },
+      {
+        id: 'legacy',
+        type: 'capability',
+        uses: 'test-shell@^1',
+        with: { argv: ['/bin/true'] },
+        idempotencyKey: 'k',
+        sunset: '2026-12-31',
+      },
     ]);
     const denied = engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan: shell } });
-    expect(denied).toMatchObject({ effect: 'deny', reasonCode: 'POLICY_RULE_DENIED', ruleIds: ['house-rules/no-shell-in-prod'] });
+    expect(denied).toMatchObject({
+      effect: 'deny',
+      reasonCode: 'POLICY_RULE_DENIED',
+      ruleIds: ['house-rules/no-shell-in-prod'],
+    });
 
     const pure = compilePlan([pureStep]);
-    const crit = engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan: pure, criticality: 'critical' } });
+    const crit = engine.decide({
+      principal: P(['author']),
+      action: 'workflow.publish',
+      resource: { plan: pure, criticality: 'critical' },
+    });
     expect(crit).toMatchObject({ effect: 'require-approval', requiredApprovals: 2 });
-    expect(engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan: pure } }).effect).toBe('allow');
+    expect(
+      engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan: pure } }).effect,
+    ).toBe('allow');
   });
 
   it('fails closed when a deny rule cannot be evaluated', () => {
@@ -246,7 +345,13 @@ rules:
       rules: [{ id: 'r', effect: 'deny', when: 'plan.analysis.stepCount + "x" > 1', reason: 'x' }],
     }).document!;
     engine.loadDocuments([broken]);
-    expect(engine.decide({ principal: P(['author']), action: 'workflow.publish', resource: { plan: compilePlan([pureStep]) } }).effect).toBe('deny');
+    expect(
+      engine.decide({
+        principal: P(['author']),
+        action: 'workflow.publish',
+        resource: { plan: compilePlan([pureStep]) },
+      }).effect,
+    ).toBe('deny');
   });
 });
 
@@ -266,10 +371,9 @@ describe('autonomy tiers (§8.3)', () => {
     // A reversible effectful step on internal data, within the cost ceiling, is inside the radius.
     expect(autonomyVerdict('T3', 'production', effectful, undefined, 100).mode).toBe('publish');
     // The same workflow handling confidential data is outside it.
-    const confidential = compilePlan(
-      [chargeStep({ with: { amount: 1, customer: '${{ inputs.cust }}' } })],
-      { inputs: { cust: { type: 'string', default: 'c', sensitivity: 'confidential' } } },
-    );
+    const confidential = compilePlan([chargeStep({ with: { amount: 1, customer: '${{ inputs.cust }}' } })], {
+      inputs: { cust: { type: 'string', default: 'c', sensitivity: 'confidential' } },
+    });
     const v = autonomyVerdict('T3', 'production', confidential, undefined, 100);
     expect(v.mode).toBe('change-request');
     expect(v.reason).toContain('confidential');
@@ -284,7 +388,14 @@ describe('autonomy tiers (§8.3)', () => {
 
   it('reports every blast-radius violation', () => {
     const shell = compilePlan([
-      { id: 'legacy', type: 'capability', uses: 'test-shell@^1', with: { argv: ['/bin/true'] }, idempotencyKey: 'k', sunset: '2026-12-31' },
+      {
+        id: 'legacy',
+        type: 'capability',
+        uses: 'test-shell@^1',
+        with: { argv: ['/bin/true'] },
+        idempotencyKey: 'k',
+        sunset: '2026-12-31',
+      },
     ]);
     const r = checkBlastRadius(shell, undefined, 0);
     expect(r.withinRadius).toBe(false);

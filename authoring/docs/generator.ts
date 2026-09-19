@@ -7,7 +7,10 @@ import { describeCron } from '../agents/explainer.ts';
  */
 
 const esc = (s: string) => s.replace(/"/g, '#quot;').replace(/[<>]/g, (c) => (c === '<' ? '#lt;' : '#gt;'));
-const cell = (s: unknown) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const cell = (s: unknown) =>
+  String(s ?? '')
+    .replace(/\|/g, '\\|')
+    .replace(/\n/g, ' ');
 
 /** The plan as a Mermaid flowchart: shape = step kind, colour = effect, dotted = conditional, red = error route. */
 export function workflowMermaid(plan: Plan): string {
@@ -56,9 +59,14 @@ export function workflowMermaid(plan: Plan): string {
     for (const d of s.dependsOn) {
       const from = node.get(d);
       if (!from) continue;
-      lines.push(s.when ? `  ${from} -.->|"${esc(s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when)}"| ${id}` : `  ${from} --> ${id}`);
+      lines.push(
+        s.when
+          ? `  ${from} -.->|"${esc(s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when)}"| ${id}`
+          : `  ${from} --> ${id}`,
+      );
     }
-    if (typeof s.onError === 'object' && s.onError && node.has(s.onError.routeTo)) lines.push(`  ${id} -. "on error" .-> ${node.get(s.onError.routeTo)}`);
+    if (typeof s.onError === 'object' && s.onError && node.has(s.onError.routeTo))
+      lines.push(`  ${id} -. "on error" .-> ${node.get(s.onError.routeTo)}`);
   }
   lines.push('  classDef effectful fill:#fdecea,stroke:#c0392b,color:#7b241c');
   lines.push('  classDef idempotent fill:#fef9e7,stroke:#b7950b,color:#7d6608');
@@ -93,7 +101,11 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     `| Version | ${w.version} |`,
     `| Owner | ${cell(w.owner)}${w.team ? ` (${cell(w.team)})` : ''} |`,
     `| Criticality | ${w.criticality} |`,
-    ...(ctx.settings ? [`| State | ${ctx.settings.killed ? 'killed' : ctx.settings.enabled ? 'enabled' : 'disabled'} · autonomy ${ctx.settings.autonomyTier} |`] : []),
+    ...(ctx.settings
+      ? [
+          `| State | ${ctx.settings.killed ? 'killed' : ctx.settings.enabled ? 'enabled' : 'disabled'} · autonomy ${ctx.settings.autonomyTier} |`,
+        ]
+      : []),
     `| Size | ${plan.analysis.stepCount} steps · depth ${plan.analysis.depth} · worst-case cost ${plan.analysis.maxCost} |`,
     '',
     '## Flow',
@@ -123,9 +135,18 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   if (inputs.length === 0) out.push('_None._');
   else {
     out.push('| Name | Type | Required | Default | Description |', '|---|---|---|---|---|');
-    for (const [k, v] of inputs) out.push(`| \`${k}\` | ${v.type} | ${v.required ? 'yes' : 'no'} | ${v.default === undefined ? '' : `\`${cell(JSON.stringify(v.default))}\``} | ${cell(v.description)} |`);
+    for (const [k, v] of inputs)
+      out.push(
+        `| \`${k}\` | ${v.type} | ${v.required ? 'yes' : 'no'} | ${v.default === undefined ? '' : `\`${cell(JSON.stringify(v.default))}\``} | ${cell(v.description)} |`,
+      );
   }
-  out.push('', '## Steps', '', '| # | Step | Kind | Capability | Effect | Depends on | Timeout | Retries | Undo |', '|---|---|---|---|---|---|---|---|---|');
+  out.push(
+    '',
+    '## Steps',
+    '',
+    '| # | Step | Kind | Capability | Effect | Depends on | Timeout | Retries | Undo |',
+    '|---|---|---|---|---|---|---|---|---|',
+  );
   for (const s of ordered) {
     out.push(
       `| ${s.order + 1} | \`${s.id}\` | ${s.type} | ${s.capability ? `${s.capability.name}@${s.capability.version}` : ''} | ${s.effect ?? ''} | ${s.dependsOn.map((d) => `\`${d}\``).join(', ')} | ${s.timeoutMs ? `${s.timeoutMs / 1000}s` : ''} | ${s.retry ? s.retry.attempts - 1 : 0} | ${s.compensate ? `\`${s.compensate.capability.name}\`` : ''} |`,
@@ -136,7 +157,9 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     '',
     '## Analysis',
     '',
-    `- Effects: ${Object.entries(a.effects).map(([k, v]) => `${v} ${k}`).join(', ')}`,
+    `- Effects: ${Object.entries(a.effects)
+      .map(([k, v]) => `${v} ${k}`)
+      .join(', ')}`,
     `- Scopes required: ${a.scopes.length ? a.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`,
     `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside OmniFlow'}`,
     `- Data sensitivity: ${a.maxSensitivity}`,
@@ -144,39 +167,81 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   );
   if (ctx.risk) {
     out.push('', `## Risk review — ${ctx.risk.level} (${ctx.risk.score}/100)`, '');
-    out.push(...(ctx.risk.findings.length ? ctx.risk.findings.map((f) => `- **${f.severity}** ${f.message}${f.stepId ? ` (\`${f.stepId}\`)` : ''}`) : ['_No findings._']));
+    out.push(
+      ...(ctx.risk.findings.length
+        ? ctx.risk.findings.map((f) => `- **${f.severity}** ${f.message}${f.stepId ? ` (\`${f.stepId}\`)` : ''}`)
+        : ['_No findings._']),
+    );
   }
   if (ctx.versions?.length) {
     out.push('', '## Versions', '', '| Version | Status | Published | By |', '|---|---|---|---|');
-    for (const v of ctx.versions) out.push(`| ${v.version} | ${v.status} | ${v.publishedAt} | ${cell(v.publishedBy)} |`);
+    for (const v of ctx.versions)
+      out.push(`| ${v.version} | ${v.status} | ${v.publishedAt} | ${cell(v.publishedBy)} |`);
   }
   return `${out.join('\n')}\n`;
 }
 
 export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
-  const out: string[] = ['# Capability catalogue', '', 'Capabilities are the only way a workflow touches the outside world. Each one declares its contract, effect, scopes and reach.', ''];
+  const out: string[] = [
+    '# Capability catalogue',
+    '',
+    'Capabilities are the only way a workflow touches the outside world. Each one declares its contract, effect, scopes and reach.',
+    '',
+  ];
   for (const c of [...caps].sort((a, b) => a.name.localeCompare(b.name))) {
-    const props = (c.inputSchema as { properties?: Record<string, { type?: string; description?: string }>; required?: string[] }) ?? {};
+    const props =
+      (c.inputSchema as {
+        properties?: Record<string, { type?: string; description?: string }>;
+        required?: string[];
+      }) ?? {};
     out.push(`## ${c.name}@${c.version}`, '', c.description, '');
     out.push(`- **Effect:** ${c.effect} · **Family:** ${c.family} · **Dry run:** ${c.dryRun}`);
     out.push(`- **Scopes:** ${c.scopes.length ? c.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`);
-    out.push(`- **Network:** ${c.egress.mode === 'none' ? 'none' : c.egress.mode === 'static' ? c.egress.hosts?.join(', ') : c.egress.mode}`);
-    out.push(`- **Data classification:** ${c.dataClassification}${c.compensation ? ` · **Undo with:** \`${c.compensation}\`` : ''}`, '');
+    out.push(
+      `- **Network:** ${c.egress.mode === 'none' ? 'none' : c.egress.mode === 'static' ? c.egress.hosts?.join(', ') : c.egress.mode}`,
+    );
+    out.push(
+      `- **Data classification:** ${c.dataClassification}${c.compensation ? ` · **Undo with:** \`${c.compensation}\`` : ''}`,
+      '',
+    );
     const inputs = Object.entries(props.properties ?? {});
     if (inputs.length) {
       out.push('| Input | Type | Required | Notes |', '|---|---|---|---|');
-      for (const [k, v] of inputs) out.push(`| \`${k}\` | ${cell(Array.isArray(v?.type) ? v.type.join('/') : (v?.type ?? 'any'))} | ${props.required?.includes(k) ? 'yes' : ''} | ${cell(v?.description)} |`);
+      for (const [k, v] of inputs)
+        out.push(
+          `| \`${k}\` | ${cell(Array.isArray(v?.type) ? v.type.join('/') : (v?.type ?? 'any'))} | ${props.required?.includes(k) ? 'yes' : ''} | ${cell(v?.description)} |`,
+        );
       out.push('');
     }
     if (c.failureModes.length) {
-      out.push('Failure modes: ' + c.failureModes.map((f) => `\`${f.code}\` (${f.class}${f.retryable ? ', retryable' : ''})`).join(', '), '');
+      out.push(
+        'Failure modes: ' +
+          c.failureModes.map((f) => `\`${f.code}\` (${f.class}${f.retryable ? ', retryable' : ''})`).join(', '),
+        '',
+      );
     }
   }
   return `${out.join('\n')}\n`;
 }
 
-export function indexMarkdown(items: Array<{ name: string; description?: string | null; stableVersion?: string | null; criticality?: string | null; owner?: string | null }>): string {
-  const out = ['# Workflows', '', '| Workflow | Version | Criticality | Owner | Description |', '|---|---|---|---|---|'];
-  for (const w of [...items].sort((a, b) => a.name.localeCompare(b.name))) out.push(`| [${w.name}](${w.name}.md) | ${w.stableVersion ?? ''} | ${w.criticality ?? ''} | ${cell(w.owner)} | ${cell(w.description)} |`);
+export function indexMarkdown(
+  items: Array<{
+    name: string;
+    description?: string | null;
+    stableVersion?: string | null;
+    criticality?: string | null;
+    owner?: string | null;
+  }>,
+): string {
+  const out = [
+    '# Workflows',
+    '',
+    '| Workflow | Version | Criticality | Owner | Description |',
+    '|---|---|---|---|---|',
+  ];
+  for (const w of [...items].sort((a, b) => a.name.localeCompare(b.name)))
+    out.push(
+      `| [${w.name}](${w.name}.md) | ${w.stableVersion ?? ''} | ${w.criticality ?? ''} | ${cell(w.owner)} | ${cell(w.description)} |`,
+    );
   return `${out.join('\n')}\n`;
 }

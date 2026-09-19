@@ -23,7 +23,10 @@ export function insightRoutes(): RouteDef[] {
       summary: 'Alerts that are open now, and recent alert history',
       tag: 'Insight',
       action: 'workflow.read',
-      handler: ({ app, principal }) => ({ active: app.alerts.active(principal.tenant), history: app.alerts.history(principal.tenant, 50) }),
+      handler: ({ app, principal }) => ({
+        active: app.alerts.active(principal.tenant),
+        history: app.alerts.history(principal.tenant, 50),
+      }),
     },
     {
       method: 'POST',
@@ -34,7 +37,13 @@ export function insightRoutes(): RouteDef[] {
       status: 200,
       handler: ({ app, principal }) => {
         const r = app.analysis.run(principal.tenant);
-        return { findings: r.findings.length, raised: r.raised.length, suppressed: r.suppressed, resolved: r.resolved, proposals: r.raised };
+        return {
+          findings: r.findings.length,
+          raised: r.raised.length,
+          suppressed: r.suppressed,
+          resolved: r.resolved,
+          proposals: r.raised,
+        };
       },
     },
     {
@@ -45,7 +54,9 @@ export function insightRoutes(): RouteDef[] {
       action: 'workflow.read',
       schema: { querystring: obj({ status: proposalStatus, workflow: { type: 'string', maxLength: 64 } }) },
       handler: ({ app, principal, query }) => ({
-        items: app.state.authoring.listProposals(principal.tenant, query.status).filter((p) => !query.workflow || p.workflowName === query.workflow),
+        items: app.state.authoring
+          .listProposals(principal.tenant, query.status)
+          .filter((p) => !query.workflow || p.workflowName === query.workflow),
       }),
     },
     {
@@ -69,7 +80,8 @@ export function insightRoutes(): RouteDef[] {
       action: 'workflow.draft',
       schema: { params: obj({ id }, ['id']), body: obj({ status: { enum: ['accepted', 'dismissed'] } }, ['status']) },
       handler: ({ app, principal, params, body }) => {
-        if (!app.state.authoring.getProposal(params.id, principal.tenant)) throw new NotFoundError('Proposal', params.id);
+        if (!app.state.authoring.getProposal(params.id, principal.tenant))
+          throw new NotFoundError('Proposal', params.id);
         return app.state.authoring.decideProposal(params.id, body.status, principal.id);
       },
     },

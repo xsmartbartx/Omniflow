@@ -29,7 +29,11 @@ export class CircuitBreakers {
   private readonly clock: Clock;
   private readonly onChange: ((capability: string, state: BreakerState) => void) | undefined;
 
-  constructor(opts: Partial<BreakerOptions> = {}, clock: Clock = systemClock, onChange?: (c: string, s: BreakerState) => void) {
+  constructor(
+    opts: Partial<BreakerOptions> = {},
+    clock: Clock = systemClock,
+    onChange?: (c: string, s: BreakerState) => void,
+  ) {
     this.opts = { ...DEFAULT_BREAKER, ...opts };
     this.clock = clock;
     this.onChange = onChange;
@@ -99,7 +103,11 @@ export class CircuitBreakers {
     return Object.fromEntries(
       [...this.entries].map(([k, v]) => [
         k,
-        { state: v.state, failures: v.failures, ...(v.openedAt ? { openedAt: new Date(v.openedAt).toISOString() } : {}) },
+        {
+          state: v.state,
+          failures: v.failures,
+          ...(v.openedAt ? { openedAt: new Date(v.openedAt).toISOString() } : {}),
+        },
       ]),
     );
   }

@@ -148,7 +148,10 @@ export class Orchestrator {
   recover(): number {
     this.st.secrets.revokeOutstanding();
     let n = 0;
-    for (const run of this.st.runs.runsByStatus(['running', 'waiting-approval', 'waiting-event', 'compensating'], 10_000)) {
+    for (const run of this.st.runs.runsByStatus(
+      ['running', 'waiting-approval', 'waiting-event', 'compensating'],
+      10_000,
+    )) {
       n++;
       this.recoverRun(run);
       this.kick(run.id);
@@ -161,7 +164,11 @@ export class Orchestrator {
     let touched = 0;
     for (const s of this.st.runs.getSteps(run.id)) {
       if (s.status === 'running') {
-        this.st.runs.patchStep(run.id, s.stepId, { status: 'retry-wait', attempt: Math.max(0, s.attempt - 1), wakeAt: now });
+        this.st.runs.patchStep(run.id, s.stepId, {
+          status: 'retry-wait',
+          attempt: Math.max(0, s.attempt - 1),
+          wakeAt: now,
+        });
         this.event(run, 'step.recovered', { attempt: s.attempt }, s.stepId);
         touched++;
       }
@@ -226,7 +233,14 @@ export class Orchestrator {
       }
       if (!ok) {
         this.event(running, 'run.guard-failed', { guard: g.name, message: g.message ?? `Guard '${g.name}' failed` });
-        this.finishRun(running, 'failed', { error: { code: 'GUARD_FAILED', message: g.message ?? `Pre-run guard '${g.name}' failed`, class: 'business', retryable: false } });
+        this.finishRun(running, 'failed', {
+          error: {
+            code: 'GUARD_FAILED',
+            message: g.message ?? `Pre-run guard '${g.name}' failed`,
+            class: 'business',
+            retryable: false,
+          },
+        });
         return this.st.runs.getRun(runId);
       }
     }
@@ -239,9 +253,15 @@ export class Orchestrator {
     const run = this.st.runs.getRun(runId);
     if (!run) throw new ConflictError(`Run '${runId}' not found`);
     if (isTerminalRun(run.status)) return run;
-    const error: ErrorInfo = { code: 'CANCELLED', message: `Cancelled by ${actor.name ?? actor.id}: ${reason}`, class: 'business', retryable: false };
+    const error: ErrorInfo = {
+      code: 'CANCELLED',
+      message: `Cancelled by ${actor.name ?? actor.id}: ${reason}`,
+      class: 'business',
+      retryable: false,
+    };
     if (run.status === 'queued') return this.finishRun(run, 'cancelled', { error });
-    if (run.status === 'compensating') throw new ConflictError('Run is being rolled back and cannot be cancelled until compensation finishes');
+    if (run.status === 'compensating')
+      throw new ConflictError('Run is being rolled back and cannot be cancelled until compensation finishes');
     this.st.runs.patchRun(runId, { cancelRequested: true, error });
     for (const ac of this.drivers.get(runId)?.inflight.values() ?? []) ac.abort();
     this.kick(runId);
@@ -274,27 +294,43 @@ export class Orchestrator {
     const ps = this.plan(run).steps.find((x) => x.id === a.stepId);
     if (!ps) return;
     if (a.status === 'approved') {
-      this.succeedStep(run, ps, {
-        decision: 'approved',
-        by: a.decidedBy ?? 'unknown',
-        ...(a.comment ? { comment: a.comment } : {}),
-        decidedAt: a.decidedAt ?? this.clock.now().toISOString(),
-        ...(a.decidedBy === 'system:timeout' ? { timedOut: true } : {}),
-      }, { cost: 0, durationMs: 0 });
+      this.succeedStep(
+        run,
+        ps,
+        {
+          decision: 'approved',
+          by: a.decidedBy ?? 'unknown',
+          ...(a.comment ? { comment: a.comment } : {}),
+          decidedAt: a.decidedAt ?? this.clock.now().toISOString(),
+          ...(a.decidedBy === 'system:timeout' ? { timedOut: true } : {}),
+        },
+        { cost: 0, durationMs: 0 },
+      );
     } else {
       const timedOut = a.status === 'timed-out';
-      this.failStep(run, ps, {
-        code: timedOut ? 'APPROVAL_TIMEOUT' : 'APPROVAL_DENIED',
-        message: timedOut ? 'The approval request timed out and was denied' : `Approval denied by ${a.decidedBy ?? 'an approver'}${a.comment ? `: ${a.comment}` : ''}`,
-        class: 'business',
-        retryable: false,
-      }, 'approval');
+      this.failStep(
+        run,
+        ps,
+        {
+          code: timedOut ? 'APPROVAL_TIMEOUT' : 'APPROVAL_DENIED',
+          message: timedOut
+            ? 'The approval request timed out and was denied'
+            : `Approval denied by ${a.decidedBy ?? 'an approver'}${a.comment ? `: ${a.comment}` : ''}`,
+          class: 'business',
+          retryable: false,
+        },
+        'approval',
+      );
     }
     this.kick(run.id);
   }
 
   /** Resolve once the run reaches a terminal state (or `timeoutMs` elapses). Mostly for tests and the CLI. */
-  waitForRun(runId: string, timeoutMs = 15_000, until: (r: RunRecord) => boolean = (r) => isTerminalRun(r.status)): Promise<RunRecord> {
+  waitForRun(
+    runId: string,
+    timeoutMs = 15_000,
+    until: (r: RunRecord) => boolean = (r) => isTerminalRun(r.status),
+  ): Promise<RunRecord> {
     return new Promise((resolve, reject) => {
       const check = () => {
         const r = this.st.runs.getRun(runId);
@@ -362,7 +398,9 @@ export class Orchestrator {
     try {
       const run = this.st.runs.getRun(runId);
       if (run && !isTerminalRun(run.status) && run.status !== 'queued' && run.status !== 'compensating') {
-        this.finishRun(run, 'failed', { error: { ...toErrorInfo(e), code: 'ORCHESTRATOR_ERROR', class: 'catastrophic', retryable: false } });
+        this.finishRun(run, 'failed', {
+          error: { ...toErrorInfo(e), code: 'ORCHESTRATOR_ERROR', class: 'catastrophic', retryable: false },
+        });
       }
     } catch (inner) {
       this.log.error('could not fail run after internal error', { runId, error: inner });
@@ -387,7 +425,11 @@ export class Orchestrator {
     // Steps recorded as running that this process is not executing (defence in depth after a crash).
     for (const s of recs.values()) {
       if (s.status === 'running' && !d.inflight.has(s.stepId)) {
-        this.st.runs.patchStep(runId, s.stepId, { status: 'retry-wait', attempt: Math.max(0, s.attempt - 1), wakeAt: this.clock.now().toISOString() });
+        this.st.runs.patchStep(runId, s.stepId, {
+          status: 'retry-wait',
+          attempt: Math.max(0, s.attempt - 1),
+          wakeAt: this.clock.now().toISOString(),
+        });
         this.event(run, 'step.recovered', { attempt: s.attempt }, s.stepId);
       }
     }
@@ -433,7 +475,8 @@ export class Orchestrator {
     if (failing()) {
       this.quiesce(run, plan, recs, 'run-failed');
       recs = this.records(runId);
-      if (![...recs.values()].some((s) => s.status === 'running') && d.inflight.size === 0) this.finalizeFailure(run, plan, recs);
+      if (![...recs.values()].some((s) => s.status === 'running') && d.inflight.size === 0)
+        this.finalizeFailure(run, plan, recs);
       return;
     }
     if (allTerminal(recs)) {
@@ -463,12 +506,27 @@ export class Orchestrator {
           }
         } catch (e) {
           this.startInline(run, ps);
-          this.failStep(run, ps, { code: 'BRANCH_EVALUATION_FAILED', message: (e as Error).message, class: 'contract', retryable: false }, 'branch');
+          this.failStep(
+            run,
+            ps,
+            { code: 'BRANCH_EVALUATION_FAILED', message: (e as Error).message, class: 'contract', retryable: false },
+            'branch',
+          );
           return true;
         }
         this.startInline(run, ps);
         if (chosen === undefined && ps.default === undefined) {
-          this.failStep(run, ps, { code: 'BRANCH_NO_MATCH', message: 'No branch case matched and there is no default', class: 'contract', retryable: false }, 'branch');
+          this.failStep(
+            run,
+            ps,
+            {
+              code: 'BRANCH_NO_MATCH',
+              message: 'No branch case matched and there is no default',
+              class: 'contract',
+              retryable: false,
+            },
+            'branch',
+          );
         } else {
           this.succeedStep(run, ps, { case: chosen ?? ps.default }, { cost: 0, durationMs: 0 });
         }
@@ -491,7 +549,17 @@ export class Orchestrator {
           }
         }
         if (ps.join === 'any' && !anyOk) {
-          this.failStep(run, ps, { code: 'PARALLEL_ALL_FAILED', message: 'Every parallel branch failed', class: 'business', retryable: false }, 'parallel');
+          this.failStep(
+            run,
+            ps,
+            {
+              code: 'PARALLEL_ALL_FAILED',
+              message: 'Every parallel branch failed',
+              class: 'business',
+              retryable: false,
+            },
+            'parallel',
+          );
         } else {
           this.succeedStep(run, ps, { results }, { cost: 0, durationMs: 0 });
         }
@@ -515,9 +583,17 @@ export class Orchestrator {
                     corr = undefined;
                   }
                 }
-                return { status: 'waiting-event' as const, waitEvent: ps.until.event, waitCorrelation: corr ?? null, wakeAt: new Date(now.getTime() + ps.timeoutMs).toISOString() };
+                return {
+                  status: 'waiting-event' as const,
+                  waitEvent: ps.until.event,
+                  waitCorrelation: corr ?? null,
+                  wakeAt: new Date(now.getTime() + ps.timeoutMs).toISOString(),
+                };
               })()
-            : { status: 'waiting-timer' as const, wakeAt: new Date(now.getTime() + (ps.durationMs ?? 0)).toISOString() }),
+            : {
+                status: 'waiting-timer' as const,
+                wakeAt: new Date(now.getTime() + (ps.durationMs ?? 0)).toISOString(),
+              }),
         });
         this.event(run, 'step.waiting', { on: ps.until ? `event:${ps.until.event}` : 'timer' }, ps.id);
         return false;
@@ -530,15 +606,23 @@ export class Orchestrator {
         if (ps.status === 'success') {
           this.succeedStep(run, ps, { terminated: true }, { cost: 0, durationMs: 0 });
           for (const s of this.records(run.id).values()) {
-            if (s.status === 'pending') this.skipStep(run, plan.steps.find((x) => x.id === s.stepId)!, 'run-terminated');
+            if (s.status === 'pending')
+              this.skipStep(run, plan.steps.find((x) => x.id === s.stepId)!, 'run-terminated');
           }
         } else {
-          this.failStep(run, ps, {
-            code: 'TERMINATED',
-            message: ps.message ? String(this.safeResolve(ps.message, this.scope(run, plan, recs), run.seed)) : 'The workflow terminated with a failure',
-            class: ps.errorClass ?? 'business',
-            retryable: false,
-          }, 'terminate');
+          this.failStep(
+            run,
+            ps,
+            {
+              code: 'TERMINATED',
+              message: ps.message
+                ? String(this.safeResolve(ps.message, this.scope(run, plan, recs), run.seed))
+                : 'The workflow terminated with a failure',
+              class: ps.errorClass ?? 'business',
+              retryable: false,
+            },
+            'terminate',
+          );
         }
         return true;
       }
@@ -561,8 +645,24 @@ export class Orchestrator {
     const ac = new AbortController();
     d.inflight.set(ps.id, ac);
     this.slots++;
-    this.st.runs.patchStep(run.id, ps.id, { status: 'running', attempt, startedAt: rec.startedAt ?? this.clock.now().toISOString(), wakeAt: null });
-    this.event(run, 'step.started', { attempt, type: ps.type, capability: ps.capability ? `${ps.capability.name}@${ps.capability.version}` : null, dryRun: run.dryRun }, ps.id, attempt);
+    this.st.runs.patchStep(run.id, ps.id, {
+      status: 'running',
+      attempt,
+      startedAt: rec.startedAt ?? this.clock.now().toISOString(),
+      wakeAt: null,
+    });
+    this.event(
+      run,
+      'step.started',
+      {
+        attempt,
+        type: ps.type,
+        capability: ps.capability ? `${ps.capability.name}@${ps.capability.version}` : null,
+        dryRun: run.dryRun,
+      },
+      ps.id,
+      attempt,
+    );
 
     const a: StepAttempt = {
       tenant: run.tenant,
@@ -580,7 +680,14 @@ export class Orchestrator {
     const promise = ps.type === 'map' ? this.exec.executeMap(a) : this.exec.executeCapability(a);
     promise.then(
       (res) => this.onStepResult(run.id, ps.id, attempt, res, d),
-      (err) => this.onStepResult(run.id, ps.id, attempt, { kind: 'failed', error: { ...toErrorInfo(err), code: 'RUNTIME_ERROR' }, durationMs: 0, phase: 'runtime' }, d),
+      (err) =>
+        this.onStepResult(
+          run.id,
+          ps.id,
+          attempt,
+          { kind: 'failed', error: { ...toErrorInfo(err), code: 'RUNTIME_ERROR' }, durationMs: 0, phase: 'runtime' },
+          d,
+        ),
     );
   }
 
@@ -600,7 +707,12 @@ export class Orchestrator {
           this.st.runs.patchStep(runId, stepId, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
           this.event(run, 'step.skipped', { reason: 'run-cancelled' }, stepId, attempt);
         } else if (res.kind === 'succeeded') {
-          this.succeedStep(run, ps, res.output, { cost: res.cost, durationMs: res.durationMs, replayed: res.replayed ?? false, simulated: res.simulated ?? false });
+          this.succeedStep(run, ps, res.output, {
+            cost: res.cost,
+            durationMs: res.durationMs,
+            replayed: res.replayed ?? false,
+            simulated: res.simulated ?? false,
+          });
         } else if (res.kind === 'failed') {
           this.failStep(run, ps, res.error, res.phase, res.durationMs);
         } else {
@@ -622,7 +734,12 @@ export class Orchestrator {
   }
 
   // ========================================================== step outcomes
-  private succeedStep(run: RunRecord, ps: PlanStep, output: unknown, meta: { cost: number; durationMs: number; replayed?: boolean; simulated?: boolean }): void {
+  private succeedStep(
+    run: RunRecord,
+    ps: PlanStep,
+    output: unknown,
+    meta: { cost: number; durationMs: number; replayed?: boolean; simulated?: boolean },
+  ): void {
     const now = this.clock.now().toISOString();
     const seq = this.st.runs.nextCompletionSeq(run.id);
     const stored = this.storeOutput(run, output);
@@ -638,19 +755,32 @@ export class Orchestrator {
     });
     if (meta.cost > 0) this.st.runs.addRunCost(run.id, run.tenant, run.workflowName, meta.cost);
     const rec = this.st.runs.getStep(run.id, ps.id)!;
-    this.event(run, 'step.succeeded', {
-      attempt: rec.attempt,
-      durationMs: meta.durationMs,
-      replayed: meta.replayed ?? false,
-      simulated: meta.simulated ?? false,
-      cost: meta.cost,
-      output: this.preview(ps, output),
-      ...(stored.ref ? { outputRef: stored.ref } : {}),
-    }, ps.id, rec.attempt);
+    this.event(
+      run,
+      'step.succeeded',
+      {
+        attempt: rec.attempt,
+        durationMs: meta.durationMs,
+        replayed: meta.replayed ?? false,
+        simulated: meta.simulated ?? false,
+        cost: meta.cost,
+        output: this.preview(ps, output),
+        ...(stored.ref ? { outputRef: stored.ref } : {}),
+      },
+      ps.id,
+      rec.attempt,
+    );
     this.checkInvariants(run);
   }
 
-  private failStep(run: RunRecord, ps: PlanStep, error: ErrorInfo, phase: string, durationMs = 0, allowRetry = true): void {
+  private failStep(
+    run: RunRecord,
+    ps: PlanStep,
+    error: ErrorInfo,
+    phase: string,
+    durationMs = 0,
+    allowRetry = true,
+  ): void {
     const rec = this.st.runs.getStep(run.id, ps.id)!;
     const now = this.clock.now();
     // Failures raised by the engine itself (a `when` that cannot be evaluated, a bad branch) are
@@ -661,26 +791,55 @@ export class Orchestrator {
       const delay = backoffDelayMs(ps.retry, rec.attempt, createRng(run.seed).fork(`${ps.id}/${rec.attempt}`).next());
       const wake = new Date(now.getTime() + delay).toISOString();
       this.st.runs.patchStep(run.id, ps.id, { status: 'retry-wait', wakeAt: wake, error });
-      this.event(run, 'step.failed', { attempt: rec.attempt, error, phase, durationMs, willRetry: true }, ps.id, rec.attempt);
-      this.event(run, 'step.retry-scheduled', { attempt: rec.attempt, delayMs: delay, wakeAt: wake, reason: verdict.reason }, ps.id, rec.attempt);
+      this.event(
+        run,
+        'step.failed',
+        { attempt: rec.attempt, error, phase, durationMs, willRetry: true },
+        ps.id,
+        rec.attempt,
+      );
+      this.event(
+        run,
+        'step.retry-scheduled',
+        { attempt: rec.attempt, delayMs: delay, wakeAt: wake, reason: verdict.reason },
+        ps.id,
+        rec.attempt,
+      );
       return;
     }
-    const handled = ps.onError === 'continue' ? 'continue' : typeof ps.onError === 'object' && ps.onError !== null ? 'route' : null;
-    this.st.runs.patchStep(run.id, ps.id, { status: 'failed', finishedAt: now.toISOString(), error, handled, wakeAt: null });
-    this.event(run, 'step.failed', {
-      attempt: rec.attempt,
+    const handled =
+      ps.onError === 'continue' ? 'continue' : typeof ps.onError === 'object' && ps.onError !== null ? 'route' : null;
+    this.st.runs.patchStep(run.id, ps.id, {
+      status: 'failed',
+      finishedAt: now.toISOString(),
       error,
-      phase,
-      durationMs,
-      willRetry: false,
-      final: true,
-      ...(handled ? { handled } : {}),
-      ...(retryable ? { retryDecision: verdict.reason } : {}),
-    }, ps.id, rec.attempt);
+      handled,
+      wakeAt: null,
+    });
+    this.event(
+      run,
+      'step.failed',
+      {
+        attempt: rec.attempt,
+        error,
+        phase,
+        durationMs,
+        willRetry: false,
+        final: true,
+        ...(handled ? { handled } : {}),
+        ...(retryable ? { retryDecision: verdict.reason } : {}),
+      },
+      ps.id,
+      rec.attempt,
+    );
   }
 
   private skipStep(run: RunRecord, ps: PlanStep, reason: string): void {
-    this.st.runs.patchStep(run.id, ps.id, { status: 'skipped', skippedReason: reason, finishedAt: this.clock.now().toISOString() });
+    this.st.runs.patchStep(run.id, ps.id, {
+      status: 'skipped',
+      skippedReason: reason,
+      finishedAt: this.clock.now().toISOString(),
+    });
     this.event(run, 'step.skipped', { reason }, ps.id);
   }
 
@@ -698,8 +857,18 @@ export class Orchestrator {
         ok = false;
       }
       if (!ok) {
-        this.event(cur, 'run.guard-failed', { guard: g.name, message: g.message ?? `Invariant '${g.name}' was violated` });
-        this.st.runs.patchRun(run.id, { error: { code: 'INVARIANT_VIOLATED', message: g.message ?? `Invariant '${g.name}' was violated`, class: 'business', retryable: false } });
+        this.event(cur, 'run.guard-failed', {
+          guard: g.name,
+          message: g.message ?? `Invariant '${g.name}' was violated`,
+        });
+        this.st.runs.patchRun(run.id, {
+          error: {
+            code: 'INVARIANT_VIOLATED',
+            message: g.message ?? `Invariant '${g.name}' was violated`,
+            class: 'business',
+            retryable: false,
+          },
+        });
         return;
       }
     }
@@ -722,8 +891,25 @@ export class Orchestrator {
       onTimeout: ps.onTimeout ?? 'deny',
       allowSelf: ps.allowSelfApproval ?? false,
     });
-    this.st.runs.patchStep(run.id, ps.id, { status: 'waiting-approval', attempt: 1, startedAt: now.toISOString(), approvalId: approval.id, wakeAt: expires });
-    this.event(run, 'approval.requested', { approvalId: approval.id, message, approvers: approval.approvers, expiresAt: expires, onTimeout: approval.onTimeout }, ps.id);
+    this.st.runs.patchStep(run.id, ps.id, {
+      status: 'waiting-approval',
+      attempt: 1,
+      startedAt: now.toISOString(),
+      approvalId: approval.id,
+      wakeAt: expires,
+    });
+    this.event(
+      run,
+      'approval.requested',
+      {
+        approvalId: approval.id,
+        message,
+        approvers: approval.approvers,
+        expiresAt: expires,
+        onTimeout: approval.onTimeout,
+      },
+      ps.id,
+    );
     this.event(run, 'step.waiting', { on: 'approval' }, ps.id);
     this.emitter.emit('approval-requested', approval, run);
   }
@@ -733,8 +919,12 @@ export class Orchestrator {
     this.st.runs.patchStep(run.id, ps.id, { attempt: (recs.get(ps.id)?.attempt ?? 0) + 1, startedAt: now });
     try {
       const childPlan = ps.childPlanHash ? this.st.registry.getPlan(run.tenant, ps.childPlanHash) : undefined;
-      if (!childPlan || !ps.childPlanHash) throw new Error(`Subworkflow plan ${ps.childPlanHash ?? '(none)'} is not available`);
-      const inputs = resolveValue(ps.with ?? {}, this.scope(run, plan, recs), { seed: run.seed }) as Record<string, unknown>;
+      if (!childPlan || !ps.childPlanHash)
+        throw new Error(`Subworkflow plan ${ps.childPlanHash ?? '(none)'} is not available`);
+      const inputs = resolveValue(ps.with ?? {}, this.scope(run, plan, recs), { seed: run.seed }) as Record<
+        string,
+        unknown
+      >;
       const child = this.createRun({
         tenant: run.tenant,
         plan: childPlan,
@@ -751,7 +941,12 @@ export class Orchestrator {
       this.startRun(child.id);
     } catch (e) {
       this.st.runs.patchStep(run.id, ps.id, { status: 'running' });
-      this.failStep(run, ps, { code: 'SUBWORKFLOW_START_FAILED', message: (e as Error).message, class: 'contract', retryable: false }, 'subworkflow');
+      this.failStep(
+        run,
+        ps,
+        { code: 'SUBWORKFLOW_START_FAILED', message: (e as Error).message, class: 'contract', retryable: false },
+        'subworkflow',
+      );
     }
   }
 
@@ -763,16 +958,26 @@ export class Orchestrator {
     const ps = this.plan(parent).steps.find((x) => x.id === child.parentStepId)!;
     if (child.status === 'succeeded') {
       this.st.runs.patchStep(parent.id, ps.id, { status: 'running' });
-      this.succeedStep(parent, ps, { runId: child.id, outputs: child.outputs ?? {} }, { cost: child.cost, durationMs: 0 });
+      this.succeedStep(
+        parent,
+        ps,
+        { runId: child.id, outputs: child.outputs ?? {} },
+        { cost: child.cost, durationMs: 0 },
+      );
     } else {
       this.st.runs.patchStep(parent.id, ps.id, { status: 'running' });
-      this.failStep(parent, ps, {
-        code: 'SUBWORKFLOW_FAILED',
-        message: `Subworkflow '${child.workflowName}' ${child.status}${child.error ? `: ${child.error.message}` : ''}`,
-        class: child.error?.class ?? 'business',
-        retryable: false,
-        details: { childRunId: child.id, childStatus: child.status },
-      }, 'subworkflow');
+      this.failStep(
+        parent,
+        ps,
+        {
+          code: 'SUBWORKFLOW_FAILED',
+          message: `Subworkflow '${child.workflowName}' ${child.status}${child.error ? `: ${child.error.message}` : ''}`,
+          class: child.error?.class ?? 'business',
+          retryable: false,
+          details: { childRunId: child.id, childStatus: child.status },
+        },
+        'subworkflow',
+      );
     }
     this.kick(parent.id);
   }
@@ -821,7 +1026,8 @@ export class Orchestrator {
     const cur = this.st.runs.getRun(run.id)!;
     const failures = unhandledFailures(recs).sort((a, b) => (a.finishedAt ?? '').localeCompare(b.finishedAt ?? ''));
     const first = failures[0];
-    const error: ErrorInfo = cur.error ?? first?.error ?? { code: 'RUN_FAILED', message: 'The run failed', class: 'business', retryable: false };
+    const error: ErrorInfo = cur.error ??
+      first?.error ?? { code: 'RUN_FAILED', message: 'The run failed', class: 'business', retryable: false };
     const wantsCompensation =
       failures.some((f) => plan.steps.find((s) => s.id === f.stepId)?.onError === 'compensate') ||
       (failures.length === 0 && cur.error !== undefined);
@@ -838,15 +1044,27 @@ export class Orchestrator {
     let outputs: Record<string, unknown>;
     try {
       outputs = resolveValue(plan.outputs, this.scope(run, plan, recs), { seed: run.seed }) as Record<string, unknown>;
-      if (JSON.stringify(outputs).length > 1024 * 1024) throw new Error('Workflow outputs exceed 1 MiB; write large results to an artifact');
+      if (JSON.stringify(outputs).length > 1024 * 1024)
+        throw new Error('Workflow outputs exceed 1 MiB; write large results to an artifact');
     } catch (e) {
-      this.finishRun(run, 'failed', { error: { code: 'OUTPUTS_FAILED', message: `Could not compute workflow outputs: ${(e as Error).message}`, class: 'contract', retryable: false } });
+      this.finishRun(run, 'failed', {
+        error: {
+          code: 'OUTPUTS_FAILED',
+          message: `Could not compute workflow outputs: ${(e as Error).message}`,
+          class: 'contract',
+          retryable: false,
+        },
+      });
       return;
     }
     this.finishRun(run, 'succeeded', { outputs });
   }
 
-  private finishRun(run: RunRecord, status: RunStatus, patch: { error?: ErrorInfo; outputs?: Record<string, unknown> }): RunRecord {
+  private finishRun(
+    run: RunRecord,
+    status: RunStatus,
+    patch: { error?: ErrorInfo; outputs?: Record<string, unknown> },
+  ): RunRecord {
     // A run that was waiting resumes (`WaitingApproval/WaitingEvent → Running`) before it can succeed.
     const live = this.st.runs.getRun(run.id);
     if (live && status === 'succeeded' && (live.status === 'waiting-approval' || live.status === 'waiting-event')) {
@@ -854,13 +1072,18 @@ export class Orchestrator {
       this.event(live, 'run.resumed', {});
     }
     const done = this.st.runs.transition(run.id, status, patch);
-    const type = ({
-      succeeded: 'run.succeeded',
-      failed: 'run.failed',
-      cancelled: 'run.cancelled',
-      'rolled-back': 'run.rolled-back',
-      'compensation-failed': 'run.compensation-failed',
-    } as Record<string, 'run.succeeded' | 'run.failed' | 'run.cancelled' | 'run.rolled-back' | 'run.compensation-failed'>)[status];
+    const type = (
+      {
+        succeeded: 'run.succeeded',
+        failed: 'run.failed',
+        cancelled: 'run.cancelled',
+        'rolled-back': 'run.rolled-back',
+        'compensation-failed': 'run.compensation-failed',
+      } as Record<
+        string,
+        'run.succeeded' | 'run.failed' | 'run.cancelled' | 'run.rolled-back' | 'run.compensation-failed'
+      >
+    )[status];
     if (type) {
       this.event(done, type, {
         durationMs: done.startedAt && done.finishedAt ? Date.parse(done.finishedAt) - Date.parse(done.startedAt) : 0,
@@ -905,7 +1128,10 @@ export class Orchestrator {
             message: `Rollback left the world inconsistent: compensation failed for ${failed.map((f) => f.stepId).join(', ')}. Manual intervention is required.`,
             class: 'catastrophic',
             retryable: false,
-            details: { failedSteps: failed.map((f) => ({ stepId: f.stepId, error: f.compensationError })), cause: run.error ?? null },
+            details: {
+              failedSteps: failed.map((f) => ({ stepId: f.stepId, error: f.compensationError })),
+              cause: run.error ?? null,
+            },
           },
         });
       } else {
@@ -938,7 +1164,13 @@ export class Orchestrator {
     };
     this.exec.executeCompensation(a).then(
       (res) => this.onCompensationResult(run.id, next.id, res, d),
-      (err) => this.onCompensationResult(run.id, next.id, { kind: 'failed', error: toErrorInfo(err), durationMs: 0, phase: 'runtime' }, d),
+      (err) =>
+        this.onCompensationResult(
+          run.id,
+          next.id,
+          { kind: 'failed', error: toErrorInfo(err), durationMs: 0, phase: 'runtime' },
+          d,
+        ),
     );
   }
 
@@ -951,9 +1183,17 @@ export class Orchestrator {
       if (run) {
         if (res.kind === 'succeeded') {
           this.st.runs.patchStep(runId, stepId, { compensationStatus: 'done' });
-          this.event(run, 'step.compensation.succeeded', { durationMs: res.durationMs, replayed: res.replayed ?? false }, stepId);
+          this.event(
+            run,
+            'step.compensation.succeeded',
+            { durationMs: res.durationMs, replayed: res.replayed ?? false },
+            stepId,
+          );
         } else {
-          const error = res.kind === 'failed' ? res.error : { code: 'COMPENSATION_DEFERRED', message: res.reason, class: 'systemic' as const, retryable: true };
+          const error =
+            res.kind === 'failed'
+              ? res.error
+              : { code: 'COMPENSATION_DEFERRED', message: res.reason, class: 'systemic' as const, retryable: true };
           this.st.runs.patchStep(runId, stepId, { compensationStatus: 'failed', compensationError: error });
           this.event(run, 'step.compensation.failed', { error }, stepId);
         }
@@ -978,7 +1218,17 @@ export class Orchestrator {
         if (s.status === 'waiting-timer') {
           this.succeedStep(run, ps, { waitedMs: ps.durationMs ?? 0 }, { cost: 0, durationMs: ps.durationMs ?? 0 });
         } else if (s.status === 'waiting-event') {
-          this.failStep(run, ps, { code: 'WAIT_TIMEOUT', message: `Timed out waiting for event '${s.waitEvent}'`, class: 'business', retryable: false }, 'wait');
+          this.failStep(
+            run,
+            ps,
+            {
+              code: 'WAIT_TIMEOUT',
+              message: `Timed out waiting for event '${s.waitEvent}'`,
+              class: 'business',
+              retryable: false,
+            },
+            'wait',
+          );
         }
         this.kick(run.id);
       }
@@ -1007,7 +1257,12 @@ export class Orchestrator {
       return;
     }
     const approve = a.onTimeout === 'approve';
-    this.st.approvals.decide(a.id, approve ? 'approved' : 'timed-out', 'system:timeout', approve ? 'auto-approved on timeout' : 'timed out');
+    this.st.approvals.decide(
+      a.id,
+      approve ? 'approved' : 'timed-out',
+      'system:timeout',
+      approve ? 'auto-approved on timeout' : 'timed out',
+    );
     this.event(run, 'approval.timed-out', { approvalId: a.id, outcome: approve ? 'approved' : 'denied' }, a.stepId);
     this.resolveApproval(a.id);
   }
@@ -1038,7 +1293,14 @@ export class Orchestrator {
   }
 
   private runScope(run: RunRecord): Record<string, unknown> {
-    return { id: run.id, seed: run.seed, dryRun: run.dryRun, trigger: run.triggerType, workflow: run.workflowName, version: run.workflowVersion };
+    return {
+      id: run.id,
+      seed: run.seed,
+      dryRun: run.dryRun,
+      trigger: run.triggerType,
+      workflow: run.workflowName,
+      version: run.workflowVersion,
+    };
   }
 
   /** Expression scope for a run. Secrets are never here — only the Step Runtime, holding a lease, can resolve them. */
@@ -1065,7 +1327,19 @@ export class Orchestrator {
       return isTruthy(evaluate(this.parse(ps.when!), this.scope(run, plan, recs), { seed: run.seed }));
     } catch (e) {
       this.startInline(run, ps);
-      this.failStep(run, ps, { code: 'WHEN_EVALUATION_FAILED', message: `Condition could not be evaluated: ${(e as Error).message}`, class: 'contract', retryable: false }, 'when', 0, false);
+      this.failStep(
+        run,
+        ps,
+        {
+          code: 'WHEN_EVALUATION_FAILED',
+          message: `Condition could not be evaluated: ${(e as Error).message}`,
+          class: 'contract',
+          retryable: false,
+        },
+        'when',
+        0,
+        false,
+      );
       return false;
     }
   }
@@ -1085,8 +1359,12 @@ export class Orchestrator {
 
   /** What the event log may see of a step's output — classification-driven redaction (§10.1). */
   private preview(ps: PlanStep, output: unknown): unknown {
-    const keys = output !== null && typeof output === 'object' && !Array.isArray(output) ? Object.keys(output as object) : undefined;
-    if (ps.sensitivity === 'confidential' || ps.sensitivity === 'secret') return { redacted: true, sensitivity: ps.sensitivity, ...(keys ? { keys } : {}) };
+    const keys =
+      output !== null && typeof output === 'object' && !Array.isArray(output)
+        ? Object.keys(output as object)
+        : undefined;
+    if (ps.sensitivity === 'confidential' || ps.sensitivity === 'secret')
+      return { redacted: true, sensitivity: ps.sensitivity, ...(keys ? { keys } : {}) };
     const json = JSON.stringify(output ?? null);
     if (json.length > 4000) return { truncated: true, size: json.length, ...(keys ? { keys } : {}) };
     return output ?? null;
@@ -1105,11 +1383,16 @@ export class Orchestrator {
     const cur = this.st.runs.getRun(run.id)!;
     if (isTerminalRun(cur.status) || cur.status === 'compensating' || cur.status === 'queued') return;
     const all = [...recs.values()];
-    const active = all.some((s) => s.status === 'running' || s.status === 'retry-wait' || (s.status === 'pending' && false));
+    const active = all.some(
+      (s) => s.status === 'running' || s.status === 'retry-wait' || (s.status === 'pending' && false),
+    );
     let want: RunStatus = 'running';
     if (!active) {
       if (all.some((s) => s.status === 'waiting-approval')) want = 'waiting-approval';
-      else if (all.some((s) => s.status === 'waiting-event' || s.status === 'waiting-timer' || s.status === 'waiting-child')) want = 'waiting-event';
+      else if (
+        all.some((s) => s.status === 'waiting-event' || s.status === 'waiting-timer' || s.status === 'waiting-child')
+      )
+        want = 'waiting-event';
     }
     if (want !== cur.status) {
       this.st.runs.transition(run.id, want);
@@ -1118,7 +1401,13 @@ export class Orchestrator {
     }
   }
 
-  private event(run: RunRecord, type: Parameters<State['events']['append']>[0]['type'], data: Record<string, unknown>, stepId?: string, attempt?: number): void {
+  private event(
+    run: RunRecord,
+    type: Parameters<State['events']['append']>[0]['type'],
+    data: Record<string, unknown>,
+    stepId?: string,
+    attempt?: number,
+  ): void {
     this.st.events.append({
       tenant: run.tenant,
       type,

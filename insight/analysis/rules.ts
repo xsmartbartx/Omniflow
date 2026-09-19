@@ -32,7 +32,12 @@ export const ignoredFailures: Rule = (input, t) => {
           rate >= 0.9
             ? `The step almost never works, so it contributes nothing. Fix the cause${topError(wf, s.stepId)}, or remove the step.`
             : `Decide whether the step matters. If it does, stop ignoring its failures (route them to a handler or fail the run); if it doesn't, remove it.`,
-        evidence: { runsSeen: ran, ignoredFailures: s.ignored, rate: round(rate), topErrors: wf.errors.get(s.stepId)?.slice(0, 3) ?? [] },
+        evidence: {
+          runsSeen: ran,
+          ignoredFailures: s.ignored,
+          rate: round(rate),
+          topErrors: wf.errors.get(s.stepId)?.slice(0, 3) ?? [],
+        },
       });
     }
   }
@@ -57,7 +62,12 @@ export const failingSteps: Rule = (input, t) => {
         title: `Step '${s.stepId}' fails ${pct(rate)} of the time`,
         summary: `${wf.name} › ${s.stepId} failed in ${s.failed} of ${ran} executions over the last ${input.windowDays} days.`,
         recommendation: `Investigate the dominant failure${topError(wf, s.stepId)}. If it is an upstream dependency, add a fallback route or tighten the timeout; if it is bad input, validate earlier in the workflow.`,
-        evidence: { executions: ran, failed: s.failed, rate: round(rate), topErrors: wf.errors.get(s.stepId)?.slice(0, 3) ?? [] },
+        evidence: {
+          executions: ran,
+          failed: s.failed,
+          rate: round(rate),
+          topErrors: wf.errors.get(s.stepId)?.slice(0, 3) ?? [],
+        },
       });
     }
   }
@@ -98,7 +108,9 @@ export const retryStorms: Rule = (input, t) => {
       const planStep = wf.plan.steps.find((p) => p.id === s.stepId);
       const errs = wf.errors.get(s.stepId) ?? [];
       const nonTransient = errs.filter((e) => e.errorClass !== 'transient' && e.errorClass !== 'systemic');
-      const misclassified = nonTransient.length > 0 && planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
+      const misclassified =
+        nonTransient.length > 0 &&
+        planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
       out.push({
         rule: 'retry-storm',
         severity: misclassified || rate >= 0.6 ? 'high' : 'medium',
@@ -110,7 +122,13 @@ export const retryStorms: Rule = (input, t) => {
         recommendation: misclassified
           ? `Retries are configured for ${nonTransient[0]!.errorClass} errors (${nonTransient[0]!.code}), which retrying cannot fix. Remove that class from retryOn so the run fails fast — or fix how the capability classifies the error.`
           : `The dependency is unreliable. Add exponential backoff with jitter, raise the timeout if calls are merely slow, or put the capability behind a fallback route.`,
-        evidence: { executions: ran, retried: s.retried, averageAttempts: round(ratio(s.attempts, Math.max(1, s.seen))), configuredRetryOn: planStep?.retry?.retryOn ?? [], topErrors: errs.slice(0, 3) },
+        evidence: {
+          executions: ran,
+          retried: s.retried,
+          averageAttempts: round(ratio(s.attempts, Math.max(1, s.seen))),
+          configuredRetryOn: planStep?.retry?.retryOn ?? [],
+          topErrors: errs.slice(0, 3),
+        },
       });
     }
   }
@@ -119,7 +137,12 @@ export const retryStorms: Rule = (input, t) => {
 
 // ---------------------------------------------------------------- duplicates
 
-const fingerprint = (s: PlanStep): string => (s.capability ? `${s.capability.name}|${Object.keys(s.with ?? {}).sort().join(',')}` : s.type);
+const fingerprint = (s: PlanStep): string =>
+  s.capability
+    ? `${s.capability.name}|${Object.keys(s.with ?? {})
+        .sort()
+        .join(',')}`
+    : s.type;
 
 /** A workflow's steps as a bag: the nth occurrence of a fingerprint is distinct from the (n-1)th. */
 function fingerprints(wf: WorkflowFacts): Map<string, PlanStep> {
@@ -140,7 +163,8 @@ function differingParameters(a: Map<string, PlanStep>, b: Map<string, PlanStep>)
   for (const [fp, s] of a) {
     const other = b.get(fp);
     if (!other?.with || !s.with) continue;
-    for (const k of Object.keys(s.with)) if (JSON.stringify(s.with[k]) !== JSON.stringify(other.with[k])) out.add(`${s.capability?.name ?? s.type}.${k}`);
+    for (const k of Object.keys(s.with))
+      if (JSON.stringify(s.with[k]) !== JSON.stringify(other.with[k])) out.add(`${s.capability?.name ?? s.type}.${k}`);
   }
   return [...out].sort();
 }
@@ -170,7 +194,12 @@ export const duplicateWorkflows: Rule = (input, t) => {
         recommendation: params.length
           ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${params.length > 5 ? '…' : ''} — make those inputs.`
           : `Merge them into one workflow; they do the same thing.`,
-        evidence: { workflows: [x, y], similarity: round(similarity), sharedSteps: shared, differingParameters: params },
+        evidence: {
+          workflows: [x, y],
+          similarity: round(similarity),
+          sharedSteps: shared,
+          differingParameters: params,
+        },
       });
     }
   }
@@ -205,7 +234,8 @@ export const costHotspots: Rule = (input, t) => {
       });
     }
     // A step being most of its *own* workflow's cost only matters if the workflow matters, and if there is a choice of steps.
-    const meaningful = ratio(wf.runs.cost, total) >= 0.25 && [...wf.steps.values()].filter((s) => s.cost > 0).length >= 2;
+    const meaningful =
+      ratio(wf.runs.cost, total) >= 0.25 && [...wf.steps.values()].filter((s) => s.cost > 0).length >= 2;
     for (const s of wf.steps.values()) {
       if (!meaningful || ratio(s.cost, wf.runs.cost) < t.costStepShare) continue;
       const planStep = wf.plan.steps.find((p) => p.id === s.stepId);
@@ -217,7 +247,9 @@ export const costHotspots: Rule = (input, t) => {
         key: `cost-hotspot:${wf.name}:${s.stepId}`,
         title: `Step '${s.stepId}' is ${pct(ratio(s.cost, wf.runs.cost))} of ${wf.name}'s cost`,
         summary: `${wf.name} › ${s.stepId} (${planStep ? capOf(planStep) : 'step'}) consumed ${round(s.cost)} of the workflow's ${round(wf.runs.cost)} cost units.`,
-        recommendation: COST_ADVICE[planStep?.family ?? ''] ?? 'Reduce how often this step runs, or cache its result when inputs repeat.',
+        recommendation:
+          COST_ADVICE[planStep?.family ?? ''] ??
+          'Reduce how often this step runs, or cache its result when inputs repeat.',
         evidence: { stepCost: round(s.cost), workflowCost: round(wf.runs.cost), family: planStep?.family ?? null },
       });
     }
@@ -295,7 +327,10 @@ export const shellSunsets: Rule = (input, t) => {
         workflow: wf.name,
         stepId: s.id,
         key: `shell-sunset:${wf.name}:${s.id}`,
-        title: days < 0 ? `Shell step '${s.id}' is ${-days} days past its sunset date` : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
+        title:
+          days < 0
+            ? `Shell step '${s.id}' is ${-days} days past its sunset date`
+            : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
         summary: `${wf.name} › ${s.id} was meant to be replaced by ${s.sunset}. Temporary bridges that outlive their date become permanent.`,
         recommendation: `Replace it with a typed capability, or renew the sunset date with a written justification.`,
         evidence: { sunset: s.sunset, daysRemaining: days, capability: capOf(s) },
@@ -321,7 +356,8 @@ export const timing: Rule = (input, t) => {
       waitByWorkflow.set(r.workflow, [...(waitByWorkflow.get(r.workflow) ?? []), started - created]);
     }
     const scheduled = parseMs(r.scheduledFor);
-    if (started !== undefined && scheduled !== undefined) lagByWorkflow.set(r.workflow, [...(lagByWorkflow.get(r.workflow) ?? []), Math.max(0, started - scheduled)]);
+    if (started !== undefined && scheduled !== undefined)
+      lagByWorkflow.set(r.workflow, [...(lagByWorkflow.get(r.workflow) ?? []), Math.max(0, started - scheduled)]);
   }
   for (const [workflow, lags] of [...lagByWorkflow].sort()) {
     const p95 = percentile(lags, 95)!;
@@ -339,7 +375,10 @@ export const timing: Rule = (input, t) => {
   }
   const p95 = percentile(waits, 95);
   if (waits.length >= 20 && p95 !== undefined && p95 >= t.queueWaitP95Ms) {
-    const worst = [...waitByWorkflow].map(([w, v]) => ({ workflow: w, p95Ms: percentile(v, 95)! })).sort((a, b) => b.p95Ms - a.p95Ms).slice(0, 3);
+    const worst = [...waitByWorkflow]
+      .map(([w, v]) => ({ workflow: w, p95Ms: percentile(v, 95)! }))
+      .sort((a, b) => b.p95Ms - a.p95Ms)
+      .slice(0, 3);
     out.push({
       rule: 'queue-starvation',
       severity: 'medium',
@@ -361,7 +400,9 @@ export const unexercisedCompensation: Rule = (input, t) => {
   for (const wf of input.workflows) {
     const compensable = wf.plan.steps.filter((s) => s.compensate);
     if (compensable.length === 0 || wf.runs.total < t.compensationMinRuns) continue;
-    const exercised = compensable.some((s) => (wf.steps.get(s.id)?.compensated ?? 0) + (wf.steps.get(s.id)?.compensationFailed ?? 0) > 0);
+    const exercised = compensable.some(
+      (s) => (wf.steps.get(s.id)?.compensated ?? 0) + (wf.steps.get(s.id)?.compensationFailed ?? 0) > 0,
+    );
     if (exercised) continue;
     out.push({
       rule: 'unexercised-compensation',
@@ -418,7 +459,9 @@ const SEVERITY_ORDER = { high: 0, medium: 1, low: 2, info: 3 } as const;
 
 /** Run every rule; order the result most severe first, then by key, so output is stable. */
 export function analyse(input: AnalysisInput, t: Thresholds): Finding[] {
-  return ALL_RULES.flatMap((r) => r.run(input, t)).sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.key.localeCompare(b.key));
+  return ALL_RULES.flatMap((r) => r.run(input, t)).sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.key.localeCompare(b.key),
+  );
 }
 
 function topError(wf: WorkflowFacts, stepId: string): string {

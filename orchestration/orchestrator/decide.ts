@@ -1,5 +1,5 @@
 import type { ErrorClass } from '../../core/index.ts';
-import type { PlanRetry, Plan, PlanStep } from '../../schemas/plan.ts';
+import type { Plan, PlanRetry, PlanStep } from '../../schemas/plan.ts';
 import type { StepRecord, StepStatus } from '../../state/run-store.ts';
 
 /**
@@ -46,7 +46,9 @@ function outcomeOf(dep: StepRecord, dependent: PlanStep, routes: ReadonlyMap<str
  */
 export function classifyPending(plan: Plan, steps: ReadonlyMap<string, StepRecord>): Classification {
   const routes = new Map(
-    plan.steps.flatMap((s) => (typeof s.onError === 'object' && s.onError !== null ? [[s.id, s.onError.routeTo] as const] : [])),
+    plan.steps.flatMap((s) =>
+      typeof s.onError === 'object' && s.onError !== null ? [[s.id, s.onError.routeTo] as const] : [],
+    ),
   );
   const runnable: PlanStep[] = [];
   const skips: Classification['skips'] = [];
@@ -98,14 +100,20 @@ export interface RetryVerdict {
  * Failure handling by class (architecture §12.2). `contract` failures (a schema violation on a
  * capability's response) get exactly one retry; authorisation and business failures never retry.
  */
-export function shouldRetry(retry: PlanRetry | undefined, attempt: number, error: { class: ErrorClass; retryable: boolean }): RetryVerdict {
+export function shouldRetry(
+  retry: PlanRetry | undefined,
+  attempt: number,
+  error: { class: ErrorClass; retryable: boolean },
+): RetryVerdict {
   if (!retry) return { retry: false, reason: 'no retry policy' };
   if (attempt >= retry.attempts) return { retry: false, reason: 'attempts exhausted' };
   if (error.class === 'authorisation' || error.class === 'business' || error.class === 'catastrophic') {
     return { retry: false, reason: `${error.class} failures are not retried` };
   }
   if (error.class === 'contract') {
-    return attempt < 2 ? { retry: true, reason: 'contract failures get one retry' } : { retry: false, reason: 'contract failure repeated' };
+    return attempt < 2
+      ? { retry: true, reason: 'contract failures get one retry' }
+      : { retry: false, reason: 'contract failure repeated' };
   }
   if (!error.retryable) return { retry: false, reason: 'error is not retryable' };
   if (!retry.retryOn.includes(error.class)) return { retry: false, reason: `'${error.class}' is not in retryOn` };
@@ -120,7 +128,9 @@ export function compensationQueue(plan: Plan, steps: ReadonlyMap<string, StepRec
       return (
         ps.compensate !== undefined &&
         rec?.status === 'succeeded' &&
-        (rec.compensationStatus === undefined || rec.compensationStatus === 'pending' || rec.compensationStatus === 'running')
+        (rec.compensationStatus === undefined ||
+          rec.compensationStatus === 'pending' ||
+          rec.compensationStatus === 'running')
       );
     })
     .sort((a, b) => (steps.get(b.id)!.completedSeq ?? 0) - (steps.get(a.id)!.completedSeq ?? 0));

@@ -30,7 +30,8 @@ export function parsePolicyDocument(source: string | unknown): PolicyParseResult
   const doc = value as PolicyDocument;
   const ids = new Set<string>();
   doc.rules.forEach((rule, i) => {
-    if (ids.has(rule.id)) issues.push({ path: `rules[${i}].id`, code: 'DUPLICATE_RULE', message: `Duplicate rule id '${rule.id}'` });
+    if (ids.has(rule.id))
+      issues.push({ path: `rules[${i}].id`, code: 'DUPLICATE_RULE', message: `Duplicate rule id '${rule.id}'` });
     ids.add(rule.id);
     try {
       const ast = parseExpressionField(rule.when);
@@ -45,7 +46,11 @@ export function parsePolicyDocument(source: string | unknown): PolicyParseResult
       }
     } catch (e) {
       if (e instanceof ExpressionSyntaxError) {
-        issues.push({ path: `rules[${i}].when`, code: 'EXPRESSION_SYNTAX', message: `${e.message} (at character ${e.pos + 1})` });
+        issues.push({
+          path: `rules[${i}].when`,
+          code: 'EXPRESSION_SYNTAX',
+          message: `${e.message} (at character ${e.pos + 1})`,
+        });
       } else throw e;
     }
   });
