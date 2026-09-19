@@ -1,4 +1,5 @@
 import { AuthenticationError, ForbiddenError, redact, ValidationError } from '../../core/index.ts';
+import { ACTIONS } from '../../schemas/index.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
 import { obj } from './util.ts';
 
@@ -109,9 +110,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
           principal,
           ...(user ? { user: { id: user.id, email: user.email, name: user.name, roles: user.roles, mustChangePassword: user.mustChangePassword } } : {}),
           environment: app.config.environment,
-          can: Object.fromEntries(
-            (['workflow.draft', 'workflow.publish', 'workflow.run', 'workflow.manage', 'workflow.approve-change', 'approval.decide', 'run.cancel', 'secret.write', 'user.manage', 'audit.read', 'capability.manage', 'agent.invoke'] as const).map((a) => [a, app.policy.can(principal, a)]),
-          ),
+          can: Object.fromEntries(ACTIONS.map((a) => [a, app.policy.can(principal, a)])),
         };
       },
     },

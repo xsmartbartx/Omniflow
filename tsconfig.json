@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
     "target": "es2023",
     "lib": ["es2023"],
     "module": "nodenext",
