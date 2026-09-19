@@ -23,7 +23,8 @@ export function inputsToJsonSchema(inputs: Record<string, InputSpec>): JsonObjec
   return {
     type: 'object',
     properties,
-    ...(required.length ? { required } : {}),
+    // Sorted: the plan hash must not depend on the order keys were written in.
+    ...(required.length ? { required: required.sort() } : {}),
     additionalProperties: false,
   };
 }

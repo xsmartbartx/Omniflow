@@ -239,7 +239,9 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
       fromExpr(s.items, [...p, 'items']);
       fromValue(s.with, [...p, 'with']);
     }
-    if (s.type === 'branch') s.cases.forEach((c, j) => fromExpr(c.when, [...p, 'cases', j, 'when']));
+    if (s.type === 'branch') {
+      for (const [j, c] of s.cases.entries()) fromExpr(c.when, [...p, 'cases', j, 'when']);
+    }
     if (s.type === 'approval') fromValue(s.message, [...p, 'message']);
     if (s.type === 'subworkflow') fromValue(s.with, [...p, 'with']);
     if (s.type === 'wait') fromValue(s.until?.correlation, [...p, 'until', 'correlation']);

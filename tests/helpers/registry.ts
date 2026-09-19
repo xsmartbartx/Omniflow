@@ -1,4 +1,9 @@
-import { type CapabilityAdapter, CapabilityRegistry, createDefaultRegistry, defineCapability } from '../../capabilities/index.ts';
+import {
+  type CapabilityAdapter,
+  type CapabilityRegistry,
+  createDefaultRegistry,
+  defineCapability,
+} from '../../capabilities/index.ts';
 import type { CapabilityDeclaration } from '../../schemas/index.ts';
 
 const base: Omit<CapabilityDeclaration, 'name' | 'effect'> = {
@@ -33,7 +38,10 @@ export const testCapabilities = (): CapabilityAdapter[] => [
       outputSchema: {
         type: 'object',
         required: ['chargeId'],
-        properties: { chargeId: { type: 'string' }, receipt: { type: 'object', properties: { url: { type: 'string' } } } },
+        properties: {
+          chargeId: { type: 'string' },
+          receipt: { type: 'object', properties: { url: { type: 'string' } } },
+        },
         additionalProperties: false,
       },
       compensation: 'test-refund@^1',
@@ -68,7 +76,11 @@ export const testCapabilities = (): CapabilityAdapter[] => [
       effect: 'effectful',
       dryRun: 'simulate',
       scopes: ['process:exec'],
-      inputSchema: { type: 'object', required: ['argv'], properties: { argv: { type: 'array', items: { type: 'string' } } } },
+      inputSchema: {
+        type: 'object',
+        required: ['argv'],
+        properties: { argv: { type: 'array', items: { type: 'string' } } },
+      },
     },
     execute: async () => ({}),
   }),

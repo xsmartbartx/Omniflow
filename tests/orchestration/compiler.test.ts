@@ -101,9 +101,18 @@ describe('compiler: plan shape', () => {
     const p = compileOk(manifest()).plan!;
     expect(p.triggers.map((t: any) => t.name)).toEqual(['manual-1', 'schedule-1', 'incoming']);
     expect(p.triggers[1]).toMatchObject({ cron: '0 2 * * *', timezone: 'UTC', catchup: 'none' });
-    expect(p.policy).toMatchObject({ concurrency: 2, concurrencyPolicy: 'queue', dedupWindowMs: 600_000, maxParallelSteps: 8 });
+    expect(p.policy).toMatchObject({
+      concurrency: 2,
+      concurrencyPolicy: 'queue',
+      dedupWindowMs: 600_000,
+      maxParallelSteps: 8,
+    });
     expect(p.context).toEqual({ region: 'eu', environment: 'production' });
-    expect(p.inputSchema).toMatchObject({ type: 'object', required: ['orderId', 'amount'], additionalProperties: false });
+    expect(p.inputSchema).toMatchObject({
+      type: 'object',
+      required: ['amount', 'orderId'],
+      additionalProperties: false,
+    });
   });
 
   it('lets the deployment context override the manifest but never `now`', () => {
@@ -119,7 +128,7 @@ describe('compiler: plan shape', () => {
     expect(a.effects).toEqual({ pure: 0, idempotent: 1, effectful: 3 }); // incl. the compensation
     expect(a.scopes).toEqual(['network:http', 'payments:write', 'chat:write'].sort());
     expect(a.egress).toEqual(['api.example.com', 'chat.example.com', 'pay.example.com']);
-    expect(a.capabilities).toEqual(['http-get@1.0.0', 'test-chat@1.0.0', 'test-charge@1.0.0', 'test-refund@1.0.0']);
+    expect(a.capabilities).toEqual(['http-get@1.0.0', 'test-charge@1.0.0', 'test-chat@1.0.0', 'test-refund@1.0.0']);
     expect(a.hasCompensation).toBe(true);
     expect(a.maxInvocations).toBe(4);
     expect(a.estimatedCost).toBe(3);
@@ -143,15 +152,32 @@ describe('compiler: purity and determinism (ADR-0002 D2)', () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it('does not depend on step order, key order, or text vs object form', () => {
+  it('does not depend on key order or on text vs object form', () => {
+    const base = compileOk(manifest());
+    const reverseKeys = (v: any): any =>
+      Array.isArray(v)
+        ? v.map(reverseKeys)
+        : v && typeof v === 'object'
+          ? Object.fromEntries(
+              Object.entries(v)
+                .reverse()
+                .map(([k, x]) => [k, reverseKeys(x)]),
+            )
+          : v;
+    expect(compileOk(reverseKeys(manifest())).hash).toBe(base.hash);
+    expect(compileOk(stringify(manifest())).hash).toBe(base.hash);
+    expect(compileOk(JSON.stringify(manifest())).hash).toBe(base.hash);
+  });
+
+  it('resolves the same plan whatever order the steps were declared in', () => {
     const base = compileOk(manifest());
     const shuffled = manifest();
     shuffled.steps.reverse();
-    expect(compileOk(shuffled).hash).toBe(base.hash === undefined ? '' : compileOk(shuffled).hash);
-    // Reversed declaration order changes the *source* hash but not the plan's step order.
-    expect(compileOk(shuffled).plan!.steps.map((s) => s.id)).toEqual(['lookup', 'charge', 'announce']);
-    const asText = compileOk(stringify(manifest()));
-    expect(asText.hash).toBe(base.hash);
+    const other = compileOk(shuffled);
+    expect(other.plan!.steps).toEqual(base.plan!.steps);
+    expect(other.plan!.analysis).toEqual(base.plan!.analysis);
+    // Only the recorded source identity differs, so plan hashes stay traceable to their manifest.
+    expect(other.plan!.sourceHash).not.toBe(base.plan!.sourceHash);
   });
 
   it('does not mutate its input', () => {
@@ -171,7 +197,7 @@ describe('compiler: purity and determinism (ADR-0002 D2)', () => {
 
   it('pins the plan hash for a fixture (golden test — update deliberately when compilation semantics change)', () => {
     const { hash } = compileOk(manifest());
-    expect(hash).toBe('sha256:REPLACE_ME');
+    expect(hash).toBe('sha256:4ab32604b8f5efd1ad8b98a0f6d0b708df745cad46cfb1a41b09e4559d40dca7');
   });
 });
 
@@ -258,7 +284,13 @@ describe('compiler: egress, classification, residency, sunset', () => {
     delete m.steps[0].egress;
     expect(codesOf(m)).toContain('EGRESS_REQUIRED');
     const m2 = manifest();
-    m2.steps.push({ id: 'n', type: 'capability', uses: 'util-noop@^1', egress: ['x.example.com'], dependsOn: ['announce'] });
+    m2.steps.push({
+      id: 'n',
+      type: 'capability',
+      uses: 'util-noop@^1',
+      egress: ['x.example.com'],
+      dependsOn: ['announce'],
+    });
     expect(codesOf(m2)).toContain('EGRESS_NOT_APPLICABLE');
     const m3 = manifest();
     m3.steps[1].egress = ['other.example.com'];
@@ -289,7 +321,14 @@ describe('compiler: egress, classification, residency, sunset', () => {
 
   it('requires a valid, unexpired sunset on shell steps', () => {
     const m = manifest();
-    m.steps.push({ id: 'legacy', type: 'capability', uses: 'test-shell@^1', dependsOn: ['announce'], with: { argv: ['/bin/true'] }, idempotencyKey: 'legacy-1' });
+    m.steps.push({
+      id: 'legacy',
+      type: 'capability',
+      uses: 'test-shell@^1',
+      dependsOn: ['announce'],
+      with: { argv: ['/bin/true'] },
+      idempotencyKey: 'legacy-1',
+    });
     expect(codesOf(m)).toContain('SUNSET_REQUIRED');
     m.steps.at(-1).sunset = '2026-01-01';
     expect(codesOf(m)).toContain('SUNSET_EXPIRED');
@@ -313,7 +352,12 @@ describe('compiler: references and outputs', () => {
 
   it('honours a step-level produces schema over the capability output', () => {
     const m = manifest();
-    m.steps[0].produces = { type: 'object', properties: { body: { type: 'object', properties: { customer: { type: 'string' } }, additionalProperties: false } } };
+    m.steps[0].produces = {
+      type: 'object',
+      properties: {
+        body: { type: 'object', properties: { customer: { type: 'string' } }, additionalProperties: false },
+      },
+    };
     m.steps[1].with.customer = '${{ steps.lookup.output.body.custmer }}';
     expect(codesOf(m)).toContain('UNKNOWN_OUTPUT_FIELD');
   });
@@ -349,7 +393,14 @@ describe('compiler: references and outputs', () => {
   });
 
   it('exposes schemaHasPath semantics', () => {
-    const s = { type: 'object', properties: { a: { type: 'object', properties: { b: { type: 'string' } }, additionalProperties: false }, list: { type: 'array', items: { type: 'object', properties: { x: {} } } }, free: { type: 'object' } } };
+    const s = {
+      type: 'object',
+      properties: {
+        a: { type: 'object', properties: { b: { type: 'string' } }, additionalProperties: false },
+        list: { type: 'array', items: { type: 'object', properties: { x: {} } } },
+        free: { type: 'object' },
+      },
+    };
     expect(schemaHasPath(s, ['a', 'b'])).toBe('yes');
     expect(schemaHasPath(s, ['a', 'c'])).toBe('no');
     expect(schemaHasPath(s, ['list', '0', 'x'])).toBe('yes');
@@ -363,7 +414,14 @@ describe('compiler: references and outputs', () => {
 describe('compiler: bounded fan-out, depth and cost (ADR-0002 D5)', () => {
   it('bounds map fan-out and total invocations', () => {
     const m = manifest();
-    m.steps.push({ id: 'big', type: 'map', dependsOn: ['lookup'], items: 'steps.lookup.output.body.rows', maxItems: 5000, uses: 'util-noop@^1' });
+    m.steps.push({
+      id: 'big',
+      type: 'map',
+      dependsOn: ['lookup'],
+      items: 'steps.lookup.output.body.rows',
+      maxItems: 5000,
+      uses: 'util-noop@^1',
+    });
     expect(compile(m, opts()).ok).toBe(true);
     expect(codesOf(m, opts({ limits: { maxMapItems: 1000 } }))).toContain('FANOUT_TOO_LARGE');
     expect(codesOf(m, opts({ limits: { maxInvocations: 100 } }))).toContain('TOO_MANY_INVOCATIONS');
@@ -391,7 +449,12 @@ describe('compiler: bounded fan-out, depth and cost (ADR-0002 D5)', () => {
     m.policy.retry = { attempts: 5, initialDelay: '500ms', maxDelay: '5s' };
     const p = compileOk(m).plan!;
     expect(p.steps[1]!.timeoutMs).toBe(120_000);
-    expect(p.steps[1]!.retry).toMatchObject({ attempts: 5, initialDelayMs: 500, maxDelayMs: 5000, backoff: 'exponential' });
+    expect(p.steps[1]!.retry).toMatchObject({
+      attempts: 5,
+      initialDelayMs: 500,
+      maxDelayMs: 5000,
+      backoff: 'exponential',
+    });
     m.steps[1].retry = { attempts: 1 };
     expect(compileOk(m).plan!.steps[1]!.retry!.attempts).toBe(1);
   });
@@ -410,7 +473,12 @@ describe('compiler: subworkflows', () => {
   const child = {
     version: '2.0.0',
     planHash: 'sha256:' + 'a'.repeat(64),
-    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } }, additionalProperties: false },
+    inputSchema: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: { type: 'string' } },
+      additionalProperties: false,
+    },
     subworkflowDepth: 0,
     subworkflowChain: [] as string[],
     maxInvocations: 3,
@@ -419,10 +487,19 @@ describe('compiler: subworkflows', () => {
   };
   const withSub = () => {
     const m = manifest();
-    m.steps.push({ id: 'sub', type: 'subworkflow', dependsOn: ['announce'], workflow: 'child-flow', version: '2.0.0', with: { id: '${{ inputs.orderId }}' } });
+    m.steps.push({
+      id: 'sub',
+      type: 'subworkflow',
+      dependsOn: ['announce'],
+      workflow: 'child-flow',
+      version: '2.0.0',
+      with: { id: '${{ inputs.orderId }}' },
+    });
     return m;
   };
-  const resolver = (info: typeof child | undefined) => ({ resolve: (n: string, v: string) => (n === 'child-flow' && v === '2.0.0' ? info : undefined) });
+  const resolver = (info: typeof child | undefined) => ({
+    resolve: (n: string, v: string) => (n === 'child-flow' && v === '2.0.0' ? info : undefined),
+  });
 
   it('pins the child plan and folds its cost and invocations into the parent', () => {
     const r = compileOk(withSub(), opts({ subworkflows: resolver(child) }));
