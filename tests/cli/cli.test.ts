@@ -465,3 +465,81 @@ describe('insight commands', () => {
     }
   });
 });
+
+describe('authoring commands', () => {
+  it('plans, reviews, imports, explains and documents', async () => {
+    const { ScriptedLlm, modelReply } = await import('../helpers/llm.ts');
+    const llm = new ScriptedLlm(modelReply(yamlWf('greeter', [echoStep('hi', 'hello')]), { rationale: 'Says hello.', questions: ['Which language?'] }));
+    const api = await makeApi({ llm, env: { OMNIFLOW_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl' } });
+    try {
+      await api.server.listen({ host: '127.0.0.1', port: 0 });
+      const addr = api.server.server.address();
+      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
+      const dir = tmp();
+
+      const planned = await cli(['plan', 'greet', 'people', '--out', 'greeter.yaml'], { env, cwd: dir });
+      expect(planned.code).toBe(0);
+      expect(planned.out).toContain('Says hello.');
+      expect(planned.out).toContain('Which language?');
+      expect(planned.out).toContain('✓ valid');
+      expect(readFileSync(join(dir, 'greeter.yaml'), 'utf8')).toContain('name: greeter');
+      const draftId = /(drf_\w+)/.exec(planned.out)![1]!;
+      expect((await cli(['plan'], { env })).code).toBe(2);
+
+      expect((await cli(['drafts'], { env })).out).toContain(draftId);
+      const shown = await cli(['drafts', 'show', draftId], { env });
+      expect(shown.out).toContain('Says hello.');
+      expect(shown.out).toContain('apiVersion: omniflow.dev/v1');
+      expect((await cli(['drafts', 'show', draftId, '--manifest'], { env })).out).toMatch(/^apiVersion:/);
+      expect((await cli(['drafts', 'validate', draftId], { env })).code).toBe(0);
+      const apply = await cli(['drafts', 'apply', draftId], { env });
+      expect(apply.out).toContain('tier T1: nothing applied');
+      const submitted = await cli(['drafts', 'submit', draftId], { env });
+      expect(submitted.out).toContain('published greeter@1.0.0');
+      writeFileSync(join(dir, 'mine.yaml'), yamlWf('mine', [echoStep('a', 1)]));
+      expect((await cli(['drafts', 'create', 'mine.yaml'], { env, cwd: dir })).out).toContain('✓ valid');
+      expect((await cli(['drafts', 'wobble', draftId], { env })).code).toBe(2);
+
+      writeFileSync(join(dir, 'crontab'), '0 2 * * * /usr/bin/curl -fsS https://backup.example.com/run\n15 3 * * * /usr/bin/pg_dump app | gzip > /b/app.gz\n@reboot /bin/x\n');
+      const imported = await cli(['import', 'crontab', 'crontab', '--out-dir', 'imported'], { env, cwd: dir });
+      expect(imported.code).toBe(0);
+      expect(imported.out).toContain('skipped');
+      expect(readFileSync(join(dir, 'imported', 'cron-curl-https-backup-example-com-run.yaml'), 'utf8')).toContain('shell-exec@^1');
+      expect(imported.out).toContain('suggested scripts');
+      expect((await cli(['import', 'nonsense', 'x'], { env })).code).toBe(2);
+
+      const run = (await cli(['run', 'greeter', '--json'], { env })).out;
+      const runId = JSON.parse(run).run.id as string;
+      await until(() => api.app.state.runs.getRun(runId)?.status === 'succeeded');
+      expect((await cli(['explain', 'workflow', 'greeter'], { env })).out).toContain('## What it does');
+      expect((await cli(['explain', 'run', runId], { env })).out).toContain('**Succeeded');
+      expect((await cli(['explain', 'wat', 'x'], { env })).code).toBe(2);
+
+      const docs = await cli(['docs', 'workflow', 'greeter', '--out', 'greeter.md'], { env, cwd: dir });
+      expect(docs.code).toBe(0);
+      expect(readFileSync(join(dir, 'greeter.md'), 'utf8')).toContain('```mermaid');
+      expect((await cli(['docs', 'workflow', 'greeter', '--format', 'mermaid'], { env })).out).toMatch(/^flowchart TD/);
+      expect((await cli(['docs', 'capabilities'], { env })).out).toContain('## util-echo@1.0.0');
+      expect((await cli(['docs', 'index'], { env })).out).toContain('[greeter]');
+      expect((await cli(['docs', 'workflow', 'greeter', '--format', 'pdf'], { env })).code).toBe(2);
+      expect((await cli(['docs'], { env })).code).toBe(2);
+    } finally {
+      await api.stop();
+    }
+  });
+
+  it('reports clearly when AI authoring is not configured', async () => {
+    const api = await makeApi();
+    try {
+      await api.server.listen({ host: '127.0.0.1', port: 0 });
+      const addr = api.server.server.address();
+      const env = { OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`, OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey! };
+      const r = await cli(['plan', 'do', 'something'], { env });
+      expect(r.code).toBe(1);
+      expect(r.err).toContain('AI_NOT_CONFIGURED');
+      expect(r.err).toContain('OMNIFLOW_LLM_API_KEY');
+    } finally {
+      await api.stop();
+    }
+  });
+});

@@ -6,6 +6,7 @@ import { OmniflowError } from '../core/index.ts';
 import { UsageError, has, parseArgs } from './args.ts';
 import { ApiError, ConnectionError } from './client.ts';
 import { adminCommand } from './commands/admin.ts';
+import { docsCommand, draftsCommand, explainCommand, importCommand, planCommand } from './commands/authoring.ts';
 import { compileCommand, devCommand, validateCommand } from './commands/local.ts';
 import {
   alertsCommand,
@@ -54,6 +55,11 @@ const COMMANDS: Record<string, Command> = {
   alerts: alertsCommand,
   analyze: analyzeCommand,
   proposals: proposalsCommand,
+  plan: planCommand,
+  drafts: draftsCommand,
+  import: importCommand,
+  explain: explainCommand,
+  docs: docsCommand,
   admin: adminCommand,
 };
 

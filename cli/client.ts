@@ -67,6 +67,27 @@ export class ApiClient {
     return data as T;
   }
 
+  /** GET a non-JSON (text) resource such as generated Markdown. */
+  async getText(path: string): Promise<string> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.base}${path}`, { headers: this.headers({ accept: 'text/plain, text/markdown' }), signal: AbortSignal.timeout(this.timeout) });
+    } catch (e) {
+      throw new ConnectionError(`Could not reach ${this.base}: ${(e as Error).message}`);
+    }
+    const text = await res.text();
+    if (!res.ok) {
+      let err: any;
+      try {
+        err = JSON.parse(text).error;
+      } catch {
+        /* not JSON */
+      }
+      throw new ApiError(res.status, err?.code ?? `HTTP_${res.status}`, err?.message ?? `HTTP ${res.status}`, err?.details);
+    }
+    return text;
+  }
+
   get<T = any>(path: string): Promise<T> {
     return this.request<T>('GET', path);
   }

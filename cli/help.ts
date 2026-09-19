@@ -29,6 +29,12 @@ Talk to a server (set OMNIFLOW_URL and OMNIFLOW_API_KEY)
   alerts                       Open alerts (exit 1 if any is critical)
   analyze                      Run the Analysis Agent now
   proposals [list|show]        Improvement proposals; also  accept|dismiss <id>
+  plan "<intent>"              AI drafts a workflow from a description  [--workflow n] [--out f]
+  drafts [list|show|create]    Drafts; also  validate|submit|apply|delete <id>
+  import crontab <file>        One draft per cron job (Lift)  [--owner e] [--out-dir d]
+  import script <file>         AI proposes a decomposed workflow from a legacy script
+  explain workflow|run <x>     Plain-language explanation
+  docs workflow <n>|capabilities|index  Generated docs (Markdown / Mermaid)  [--out f]
   audit verify|export          Check the tamper-evident audit chain / export it  [--out file]
 
 Operate the data directory (run on the server host; OMNIFLOW_DATA_DIR)
