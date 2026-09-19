@@ -66,8 +66,16 @@ const KNOWN_PATHS: Record<string, string> = {
   certbot: '/usr/bin/certbot',
 };
 
-/** Shell syntax that cannot be expressed as a plain argument vector. */
-const SHELL_SYNTAX = /[|&;<>`]|\$\(|\$\{|\*|\?|(^|\s)~/;
+/**
+ * Does the command rely on the shell (pipes, redirects, globs, variables, substitutions)? Quoted text and
+ * URLs are ignored: `curl 'https://x/y?a=1&b=2'` is a plain argument vector.
+ */
+export function needsShell(command: string): boolean {
+  const noSingle = command.replace(/'[^']*'/g, "''");
+  if (/\$[A-Za-z_{(]|`/.test(noSingle)) return true; // expansions still happen inside double quotes
+  const bare = noSingle.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/\S+:\/\/\S+/g, 'URL');
+  return /[|&;<>*?]|(^|\s)~/.test(bare);
+}
 
 /** Split a command line into words, honouring single and double quotes and backslash escapes. */
 export function tokenize(command: string): string[] | undefined {
@@ -164,12 +172,12 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     // A stable, readable name from the first word(s) of the command.
     const words0 = command.split(/[\s|&;<>]+/).filter(Boolean);
     const exeWord = (words0[0] ?? 'job').split('/').pop() ?? 'job';
-    let name = `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !SHELL_SYNTAX.test(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
+    let name = `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !needsShell(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
     for (let n = 2; used.has(name); n++) name = `${name.replace(/-\d+$/, '')}-${n}`;
     used.add(name);
 
     let argv: string[];
-    if (SHELL_SYNTAX.test(command)) {
+    if (needsShell(command)) {
       const path = `${(opts.scriptDir ?? '/opt/omniflow/scripts').replace(/\/$/, '')}/${name}.sh`;
       script = { path, content: `#!/bin/sh\nset -eu\n${command}\n` };
       argv = [path];

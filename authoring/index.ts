@@ -1,5 +1,5 @@
 export { explainPlan, explainRun, describeCron, type PlanExplanation, type RunExplanation } from './agents/explainer.ts';
-export { importCrontab, tokenize, type ImportOptions, type ImportResult, type ImportedWorkflow } from './agents/importer.ts';
+export { importCrontab, needsShell, tokenize, type ImportOptions, type ImportResult, type ImportedWorkflow } from './agents/importer.ts';
 export { parseReply, Planner, type PlannerDeps, type PlanRequest, type PlanResult, type ValidationOutcome } from './agents/planner.ts';
 export { capabilityCatalogue, EXAMPLE_MANIFEST, MANIFEST_REFERENCE, plannerSystemPrompt } from './agents/prompt.ts';
 export { capabilityMarkdown, indexMarkdown, workflowMarkdown, workflowMermaid, type WorkflowDocContext } from './docs/generator.ts';

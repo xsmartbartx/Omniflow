@@ -134,7 +134,7 @@ export function explainPlan(plan: Plan): PlanExplanation {
   if (effectful.length) {
     const uncompensated = effectful.filter((s) => !s.compensate);
     risks.push(`${effectful.length} step${effectful.length === 1 ? ' changes' : 's change'} things outside OmniFlow (${effectful.map((s) => `“${s.name ?? s.id}”`).join(', ')}).`);
-    if (uncompensated.length === effectful.length) risks.push('None of them can be undone automatically, so a failure part-way through needs a person to clean up.');
+    if (uncompensated.length === effectful.length) risks.push(`${effectful.length === 1 ? 'It cannot' : 'None of them can'} be undone automatically, so a failure part-way through needs a person to clean up.`);
     else if (uncompensated.length) risks.push(`${uncompensated.map((s) => `“${s.name ?? s.id}”`).join(', ')} cannot be undone automatically, so a failure after ${uncompensated.length === 1 ? 'it' : 'them'} needs a person to clean up.`);
   }
   if (a.families.includes('shell')) risks.push('It runs shell commands, the least constrained kind of step. That is meant to be temporary.');
