@@ -1,12 +1,16 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse, parseAllDocuments } from 'yaml';
 import { createDefaultRegistry, defaultAdapterConfig } from '../../capabilities/index.ts';
 import { runCli } from '../../cli/main.ts';
+import { systemClock } from '../../core/index.ts';
 import { compile } from '../../orchestration/compiler/index.ts';
 import { parsePolicyDocument } from '../../security/policy/index.ts';
+import { createOmniflow } from '../../server/platform.ts';
 import { makeApi, until } from '../helpers/api.ts';
+import { makeState } from '../helpers/state.ts';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
@@ -35,18 +39,33 @@ describe('configuration documentation cannot drift from the code', () => {
     expect([...documented].filter((v) => !used.has(v) && !composeLevel.has(v)).sort()).toEqual([]);
   });
 
-  it('a copied .env.example (secrets blank) loads as a valid configuration', async () => {
+  it('a copied .env.example, exactly as shipped (blank secrets and all), starts a working server', async () => {
     const { loadConfig } = await import('../../server/config.ts');
     const env: Record<string, string> = {};
     for (const line of read('.env.example').split('\n')) {
       const m = /^([A-Z_]+)=(.*)$/.exec(line);
-      if (m?.[2]) env[m[1]!] = m[2];
+      if (m) env[m[1]!] = m[2]!; // blanks included: that is what `cp .env.example .env` produces
     }
-    const dir = join(ROOT, 'node_modules', '.cache', `envtest-${process.pid}`);
-    const cfg = loadConfig({ ...env, OMNIFLOW_DATA_DIR: dir, OMNIFLOW_ADMIN_PASSWORD: 'x'.repeat(16) }, { cwd: dir });
+    expect(env.OMNIFLOW_ADMIN_PASSWORD).toBe('');
+    expect(env.OMNIFLOW_MASTER_KEY).toBe('');
+    const dir = mkdtempSync(join(tmpdir(), 'omniflow-envtest-'));
+    const cfg = loadConfig({ ...env, OMNIFLOW_DATA_DIR: dir, OMNIFLOW_LOG_LEVEL: 'silent' }, { cwd: dir });
     expect(cfg.environment).toBe('production');
     expect(cfg.analysisIntervalHours).toBe(24);
     expect(cfg.alertChannels).toEqual([]);
+    expect(cfg.admin.password).toBeUndefined();
+    expect(cfg.masterKeySource).toBe('generated');
+
+    const app = createOmniflow(cfg, { state: makeState({ clock: systemClock }) });
+    const started = await app.start();
+    try {
+      // no password was configured, so one is generated for the first sign-in and must be changed
+      expect(started.bootstrap?.password).toMatch(/.{12,}/);
+      const user = app.state.identity.getUserByEmail('default', 'admin@example.com');
+      expect(user?.mustChangePassword).toBe(true);
+    } finally {
+      await app.stop().catch(() => undefined);
+    }
   });
 });
 

@@ -52,13 +52,16 @@ function json<T>(env: Env, name: string, dflt: T): T {
  * from a secret manager instead.
  */
 export function loadConfig(
-  env: Env = process.env,
+  rawEnv: Env = process.env,
   opts: {
     version?: string;
-    cwd?: string /** Tooling that only reads must not invent and store a key. */;
+    cwd?: string;
+    /** Tooling that only reads must not invent and store a key. */
     persistMasterKey?: boolean;
   } = {},
 ): Config {
+  // A blank value (`OMNIFLOW_ADMIN_PASSWORD=` in an env file) means "not set", never "set to nothing".
+  const env: Env = Object.fromEntries(Object.entries(rawEnv).filter(([, v]) => v !== undefined && v.trim() !== ''));
   const cwd = opts.cwd ?? process.cwd();
   const environment = (env.OMNIFLOW_ENV ?? 'production') as EnvironmentName;
   if (!['development', 'staging', 'production'].includes(environment))

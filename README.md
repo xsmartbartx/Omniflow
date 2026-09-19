@@ -41,11 +41,12 @@ You need Docker (or Node.js 24+).
 
 ```bash
 git clone <this repository> omniflow && cd omniflow
-cp .env.example .env            # set OMNIFLOW_ADMIN_PASSWORD; leave the rest for now
+cp .env.example .env            # optional: set OMNIFLOW_ADMIN_PASSWORD (blank = a random one is printed once in the log)
 docker compose up -d
 ```
 
-Open <http://localhost:8080>, sign in as `admin@example.com`, and go to **Workflows → New workflow**.
+Open <http://localhost:8080> and sign in as `admin@example.com`. If you left the password blank, read it from
+`docker compose logs omniflow` ("First start"); you will be asked to change it. Then go to **Workflows → New workflow**.
 Or from the command line:
 
 ```bash
