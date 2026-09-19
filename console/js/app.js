@@ -107,7 +107,7 @@ function buildShell() {
   );
   const main = h('main', { class: 'main', id: 'main', tabindex: -1 });
   const menu = h('button', { type: 'button', class: 'btn menu-btn', 'aria-label': 'Menu', onClick: () => side.classList.toggle('open') }, icon('menu'));
-  return { shell: h('div', { class: 'shell' }, side, h('div', {}, h('div', { class: 'main' , style: {} }, menu, main))), main, side };
+  return { shell: h('div', { class: 'shell' }, side, h('div', { class: 'content' }, menu, main)), main, side };
 }
 
 async function signOut(ev) {
@@ -131,8 +131,10 @@ async function renderRoute() {
   const { main, side } = shellParts;
   side.classList.remove('open');
   const active = match.route?.parent ?? match.route?.path;
-  for (const a of side.querySelectorAll('.nav a')) a.toggleAttribute('aria-current', a.dataset.path === active) || a.removeAttribute('aria-current');
-  for (const a of side.querySelectorAll('.nav a')) if (a.dataset.path === active) a.setAttribute('aria-current', 'page');
+  for (const a of side.querySelectorAll('.nav a')) {
+    if (a.dataset.path === active) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
 
   if (!match.route || (match.route.can && !can(match.route.can))) {
     document.title = 'Not found · OmniFlow';
