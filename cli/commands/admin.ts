@@ -223,7 +223,7 @@ function doctor(ctx: CliContext, { config, state, dataDir }: { config: ReturnTyp
     if (!config.publicUrl.startsWith('https://')) add('warn', 'HTTPS', `OMNIFLOW_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`);
     else if (!config.trustProxy) add('warn', 'reverse proxy', 'OMNIFLOW_PUBLIC_URL is https but OMNIFLOW_TRUST_PROXY is off: rate limits and audit will see the proxy\'s address, not the client\'s');
     else add('ok', 'HTTPS', 'public URL is https and the proxy is trusted');
-    add(config.metricsToken ? 'ok' : 'warn', 'metrics', config.metricsToken ? 'the /metrics endpoint requires a token' : 'OMNIFLOW_METRICS_TOKEN is unset: /metrics is not exposed');
+    add('ok', 'metrics', config.metricsToken ? '/metrics accepts the OMNIFLOW_METRICS_TOKEN bearer token' : '/metrics needs an API key with audit access (set OMNIFLOW_METRICS_TOKEN for a dedicated scrape token)');
     add(config.alertChannels.length ? 'ok' : 'warn', 'alerting', config.alertChannels.length ? `alerts go to: ${config.alertChannels.join(', ')}` : 'no OMNIFLOW_ALERT_CHANNELS: alerts are only visible in the console');
   }
   if (config.adapters.shell.allowedCommands.length) add('warn', 'shell capability', `enabled for ${config.adapters.shell.allowedCommands.length} executable(s); run OmniFlow in a network-restricted container`);

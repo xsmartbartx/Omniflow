@@ -85,13 +85,7 @@ Run one and watch it:
 omniflow run hello-world --input name=Ada --wait
 ```
 
-```
-15:04:05.101  ...                run.queued
-15:04:05.103  greet              step.succeeded
-15:04:05.104  shout              step.succeeded
-15:04:05.105  ...                run.succeeded
-✓ succeeded
-```
+`--wait` streams each event as it happens and exits `0` only if the run succeeded — handy in scripts and CI.
 
 Open the console (**Runs**) to see the same run with its graph, timings and inputs/outputs. **Workflows →
 hello-world → Docs** shows the generated documentation and diagram.
