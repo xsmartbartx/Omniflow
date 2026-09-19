@@ -3,21 +3,13 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "includes": [
-      "**",
-      "!**/node_modules",
-      "!**/dist",
-      "!**/coverage",
-      "!docs",
-      "!package-lock.json",
-      "!LICENSE"
-    ]
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/coverage", "!docs", "!package-lock.json", "!LICENSE"]
   },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
-    "lineWidth": 100
+    "lineWidth": 120
   },
   "linter": {
     "enabled": true,

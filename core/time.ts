@@ -42,9 +42,7 @@ export function parseDuration(input: string | number): number {
     return Math.round(input);
   }
   const text = input.trim();
-  const iso = /^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i.exec(
-    text,
-  );
+  const iso = /^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i.exec(text);
   if (iso && text.length > 1 && !/^PT?$/i.test(text)) {
     const [, w, d, h, m, s] = iso;
     return Math.round(

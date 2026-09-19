@@ -1,22 +1,8 @@
 import semver from 'semver';
-import {
-  contentHash,
-  ERROR_CLASSES,
-  type Issue,
-  isSensitivity,
-  ValidationError,
-} from '../../core/index.ts';
+import { contentHash, ERROR_CLASSES, type Issue, isSensitivity, ValidationError } from '../../core/index.ts';
 import type { CapabilityDeclaration } from '../../schemas/index.ts';
-import {
-  checkSchemaDefinition,
-  isValidEgressHost,
-  parseCapabilityRef,
-} from '../../security/validator/index.ts';
-import type {
-  CapabilityAdapter,
-  CapabilityRegistration,
-  RegisteredCapability,
-} from './types.ts';
+import { checkSchemaDefinition, isValidEgressHost, parseCapabilityRef } from '../../security/validator/index.ts';
+import type { CapabilityAdapter, CapabilityRegistration, RegisteredCapability } from './types.ts';
 
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -43,10 +29,14 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
     err('dryRun', 'MISSING_DRY_RUN', "every capability must declare dryRun: 'simulate' | 'execute' (ADR-0002 D3)");
   }
   if (d.effect === 'effectful' && d.dryRun !== 'simulate') {
-    err('dryRun', 'EFFECTFUL_MUST_SIMULATE', "an effectful capability must declare dryRun: 'simulate' so shadow runs can never perform its effect");
+    err(
+      'dryRun',
+      'EFFECTFUL_MUST_SIMULATE',
+      "an effectful capability must declare dryRun: 'simulate' so shadow runs can never perform its effect",
+    );
   }
   if (d.effect === 'pure' && d.egress?.mode !== 'none') {
-    err('egress', 'PURE_WITH_EGRESS', "a pure capability cannot have network egress");
+    err('egress', 'PURE_WITH_EGRESS', 'a pure capability cannot have network egress');
   }
   if (d.egress?.mode === 'static') {
     if (d.egress.hosts.length === 0) err('egress.hosts', 'EMPTY_EGRESS', 'static egress needs at least one host');
@@ -91,7 +81,11 @@ export class CapabilityRegistry {
     const declaration = adapter.declaration;
     const issues = validateDeclaration(declaration);
     if (!registration.owner?.trim()) {
-      issues.push({ path: 'owner', code: 'OWNER_REQUIRED', message: 'a named owner is required to register a capability' });
+      issues.push({
+        path: 'owner',
+        code: 'OWNER_REQUIRED',
+        message: 'a named owner is required to register a capability',
+      });
     }
     if (issues.length > 0) {
       throw new ValidationError(

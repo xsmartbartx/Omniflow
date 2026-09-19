@@ -27,38 +27,9 @@ const ALLOWED: Record<string, string[]> = {
   orchestration: ['core', 'schemas', 'security', 'capabilities', 'state'],
   insight: ['core', 'schemas', 'security', 'capabilities', 'state'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
-  gateway: [
-    'core',
-    'schemas',
-    'security',
-    'capabilities',
-    'state',
-    'orchestration',
-    'insight',
-    'authoring',
-  ],
-  cli: [
-    'core',
-    'schemas',
-    'security',
-    'capabilities',
-    'state',
-    'orchestration',
-    'insight',
-    'authoring',
-    'gateway',
-  ],
-  server: [
-    'core',
-    'schemas',
-    'security',
-    'capabilities',
-    'state',
-    'orchestration',
-    'insight',
-    'authoring',
-    'gateway',
-  ],
+  gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring'],
+  cli: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway'],
+  server: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway'],
 };
 
 /** Agent modules: may only *propose*. They may never import these execution-plane modules. */
@@ -92,8 +63,7 @@ const violations: string[] = [];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === 'coverage' || name.startsWith('.'))
-      continue;
+    if (name === 'node_modules' || name === 'dist' || name === 'coverage' || name.startsWith('.')) continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) walk(full, out);
     else if (full.endsWith('.ts') && !full.endsWith('.d.ts')) out.push(full);
@@ -134,28 +104,18 @@ for (const layer of Object.keys(ALLOWED)) {
           .join('/');
         const targetLayer = layerOf(target);
         if (targetLayer !== layer && !(ALLOWED[layer] ?? []).includes(targetLayer)) {
-          violations.push(
-            `${relFile}: layer '${layer}' may not import from '${targetLayer}' (${spec})`,
-          );
+          violations.push(`${relFile}: layer '${layer}' may not import from '${targetLayer}' (${spec})`);
         }
         if (
           AGENT_DIRS.some((d) => relFile.startsWith(`${d}/`)) &&
           AGENT_FORBIDDEN.some((f) => target === f || target.startsWith(`${f}/`))
         ) {
-          violations.push(
-            `${relFile}: agent module may not import execution-plane module '${target}' (ADR-0002 D4)`,
-          );
+          violations.push(`${relFile}: agent module may not import execution-plane module '${target}' (ADR-0002 D4)`);
         }
       } else if (NO_NETWORK_DIRS.some((d) => relFile.startsWith(`${d}/`))) {
         const bare = spec.replace(/^node:/, '');
-        if (
-          NETWORK_MODULES.some(
-            (m) => m === spec || m === `node:${bare}` || spec.startsWith(`${m}/`),
-          )
-        ) {
-          violations.push(
-            `${relFile}: orchestrator may not import network module '${spec}' (ADR-0002 D6)`,
-          );
+        if (NETWORK_MODULES.some((m) => m === spec || m === `node:${bare}` || spec.startsWith(`${m}/`))) {
+          violations.push(`${relFile}: orchestrator may not import network module '${spec}' (ADR-0002 D6)`);
         }
       }
     }

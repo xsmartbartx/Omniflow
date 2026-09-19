@@ -223,8 +223,7 @@ class Parser {
     for (;;) {
       const t = this.peek();
       const isOp =
-        (t.type === 'punct' && ['<', '<=', '>', '>='].includes(t.value)) ||
-        (t.type === 'ident' && t.value === 'in');
+        (t.type === 'punct' && ['<', '<=', '>', '>='].includes(t.value)) || (t.type === 'ident' && t.value === 'in');
       if (!isOp) break;
       this.next();
       left = {
@@ -359,10 +358,7 @@ class Parser {
     this.expectPunct(')');
     if (args.length < spec.min || args.length > spec.max) {
       const range = spec.min === spec.max ? `${spec.min}` : `${spec.min}–${spec.max}`;
-      throw new ExpressionSyntaxError(
-        `${nameTok.value}() takes ${range} argument(s), got ${args.length}`,
-        nameTok.pos,
-      );
+      throw new ExpressionSyntaxError(`${nameTok.value}() takes ${range} argument(s), got ${args.length}`, nameTok.pos);
     }
     return { type: 'call', name: nameTok.value, args, pos: nameTok.pos };
   }

@@ -149,9 +149,7 @@ describe('manifest validator: schema errors', () => {
   it('reports missing required properties', () => {
     const m: any = base();
     delete m.metadata.owner;
-    expect(errorsOf(m).some((e) => e.message.includes("Missing required property 'owner'"))).toBe(
-      true,
-    );
+    expect(errorsOf(m).some((e) => e.message.includes("Missing required property 'owner'"))).toBe(true);
   });
 
   it('rejects unknown top-level properties (closed schema)', () => {
@@ -174,9 +172,7 @@ describe('manifest validator: schema errors', () => {
     const errs = errorsOf(m);
     expect(errs.some((e) => e.path === 'metadata.name')).toBe(true);
     expect(errs.some((e) => e.path === 'metadata.version')).toBe(true);
-    expect(
-      errs.some((e) => e.path === 'metadata.criticality' && e.message.startsWith('Must be one of')),
-    ).toBe(true);
+    expect(errs.some((e) => e.path === 'metadata.criticality' && e.message.startsWith('Must be one of'))).toBe(true);
   });
 
   it('requires per-type fields', () => {
@@ -392,11 +388,7 @@ describe('manifest validator: step-type rules', () => {
     });
     const c = codes(m);
     expect(c).toEqual(
-      expect.arrayContaining([
-        'RETRY_NOT_APPLICABLE',
-        'IDEMPOTENCY_NOT_APPLICABLE',
-        'COMPENSATE_NOT_APPLICABLE',
-      ]),
+      expect.arrayContaining(['RETRY_NOT_APPLICABLE', 'IDEMPOTENCY_NOT_APPLICABLE', 'COMPENSATE_NOT_APPLICABLE']),
     );
   });
 
@@ -452,9 +444,7 @@ describe('manifest validator: triggers, inputs, guards, policy', () => {
     m.inputs.range = { type: 'integer', minimum: 10, maximum: 1 };
     m.inputs.bad = { type: 'string', pattern: '(' };
     const c = codes(m);
-    expect(c).toEqual(
-      expect.arrayContaining(['INVALID_DEFAULT', 'UNSAFE_REGEX', 'INVALID_RANGE', 'INVALID_REGEX']),
-    );
+    expect(c).toEqual(expect.arrayContaining(['INVALID_DEFAULT', 'UNSAFE_REGEX', 'INVALID_RANGE', 'INVALID_REGEX']));
   });
 
   it('rejects reserved context keys', () => {

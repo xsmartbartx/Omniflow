@@ -14,10 +14,7 @@ export interface TopoResult {
  * @param ids   every node id
  * @param deps  node id → ids it depends on (edges point from dependency to dependent)
  */
-export function topologicalOrder(
-  ids: readonly string[],
-  deps: ReadonlyMap<string, readonly string[]>,
-): TopoResult {
+export function topologicalOrder(ids: readonly string[], deps: ReadonlyMap<string, readonly string[]>): TopoResult {
   const idSet = new Set(ids);
   const indegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
@@ -53,10 +50,7 @@ export function topologicalOrder(
   return { order, cycle: findCycle(remaining, deps) };
 }
 
-function findCycle(
-  nodes: ReadonlySet<string>,
-  deps: ReadonlyMap<string, readonly string[]>,
-): string[] {
+function findCycle(nodes: ReadonlySet<string>, deps: ReadonlyMap<string, readonly string[]>): string[] {
   const state = new Map<string, 'visiting' | 'done'>();
   const stack: string[] = [];
   const visit = (id: string): string[] | undefined => {
@@ -101,10 +95,7 @@ export function transitiveDependencies(
 }
 
 /** Longest dependency chain length (number of nodes) in an acyclic graph. */
-export function longestPath(
-  order: readonly string[],
-  deps: ReadonlyMap<string, readonly string[]>,
-): number {
+export function longestPath(order: readonly string[], deps: ReadonlyMap<string, readonly string[]>): number {
   const depth = new Map<string, number>();
   let max = 0;
   for (const id of order) {

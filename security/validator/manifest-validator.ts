@@ -24,13 +24,7 @@ import {
 } from '../../schemas/manifest.ts';
 import { isIsoDate, isSuspiciousRegex, isValidEgressHost, parseCapabilityRef } from './refs.ts';
 import { checkSchemaDefinition, validateAgainstSchema, validateValue } from './schema-validator.ts';
-import {
-  DEFAULT_MAX_BYTES,
-  formatPath,
-  type Locator,
-  type PathSegment,
-  parseSource,
-} from './source-map.ts';
+import { DEFAULT_MAX_BYTES, formatPath, type Locator, type PathSegment, parseSource } from './source-map.ts';
 
 export interface ManifestValidation {
   ok: boolean;
@@ -63,10 +57,7 @@ const roots = (...r: string[]) => new Set(r);
 const BASE = ['inputs', 'context', 'run'] as const;
 
 /** Validate a manifest given as YAML/JSON text (with source positions) or an already-parsed object. */
-export function validateManifest(
-  source: string | unknown,
-  options: { maxBytes?: number } = {},
-): ManifestValidation {
+export function validateManifest(source: string | unknown, options: { maxBytes?: number } = {}): ManifestValidation {
   let value: unknown;
   let locate: Locator | undefined;
   const issues: Issue[] = [];
@@ -79,10 +70,7 @@ export function validateManifest(
     locate = parsed.locate;
   } else {
     value = source;
-    if (
-      Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8') >
-      (options.maxBytes ?? LIMITS.maxManifestBytes)
-    ) {
+    if (Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8') > (options.maxBytes ?? LIMITS.maxManifestBytes)) {
       return finish([{ path: '', code: 'DOCUMENT_TOO_LARGE', message: 'Manifest is too large' }]);
     }
   }
@@ -99,9 +87,7 @@ export function validateManifest(
 }
 
 function finish(issues: Issue[]): ManifestValidation {
-  const sorted = [...issues].sort(
-    (a, b) => (a.line ?? Number.MAX_SAFE_INTEGER) - (b.line ?? Number.MAX_SAFE_INTEGER),
-  );
+  const sorted = [...issues].sort((a, b) => (a.line ?? Number.MAX_SAFE_INTEGER) - (b.line ?? Number.MAX_SAFE_INTEGER));
   const errors = sorted.filter((i) => i.severity !== 'warning');
   const warnings = sorted.filter((i) => i.severity === 'warning');
   return { ok: errors.length === 0, issues: sorted, errors, warnings };
@@ -128,32 +114,18 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   };
   const error = (path: readonly PathSegment[], code: string, message: string, keyLoc = false) =>
     add('error', path, code, message, keyLoc);
-  const warn = (path: readonly PathSegment[], code: string, message: string) =>
-    add('warning', path, code, message);
+  const warn = (path: readonly PathSegment[], code: string, message: string) => add('warning', path, code, message);
 
   // ------------------------------------------------------------ metadata
   if (!m.metadata.description) {
-    warn(
-      ['metadata'],
-      'MISSING_DESCRIPTION',
-      'Add a description so reviewers know what this workflow is for',
-    );
+    warn(['metadata'], 'MISSING_DESCRIPTION', 'Add a description so reviewers know what this workflow is for');
   }
   if (!m.metadata.criticality) {
-    warn(
-      ['metadata'],
-      'MISSING_CRITICALITY',
-      "Set 'criticality' so policy and alerting can be tuned",
-    );
+    warn(['metadata'], 'MISSING_CRITICALITY', "Set 'criticality' so policy and alerting can be tuned");
   }
   for (const key of Object.keys(m.context ?? {})) {
     if (RESERVED_CONTEXT_KEYS.includes(key)) {
-      error(
-        ['context', key],
-        'RESERVED_CONTEXT_KEY',
-        `'${key}' is reserved and injected by the engine`,
-        true,
-      );
+      error(['context', key], 'RESERVED_CONTEXT_KEY', `'${key}' is reserved and injected by the engine`, true);
     }
   }
 
@@ -163,11 +135,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     const p = ['inputs', name];
     if (spec.pattern !== undefined) {
       if (isSuspiciousRegex(spec.pattern)) {
-        error(
-          [...p, 'pattern'],
-          'UNSAFE_REGEX',
-          'Pattern risks catastrophic backtracking; simplify it',
-        );
+        error([...p, 'pattern'], 'UNSAFE_REGEX', 'Pattern risks catastrophic backtracking; simplify it');
       } else {
         try {
           new RegExp(spec.pattern, 'u');
@@ -201,11 +169,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       }
     }
     if (spec.required === true && spec.default !== undefined) {
-      warn(
-        [...p, 'required'],
-        'REQUIRED_WITH_DEFAULT',
-        "'required' has no effect when a default is given",
-      );
+      warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
     }
   }
 
@@ -214,8 +178,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   m.triggers.forEach((t, i) => {
     const p: PathSegment[] = ['triggers', i];
     if ('name' in t && t.name) {
-      if (triggerNames.has(t.name))
-        error([...p, 'name'], 'DUPLICATE_TRIGGER', `Duplicate trigger name '${t.name}'`);
+      if (triggerNames.has(t.name)) error([...p, 'name'], 'DUPLICATE_TRIGGER', `Duplicate trigger name '${t.name}'`);
       triggerNames.add(t.name);
     }
     if (t.type === 'schedule') {
@@ -250,10 +213,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         where: 'trigger filter',
       });
     }
-    if (
-      (t.type === 'webhook' || t.type === 'event' || t.type === 'workflow-completion') &&
-      t.inputs
-    ) {
+    if ((t.type === 'webhook' || t.type === 'event' || t.type === 'workflow-completion') && t.inputs) {
       checkValue(t.inputs, [...p, 'inputs'], {
         roots: roots('event', 'context'),
         steps: new Set(),
@@ -262,11 +222,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       });
     }
     if (t.type === 'workflow-completion' && t.workflow === m.metadata.name) {
-      error(
-        [...p, 'workflow'],
-        'SELF_TRIGGER',
-        'A workflow cannot be triggered by its own completion',
-      );
+      error([...p, 'workflow'], 'SELF_TRIGGER', 'A workflow cannot be triggered by its own completion');
     }
   });
 
@@ -289,14 +245,9 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   m.steps.forEach((s, i) => {
     const list: string[] = [];
     (s.dependsOn ?? []).forEach((d, j) => {
-      if (d === s.id)
-        error(['steps', i, 'dependsOn', j], 'SELF_DEPENDENCY', `Step '${s.id}' depends on itself`);
+      if (d === s.id) error(['steps', i, 'dependsOn', j], 'SELF_DEPENDENCY', `Step '${s.id}' depends on itself`);
       else if (!stepIds.has(d)) {
-        error(
-          ['steps', i, 'dependsOn', j],
-          'UNKNOWN_DEPENDENCY',
-          `Step '${s.id}' depends on unknown step '${d}'`,
-        );
+        error(['steps', i, 'dependsOn', j], 'UNKNOWN_DEPENDENCY', `Step '${s.id}' depends on unknown step '${d}'`);
       } else list.push(d);
     });
     deps.set(s.id, list);
@@ -306,20 +257,13 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   if (topo.cycle) {
     error(['steps'], 'DEPENDENCY_CYCLE', `Dependency cycle: ${topo.cycle.join(' → ')}`);
   }
-  const ancestors = topo.cycle
-    ? new Map<string, Set<string>>()
-    : transitiveDependencies(topo.order, deps);
+  const ancestors = topo.cycle ? new Map<string, Set<string>>() : transitiveDependencies(topo.order, deps);
 
-  const scopeFor = (
-    s: Step,
-    o: { secrets?: boolean; item?: boolean; self?: boolean; where: string },
-  ): ExprScope => {
+  const scopeFor = (s: Step, o: { secrets?: boolean; item?: boolean; self?: boolean; where: string }): ExprScope => {
     const up = new Set(ancestors.get(s.id) ?? []);
     if (o.self) up.add(s.id);
     return {
-      roots: o.item
-        ? roots(...BASE, 'steps', 'secrets', 'item', 'index')
-        : roots(...BASE, 'steps', 'secrets'),
+      roots: o.item ? roots(...BASE, 'steps', 'secrets', 'item', 'index') : roots(...BASE, 'steps', 'secrets'),
       steps: up,
       secrets: o.secrets ?? false,
       where: o.where,
@@ -342,11 +286,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     const p: PathSegment[] = ['steps', i];
     (s.dependsOn ?? []).forEach((d, j) => {
       if (terminateIds.has(d)) {
-        error(
-          [...p, 'dependsOn', j],
-          'DEPENDS_ON_TERMINATE',
-          `'${d}' ends the run, so nothing can depend on it`,
-        );
+        error([...p, 'dependsOn', j], 'DEPENDS_ON_TERMINATE', `'${d}' ends the run, so nothing can depend on it`);
       }
     });
 
@@ -357,20 +297,11 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     }
     if (s.produces !== undefined) {
       const bad = checkSchemaDefinition(s.produces);
-      if (bad)
-        error(
-          [...p, 'produces'],
-          'INVALID_SCHEMA',
-          `'produces' is not a valid JSON Schema: ${bad}`,
-        );
+      if (bad) error([...p, 'produces'], 'INVALID_SCHEMA', `'produces' is not a valid JSON Schema: ${bad}`);
     }
     if (s.retry) {
       if (!['capability', 'map', 'subworkflow'].includes(s.type)) {
-        error(
-          [...p, 'retry'],
-          'RETRY_NOT_APPLICABLE',
-          `'retry' is not allowed on '${s.type}' steps`,
-        );
+        error([...p, 'retry'], 'RETRY_NOT_APPLICABLE', `'retry' is not allowed on '${s.type}' steps`);
       }
       for (const k of ['initialDelay', 'maxDelay'] as const) {
         const v = s.retry[k];
@@ -398,11 +329,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     }
     if (s.compensate) {
       if (s.type !== 'capability') {
-        error(
-          [...p, 'compensate'],
-          'COMPENSATE_NOT_APPLICABLE',
-          "'compensate' is only allowed on capability steps",
-        );
+        error([...p, 'compensate'], 'COMPENSATE_NOT_APPLICABLE', "'compensate' is only allowed on capability steps");
       } else {
         checkCapabilityRef(s.compensate.uses, [...p, 'compensate', 'uses']);
         if (s.compensate.with) {
@@ -427,14 +354,8 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     if (typeof s.onError === 'object' && s.onError !== null) {
       const target = s.onError.routeTo;
       const t = byId.get(target);
-      if (!t)
-        error(
-          [...p, 'onError', 'routeTo'],
-          'UNKNOWN_ROUTE_TARGET',
-          `routeTo target '${target}' does not exist`,
-        );
-      else if (target === s.id)
-        error([...p, 'onError', 'routeTo'], 'SELF_ROUTE', 'A step cannot route to itself');
+      if (!t) error([...p, 'onError', 'routeTo'], 'UNKNOWN_ROUTE_TARGET', `routeTo target '${target}' does not exist`);
+      else if (target === s.id) error([...p, 'onError', 'routeTo'], 'SELF_ROUTE', 'A step cannot route to itself');
       else if (!(t.step.dependsOn ?? []).includes(s.id)) {
         error(
           [...p, 'onError', 'routeTo'],
@@ -447,8 +368,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     switch (s.type) {
       case 'capability': {
         checkCapabilityRef(s.uses, [...p, 'uses']);
-        if (s.with)
-          checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, where: 'step input' }));
+        if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, where: 'step input' }));
         checkStepEgress(s.egress, [...p, 'egress']);
         checkSunset(s.sunset, [...p, 'sunset']);
         break;
@@ -457,24 +377,12 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         checkCapabilityRef(s.uses, [...p, 'uses']);
         checkExpression(s.items, [...p, 'items'], scopeFor(s, { where: "'items' expression" }));
         if (s.with)
-          checkValue(
-            s.with,
-            [...p, 'with'],
-            scopeFor(s, { secrets: true, item: true, where: 'map body input' }),
-          );
+          checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, item: true, where: 'map body input' }));
         if (s.maxItems > LIMITS.maxMapItems)
-          error(
-            [...p, 'maxItems'],
-            'FANOUT_TOO_LARGE',
-            `maxItems may not exceed ${LIMITS.maxMapItems}`,
-          );
+          error([...p, 'maxItems'], 'FANOUT_TOO_LARGE', `maxItems may not exceed ${LIMITS.maxMapItems}`);
         checkStepEgress(s.egress, [...p, 'egress']);
         checkSunset(s.sunset, [...p, 'sunset']);
-        if (
-          s.errorTolerance &&
-          s.errorTolerance.count === undefined &&
-          s.errorTolerance.percent === undefined
-        ) {
+        if (s.errorTolerance && s.errorTolerance.count === undefined && s.errorTolerance.percent === undefined) {
           error([...p, 'errorTolerance'], 'EMPTY_TOLERANCE', "Set 'count' and/or 'percent'");
         }
         break;
@@ -482,25 +390,15 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       case 'branch': {
         const names = new Set<string>();
         s.cases.forEach((c, j) => {
-          if (names.has(c.name))
-            error([...p, 'cases', j, 'name'], 'DUPLICATE_CASE', `Duplicate case '${c.name}'`);
+          if (names.has(c.name)) error([...p, 'cases', j, 'name'], 'DUPLICATE_CASE', `Duplicate case '${c.name}'`);
           names.add(c.name);
-          checkExpression(
-            c.when,
-            [...p, 'cases', j, 'when'],
-            scopeFor(s, { where: 'branch condition' }),
-          );
+          checkExpression(c.when, [...p, 'cases', j, 'when'], scopeFor(s, { where: 'branch condition' }));
         });
         if (s.default !== undefined && names.has(s.default)) {
-          error(
-            [...p, 'default'],
-            'DEFAULT_COLLIDES_WITH_CASE',
-            `default name '${s.default}' is also a case name`,
-          );
+          error([...p, 'default'], 'DEFAULT_COLLIDES_WITH_CASE', `default name '${s.default}' is also a case name`);
         }
         const last = s.cases[s.cases.length - 1];
-        const alwaysTrue =
-          last !== undefined && /^\s*(\$\{\{\s*)?true(\s*\}\})?\s*$/.test(last.when);
+        const alwaysTrue = last !== undefined && /^\s*(\$\{\{\s*)?true(\s*\}\})?\s*$/.test(last.when);
         if (s.default === undefined && !alwaysTrue) {
           error(
             [...p],
@@ -521,8 +419,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         break;
       }
       case 'approval': {
-        if (!isDuration(s.timeout))
-          error([...p, 'timeout'], 'INVALID_DURATION', 'Invalid duration');
+        if (!isDuration(s.timeout)) error([...p, 'timeout'], 'INVALID_DURATION', 'Invalid duration');
         if (s.onTimeout === 'approve' && !s.justification) {
           error(
             [...p, 'justification'],
@@ -546,17 +443,12 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         if (hasDuration === hasUntil) {
           error(p, 'WAIT_NEEDS_ONE_OF', "A wait step needs exactly one of 'duration' or 'until'");
         }
-        if (hasDuration && !isDuration(s.duration))
-          error([...p, 'duration'], 'INVALID_DURATION', 'Invalid duration');
+        if (hasDuration && !isDuration(s.duration)) error([...p, 'duration'], 'INVALID_DURATION', 'Invalid duration');
         if (hasUntil) {
           if (s.timeout === undefined)
             error(p, 'WAIT_EVENT_NEEDS_TIMEOUT', "Waiting for an event requires a 'timeout'");
           if (s.until?.correlation) {
-            checkValue(
-              s.until.correlation,
-              [...p, 'until', 'correlation'],
-              scopeFor(s, { where: 'wait correlation' }),
-            );
+            checkValue(s.until.correlation, [...p, 'until', 'correlation'], scopeFor(s, { where: 'wait correlation' }));
           }
         }
         break;
@@ -569,14 +461,9 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         break;
       }
       case 'terminate': {
-        if (s.message)
-          checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'terminate message' }));
+        if (s.message) checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'terminate message' }));
         if (s.status === 'failure' && !s.errorClass) {
-          warn(
-            [...p, 'errorClass'],
-            'TERMINATE_FAILURE_UNCLASSIFIED',
-            "Classify the failure with 'errorClass'",
-          );
+          warn([...p, 'errorClass'], 'TERMINATE_FAILURE_UNCLASSIFIED', "Classify the failure with 'errorClass'");
         }
         break;
       }
@@ -588,8 +475,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   for (const kind of ['pre', 'invariants'] as const) {
     (m.guards?.[kind] ?? []).forEach((g, i) => {
       const p: PathSegment[] = ['guards', kind, i];
-      if (seenGuards.has(g.name))
-        error([...p, 'name'], 'DUPLICATE_GUARD', `Duplicate guard '${g.name}'`);
+      if (seenGuards.has(g.name)) error([...p, 'name'], 'DUPLICATE_GUARD', `Duplicate guard '${g.name}'`);
       seenGuards.add(g.name);
       checkExpression(g.expr, [...p, 'expr'], {
         roots: kind === 'pre' ? roots('inputs', 'context', 'run') : roots(...BASE, 'steps'),
@@ -614,13 +500,11 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   if (m.policy) {
     for (const k of ['timeout', 'dedupWindow'] as const) {
       const v = m.policy[k];
-      if (v !== undefined && !isDuration(v))
-        error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
+      if (v !== undefined && !isDuration(v)) error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
     }
     for (const k of ['initialDelay', 'maxDelay'] as const) {
       const v = m.policy.retry?.[k];
-      if (v !== undefined && !isDuration(v))
-        error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
+      if (v !== undefined && !isDuration(v)) error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
     }
     if (m.policy.dedupKey) {
       checkValue(m.policy.dedupKey, ['policy', 'dedupKey'], {
@@ -631,11 +515,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       });
     }
     if (m.policy.dedupKey && m.policy.dedupWindow === undefined) {
-      warn(
-        ['policy', 'dedupKey'],
-        'DEDUP_WITHOUT_WINDOW',
-        "'dedupKey' has no effect without 'dedupWindow'",
-      );
+      warn(['policy', 'dedupKey'], 'DEDUP_WITHOUT_WINDOW', "'dedupKey' has no effect without 'dedupWindow'");
     }
     if (
       m.policy.maxRunCost !== undefined &&
@@ -689,11 +569,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       checkRefs(collectReferences(ast), path, scope);
     } catch (e) {
       if (e instanceof ExpressionSyntaxError) {
-        error(
-          path,
-          'EXPRESSION_SYNTAX',
-          `${e.message} (at character ${e.pos + 1} of the expression)`,
-        );
+        error(path, 'EXPRESSION_SYNTAX', `${e.message} (at character ${e.pos + 1} of the expression)`);
       } else throw e;
     }
   }
@@ -705,11 +581,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       const rel = found.path;
       const full: PathSegment[] = [...path, ...relativeSegments(rel)];
       if (found.error) {
-        error(
-          full,
-          'EXPRESSION_SYNTAX',
-          `${found.error.message} (at character ${found.error.pos + 1})`,
-        );
+        error(full, 'EXPRESSION_SYNTAX', `${found.error.message} (at character ${found.error.pos + 1})`);
         continue;
       }
       for (const part of found.template?.parts ?? []) {
@@ -742,11 +614,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       }
       if (!scope.roots.has(r.root)) {
         const hint = scope.roots.size ? ` (available here: ${[...scope.roots].join(', ')})` : '';
-        error(
-          path,
-          'UNKNOWN_REFERENCE_ROOT',
-          `'${r.root}' is not available in ${scope.where}${hint}`,
-        );
+        error(path, 'UNKNOWN_REFERENCE_ROOT', `'${r.root}' is not available in ${scope.where}${hint}`);
         continue;
       }
       switch (r.root) {

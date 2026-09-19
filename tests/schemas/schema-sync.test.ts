@@ -4,9 +4,7 @@ import { buildManifestSchema, inputsToJsonSchema } from '../../schemas/index.ts'
 
 describe('emitted schemas', () => {
   it('manifest.schema.json matches its generator (run `node scripts/emit-schemas.ts`)', () => {
-    const onDisk = JSON.parse(
-      readFileSync(new URL('../../schemas/manifest.schema.json', import.meta.url), 'utf8'),
-    );
+    const onDisk = JSON.parse(readFileSync(new URL('../../schemas/manifest.schema.json', import.meta.url), 'utf8'));
     expect(onDisk).toEqual(JSON.parse(JSON.stringify(buildManifestSchema())));
   });
 });

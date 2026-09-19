@@ -340,14 +340,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -505,14 +498,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -674,14 +660,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -819,14 +798,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -1014,14 +986,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -1194,14 +1159,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -1357,14 +1315,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -1513,14 +1464,7 @@
                   "retryOn": {
                     "type": "array",
                     "items": {
-                      "enum": [
-                        "transient",
-                        "contract",
-                        "authorisation",
-                        "business",
-                        "systemic",
-                        "catastrophic"
-                      ]
+                      "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
                     },
                     "uniqueItems": true
                   }
@@ -1590,14 +1534,7 @@
                 "enum": ["success", "failure"]
               },
               "errorClass": {
-                "enum": [
-                  "transient",
-                  "contract",
-                  "authorisation",
-                  "business",
-                  "systemic",
-                  "catastrophic"
-                ]
+                "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
               },
               "message": {
                 "type": "string",
@@ -1710,14 +1647,7 @@
             "retryOn": {
               "type": "array",
               "items": {
-                "enum": [
-                  "transient",
-                  "contract",
-                  "authorisation",
-                  "business",
-                  "systemic",
-                  "catastrophic"
-                ]
+                "enum": ["transient", "contract", "authorisation", "business", "systemic", "catastrophic"]
               },
               "uniqueItems": true
             }

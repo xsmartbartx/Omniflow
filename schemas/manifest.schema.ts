@@ -11,8 +11,7 @@ type Schema = Record<string, unknown>;
 
 const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 const IDENT = '^[A-Za-z][A-Za-z0-9_]*$';
-const SEMVER =
-  '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
+const SEMVER = '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
 
 const str = (extra: Schema = {}): Schema => ({ type: 'string', maxLength: 4096, ...extra });
 const kebab = (): Schema => ({ type: 'string', pattern: KEBAB, maxLength: 64 });
@@ -148,16 +147,11 @@ const steps: Schema[] = [
     },
     [],
   ),
-  step(
-    'subworkflow',
-    { workflow: kebab(), version: str({ pattern: SEMVER, maxLength: 64 }), with: freeObject() },
-    ['workflow', 'version'],
-  ),
-  step(
-    'terminate',
-    { status: { enum: ['success', 'failure'] }, errorClass: errorClass(), message: str() },
-    ['status'],
-  ),
+  step('subworkflow', { workflow: kebab(), version: str({ pattern: SEMVER, maxLength: 64 }), with: freeObject() }, [
+    'workflow',
+    'version',
+  ]),
+  step('terminate', { status: { enum: ['success', 'failure'] }, errorClass: errorClass(), message: str() }, ['status']),
 ];
 
 const triggers: Schema[] = [
@@ -225,8 +219,7 @@ export function buildManifestSchema(): Schema {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $id: 'https://omniflow.dev/schemas/workflow-manifest.v1.json',
     title: 'OmniFlow Workflow Manifest',
-    description:
-      'Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.',
+    description: 'Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.',
     type: 'object',
     required: ['apiVersion', 'kind', 'metadata', 'triggers', 'inputs', 'steps'],
     additionalProperties: false,
@@ -298,10 +291,7 @@ export function buildManifestSchema(): Schema {
         metrics: {
           type: 'array',
           maxItems: 50,
-          items: obj({ name: str({ pattern: '^[a-z][a-z0-9_]*$' }), value: expr(), unit: str() }, [
-            'name',
-            'value',
-          ]),
+          items: obj({ name: str({ pattern: '^[a-z][a-z0-9_]*$' }), value: expr(), unit: str() }, ['name', 'value']),
         },
       }),
     },

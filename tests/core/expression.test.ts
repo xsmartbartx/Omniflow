@@ -32,8 +32,7 @@ const scope = {
   secrets: {},
 };
 
-const ev = (src: string, s: Record<string, unknown> = scope, opts = {}) =>
-  evaluate(parseExpression(src), s, opts);
+const ev = (src: string, s: Record<string, unknown> = scope, opts = {}) => evaluate(parseExpression(src), s, opts);
 
 describe('expression: literals and operators', () => {
   it('evaluates arithmetic with precedence', () => {
@@ -161,9 +160,7 @@ describe('expression: functions', () => {
 
   it('hashes canonically', () => {
     expect(ev('hash({})'.replace('{}', '[1]'))).toBe(ev('hash([1])'));
-    expect(ev('hash("abc")')).toBe(
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-    );
+    expect(ev('hash("abc")')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   });
 
   it('rejects unknown functions at parse time', () => {
@@ -194,9 +191,7 @@ describe('expression: sandbox guarantees (non-Turing-complete)', () => {
 
   it('bounds expression length and nesting', () => {
     expect(() => parseExpression('1+'.repeat(3000))).toThrow(/limit/);
-    expect(() => parseExpression(`${'('.repeat(100)}1${')'.repeat(100)}`)).toThrow(
-      /nested too deeply/,
-    );
+    expect(() => parseExpression(`${'('.repeat(100)}1${')'.repeat(100)}`)).toThrow(/nested too deeply/);
   });
 
   it('reports syntax errors with positions', () => {
@@ -241,10 +236,7 @@ describe('expression: static analysis', () => {
   });
 
   it('lists the functions an expression calls', () => {
-    expect(functionsUsed(parseExpression('len(x) + sum(y) + len(z)')).sort()).toEqual([
-      'len',
-      'sum',
-    ]);
+    expect(functionsUsed(parseExpression('len(x) + sum(y) + len(z)')).sort()).toEqual(['len', 'sum']);
   });
 });
 
@@ -258,21 +250,15 @@ describe('templates', () => {
   it('interpolates into strings', () => {
     expect(
       renderTemplate(
-        parseTemplate(
-          'https://x.test/c/${{ steps.fetch-customer.output.body.id }}/i?n=${{ inputs.n }}',
-        ),
+        parseTemplate('https://x.test/c/${{ steps.fetch-customer.output.body.id }}/i?n=${{ inputs.n }}'),
         scope,
       ),
     ).toBe('https://x.test/c/42/i?n=5');
   });
 
   it('refuses to silently interpolate null', () => {
-    expect(() => renderTemplate(parseTemplate('id-${{ inputs.missing }}'), scope)).toThrow(
-      /is null inside a string/,
-    );
-    expect(renderTemplate(parseTemplate('id-${{ inputs.missing ?? "none" }}'), scope)).toBe(
-      'id-none',
-    );
+    expect(() => renderTemplate(parseTemplate('id-${{ inputs.missing }}'), scope)).toThrow(/is null inside a string/);
+    expect(renderTemplate(parseTemplate('id-${{ inputs.missing ?? "none" }}'), scope)).toBe('id-none');
   });
 
   it('supports escaping and quotes containing braces', () => {
@@ -305,10 +291,7 @@ describe('templates', () => {
   });
 
   it('scans a value tree for templates and syntax errors', () => {
-    const found = scanTemplates(
-      { a: '${{ inputs.n }}', b: ['ok', '${{ 1 + }}'], c: { d: 'x' } },
-      'with',
-    );
+    const found = scanTemplates({ a: '${{ inputs.n }}', b: ['ok', '${{ 1 + }}'], c: { d: 'x' } }, 'with');
     expect(found.map((f) => f.path)).toEqual(['with.a', 'with.b[1]']);
     expect(found[0]!.template).toBeDefined();
     expect(found[1]!.error).toBeInstanceOf(ExpressionSyntaxError);

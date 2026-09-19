@@ -8,10 +8,7 @@ export interface Position {
   column: number;
 }
 
-export type Locator = (
-  path: readonly PathSegment[],
-  opts?: { key?: boolean },
-) => Position | undefined;
+export type Locator = (path: readonly PathSegment[], opts?: { key?: boolean }) => Position | undefined;
 
 export interface ParsedSource {
   /** Parsed value, or `undefined` if the text could not be parsed. */
@@ -138,17 +135,14 @@ export function parseSource(text: string, maxBytes = DEFAULT_MAX_BYTES): ParsedS
       }
     },
   });
-  if (issues.some((i) => i.severity !== 'warning'))
-    return { value: undefined, issues, locate: noLocation };
+  if (issues.some((i) => i.severity !== 'warning')) return { value: undefined, issues, locate: noLocation };
 
   const locate: Locator = (path, opts) => {
     let node: unknown = doc.contents;
     let keyNode: unknown;
     for (const seg of path) {
       if (isMap(node)) {
-        const pair = node.items.find(
-          (p) => isPair(p) && String(isScalar(p.key) ? p.key.value : p.key) === String(seg),
-        );
+        const pair = node.items.find((p) => isPair(p) && String(isScalar(p.key) ? p.key.value : p.key) === String(seg));
         if (!pair) break;
         keyNode = pair.key;
         node = pair.value;

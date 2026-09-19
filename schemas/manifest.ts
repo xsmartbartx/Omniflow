@@ -61,12 +61,7 @@ export interface WorkflowCompletionTrigger {
   name?: string;
   inputs?: JsonObject;
 }
-export type Trigger =
-  | ManualTrigger
-  | ScheduleTrigger
-  | WebhookTrigger
-  | EventTrigger
-  | WorkflowCompletionTrigger;
+export type Trigger = ManualTrigger | ScheduleTrigger | WebhookTrigger | EventTrigger | WorkflowCompletionTrigger;
 
 // ------------------------------------------------------------------ inputs
 export type InputType = 'string' | 'integer' | 'number' | 'boolean' | 'object' | 'array';
@@ -282,12 +277,5 @@ export interface Manifest {
 }
 
 export const RESERVED_CONTEXT_KEYS: readonly string[] = ['now', 'environment', 'tenant'];
-export const RUN_SCOPE_KEYS: readonly string[] = [
-  'id',
-  'seed',
-  'dryRun',
-  'trigger',
-  'workflow',
-  'version',
-];
+export const RUN_SCOPE_KEYS: readonly string[] = ['id', 'seed', 'dryRun', 'trigger', 'workflow', 'version'];
 export const STEP_OUTPUT_KEYS: readonly string[] = ['output', 'status', 'error'];

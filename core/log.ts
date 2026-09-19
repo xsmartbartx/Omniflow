@@ -37,11 +37,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
   const sink = options.sink ?? stdoutSink;
   const bindings = options.bindings ?? {};
 
-  const emit = (
-    lvl: Exclude<LogLevel, 'silent'>,
-    msg: string,
-    fields?: Record<string, unknown>,
-  ) => {
+  const emit = (lvl: Exclude<LogLevel, 'silent'>, msg: string, fields?: Record<string, unknown>) => {
     if (ORDER[lvl] < threshold) return;
     const safe = redact({ ...bindings, ...fields }) as Record<string, unknown>;
     sink({ level: lvl, time: new Date().toISOString(), msg, ...safe });

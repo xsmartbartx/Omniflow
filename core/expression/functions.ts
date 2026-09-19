@@ -23,8 +23,7 @@ interface FunctionSpec {
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isArr = (v: unknown): v is unknown[] => Array.isArray(v);
-const isObj = (v: unknown): v is Record<string, unknown> =>
-  v !== null && typeof v === 'object' && !Array.isArray(v);
+const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function need<T>(name: string, v: unknown, guard: (x: unknown) => x is T, what: string): T {
   if (!guard(v)) throw new ExpressionError('EXPR_TYPE', `${name}() expects ${what}`);
@@ -71,14 +70,12 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
   startsWith: {
     min: 2,
     max: 2,
-    fn: ([s, p]) =>
-      need('startsWith', s, isStr, 'strings').startsWith(need('startsWith', p, isStr, 'strings')),
+    fn: ([s, p]) => need('startsWith', s, isStr, 'strings').startsWith(need('startsWith', p, isStr, 'strings')),
   },
   endsWith: {
     min: 2,
     max: 2,
-    fn: ([s, p]) =>
-      need('endsWith', s, isStr, 'strings').endsWith(need('endsWith', p, isStr, 'strings')),
+    fn: ([s, p]) => need('endsWith', s, isStr, 'strings').endsWith(need('endsWith', p, isStr, 'strings')),
   },
   join: {
     min: 1,
@@ -93,8 +90,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
   split: {
     min: 2,
     max: 2,
-    fn: ([s, sep]) =>
-      need('split', s, isStr, 'a string').split(need('split', sep, isStr, 'a string separator')),
+    fn: ([s, sep]) => need('split', s, isStr, 'a string').split(need('split', sep, isStr, 'a string separator')),
   },
   replace: {
     min: 3,
@@ -132,9 +128,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     max: 2,
     fn: ([arr, key]) => {
       const k = need('pluck', key, isStr, 'a string key');
-      return need('pluck', arr, isArr, 'an array').map((x) =>
-        isObj(x) && Object.hasOwn(x, k) ? x[k] : null,
-      );
+      return need('pluck', arr, isArr, 'an array').map((x) => (isObj(x) && Object.hasOwn(x, k) ? x[k] : null));
     },
   },
   first: { min: 1, max: 1, fn: ([v]) => (isArr(v) && v.length > 0 ? v[0] : null) },
@@ -169,20 +163,14 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
   sum: {
     min: 1,
     max: 1,
-    fn: ([v]) =>
-      need('sum', v, isArr, 'an array').reduce<number>(
-        (a, x) => a + need('sum', x, isNum, 'numbers'),
-        0,
-      ),
+    fn: ([v]) => need('sum', v, isArr, 'an array').reduce<number>((a, x) => a + need('sum', x, isNum, 'numbers'), 0),
   },
   min: {
     min: 1,
     max: 1,
     fn: ([v]) => {
       const arr = need('min', v, isArr, 'an array');
-      return arr.length === 0
-        ? null
-        : Math.min(...arr.map((x) => need('min', x, isNum, 'numbers')));
+      return arr.length === 0 ? null : Math.min(...arr.map((x) => need('min', x, isNum, 'numbers')));
     },
   },
   max: {
@@ -190,9 +178,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     max: 1,
     fn: ([v]) => {
       const arr = need('max', v, isArr, 'an array');
-      return arr.length === 0
-        ? null
-        : Math.max(...arr.map((x) => need('max', x, isNum, 'numbers')));
+      return arr.length === 0 ? null : Math.max(...arr.map((x) => need('max', x, isNum, 'numbers')));
     },
   },
   round: {
@@ -251,10 +237,8 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     max: 2,
     fn: ([iso, dur]) => {
       const t = Date.parse(need('dateAdd', iso, isStr, 'an ISO timestamp'));
-      if (Number.isNaN(t))
-        throw new ExpressionError('EXPR_TYPE', 'dateAdd() received an invalid timestamp');
-      const ms =
-        typeof dur === 'number' ? dur : parseDuration(need('dateAdd', dur, isStr, 'a duration'));
+      if (Number.isNaN(t)) throw new ExpressionError('EXPR_TYPE', 'dateAdd() received an invalid timestamp');
+      const ms = typeof dur === 'number' ? dur : parseDuration(need('dateAdd', dur, isStr, 'a duration'));
       return new Date(t + ms).toISOString();
     },
   },
@@ -263,8 +247,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     max: 1,
     fn: ([iso]) => {
       const t = Date.parse(need('date', iso, isStr, 'an ISO timestamp'));
-      if (Number.isNaN(t))
-        throw new ExpressionError('EXPR_TYPE', 'date() received an invalid timestamp');
+      if (Number.isNaN(t)) throw new ExpressionError('EXPR_TYPE', 'date() received an invalid timestamp');
       return new Date(t).toISOString().slice(0, 10);
     },
   },
@@ -273,8 +256,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     max: 1,
     fn: ([iso]) => {
       const t = Date.parse(need('epochMs', iso, isStr, 'an ISO timestamp'));
-      if (Number.isNaN(t))
-        throw new ExpressionError('EXPR_TYPE', 'epochMs() received an invalid timestamp');
+      if (Number.isNaN(t)) throw new ExpressionError('EXPR_TYPE', 'epochMs() received an invalid timestamp');
       return t;
     },
   },

@@ -19,10 +19,7 @@ describe('graph', () => {
   });
 
   it('reports a concrete cycle', () => {
-    const r = topologicalOrder(
-      ['a', 'b', 'c', 'ok'],
-      deps({ a: ['c'], b: ['a'], c: ['b'], ok: [] }),
-    );
+    const r = topologicalOrder(['a', 'b', 'c', 'ok'], deps({ a: ['c'], b: ['a'], c: ['b'], ok: [] }));
     expect(r.cycle).toBeDefined();
     expect(r.cycle![0]).toBe(r.cycle![r.cycle!.length - 1]);
     expect(new Set(r.cycle)).toEqual(new Set(['a', 'b', 'c']));

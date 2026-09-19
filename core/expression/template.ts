@@ -9,9 +9,7 @@ import { parseExpression } from './parser.ts';
  * into a string. `$${{` escapes a literal `${{`.
  */
 
-export type TemplatePart =
-  | { kind: 'text'; text: string }
-  | { kind: 'expr'; source: string; ast: Node; offset: number };
+export type TemplatePart = { kind: 'text'; text: string } | { kind: 'expr'; source: string; ast: Node; offset: number };
 
 export interface Template {
   source: string;
@@ -97,11 +95,7 @@ function display(v: unknown): string {
   return canonicalize(v);
 }
 
-export function renderTemplate(
-  tpl: Template,
-  scope: Record<string, unknown>,
-  options: EvalOptions = {},
-): unknown {
+export function renderTemplate(tpl: Template, scope: Record<string, unknown>, options: EvalOptions = {}): unknown {
   if (tpl.parts.length === 0) return '';
   if (tpl.parts.length === 1 && tpl.parts[0]!.kind === 'expr') {
     return evaluate(tpl.parts[0].ast, scope, options);
@@ -126,11 +120,7 @@ export function renderTemplate(
 }
 
 /** Recursively resolve every `${{ }}` inside strings of a JSON-like value. Object keys are static. */
-export function resolveValue(
-  value: unknown,
-  scope: Record<string, unknown>,
-  options: EvalOptions = {},
-): unknown {
+export function resolveValue(value: unknown, scope: Record<string, unknown>, options: EvalOptions = {}): unknown {
   if (typeof value === 'string') {
     return hasTemplate(value) ? renderTemplate(parseTemplate(value), scope, options) : value;
   }
