@@ -79,6 +79,9 @@ export const EVENT_CATALOGUE = {
   'agent.draft-created': { run: false, required: ['agent', 'draftId'] },
   'agent.proposal-created': { run: false, required: ['agent', 'proposalId'] },
   'pentest.finding': { run: false, required: ['ruleId', 'severity'] },
+  'insight.analysis-completed': { run: false, required: ['findings', 'proposals'] },
+  'alert.raised': { run: false, required: ['key', 'severity', 'title'] },
+  'alert.resolved': { run: false, required: ['key'] },
   // ---- system
   'system.started': { run: false, required: [] },
   'system.stopped': { run: false, required: [] },

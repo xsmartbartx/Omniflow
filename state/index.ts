@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { type Clock, systemClock } from '../core/index.ts';
+import { AnalyticsStore } from './analytics-store.ts';
 import { ApprovalStore } from './approval-store.ts';
 import { ArtifactStore } from './artifact-store.ts';
 import { AuthoringStore } from './authoring-store.ts';
@@ -13,6 +14,7 @@ import { RunStore } from './run-store.ts';
 import { SecretStore } from './secret-store.ts';
 import { TriggerStore } from './trigger-store.ts';
 
+export * from './analytics-store.ts';
 export * from './approval-store.ts';
 export * from './artifact-store.ts';
 export * from './authoring-store.ts';
@@ -40,6 +42,7 @@ export interface State {
   triggers: TriggerStore;
   authoring: AuthoringStore;
   kv: KvStore;
+  analytics: AnalyticsStore;
   clock: Clock;
   close(): void;
 }
@@ -70,6 +73,7 @@ export function openState(opts: OpenStateOptions): State {
     triggers: new TriggerStore(db, clock),
     authoring: new AuthoringStore(db, clock),
     kv: new KvStore(db, clock),
+    analytics: new AnalyticsStore(db, clock),
     close: () => db.close(),
   };
 }
