@@ -212,7 +212,7 @@ export class Orchestrator {
   /** Admit a queued run: `queued → running`, evaluate pre-run guards, begin dispatching. */
   startRun(runId: string): RunRecord | undefined {
     const run = this.st.runs.getRun(runId);
-    if (!run || run.status !== 'queued') return run;
+    if (run?.status !== 'queued') return run;
     const running = this.st.runs.transition(runId, 'running');
     this.event(running, 'run.started', { attempt: 1 });
     const plan = this.plan(running);
@@ -243,7 +243,7 @@ export class Orchestrator {
     if (run.status === 'queued') return this.finishRun(run, 'cancelled', { error });
     if (run.status === 'compensating') throw new ConflictError('Run is being rolled back and cannot be cancelled until compensation finishes');
     this.st.runs.patchRun(runId, { cancelRequested: true, error });
-    this.drivers.get(runId)?.inflight.forEach((ac) => ac.abort());
+    for (const ac of this.drivers.get(runId)?.inflight.values() ?? []) ac.abort();
     this.kick(runId);
     return this.st.runs.getRun(runId)!;
   }
@@ -375,8 +375,14 @@ export class Orchestrator {
     const plan = this.plan(run);
     let recs = this.records(runId);
 
-    if (run.cancelRequested) return this.advanceCancel(run, plan, recs, d);
-    if (run.status === 'compensating') return this.advanceCompensation(run, plan, recs, d);
+    if (run.cancelRequested) {
+      this.advanceCancel(run, plan, recs, d);
+      return;
+    }
+    if (run.status === 'compensating') {
+      this.advanceCompensation(run, plan, recs, d);
+      return;
+    }
 
     // Steps recorded as running that this process is not executing (defence in depth after a crash).
     for (const s of recs.values()) {
@@ -430,7 +436,10 @@ export class Orchestrator {
       if (![...recs.values()].some((s) => s.status === 'running') && d.inflight.size === 0) this.finalizeFailure(run, plan, recs);
       return;
     }
-    if (allTerminal(recs)) return this.finalizeSuccess(run, plan, recs);
+    if (allTerminal(recs)) {
+      this.finalizeSuccess(run, plan, recs);
+      return;
+    }
     this.syncVisibility(run, recs);
   }
 

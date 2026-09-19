@@ -1,3 +1,4 @@
+export { ApprovalService } from './approval-service.ts';
 export {
   allTerminal,
   backoffDelayMs,

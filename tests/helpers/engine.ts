@@ -53,7 +53,14 @@ const base: Omit<CapabilityDeclaration, 'name' | 'effect'> = {
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     const t = setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => (clearTimeout(t), reject(signal.reason)), { once: true });
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
   });
 
 export function simCapabilities(world: World) {
