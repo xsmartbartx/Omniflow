@@ -172,6 +172,17 @@ export class Authenticator {
     return user;
   }
 
+  /** Operator-initiated reset (break-glass): sets a temporary password, clears any lockout and signs the user out. */
+  async resetPassword(actor: Principal, userId: string, password: string): Promise<void> {
+    const user = this.st.identity.getUser(userId);
+    if (!user) throw new AuthenticationError('User not found');
+    checkPasswordPolicy(password, user.email);
+    this.st.identity.updateUser(userId, { passwordHash: await hashPassword(password), mustChangePassword: true });
+    this.st.identity.recordLoginSuccess(userId);
+    this.st.identity.deleteUserSessions(userId);
+    this.st.events.append({ tenant: user.tenant, type: 'auth.user-updated', actor: { type: actor.type, id: actor.id, name: actor.name }, data: { userId, change: 'password-reset' } });
+  }
+
   updateUser(actor: Principal, id: string, patch: { name?: string; roles?: Role[]; disabled?: boolean }): UserRecord {
     const user = this.st.identity.getUser(id);
     if (!user || user.tenant !== actor.tenant) throw new AuthenticationError('User not found');
