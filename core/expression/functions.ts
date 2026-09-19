@@ -239,7 +239,10 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
       const t = Date.parse(need('dateAdd', iso, isStr, 'an ISO timestamp'));
       if (Number.isNaN(t)) throw new ExpressionError('EXPR_TYPE', 'dateAdd() received an invalid timestamp');
       const ms = typeof dur === 'number' ? dur : parseDuration(need('dateAdd', dur, isStr, 'a duration'));
-      return new Date(t + ms).toISOString();
+      const result = new Date(t + ms);
+      // an infinite or absurd offset would otherwise surface as a RangeError from Date, not an expression error
+      if (!Number.isFinite(ms) || Number.isNaN(result.getTime())) throw new ExpressionError('EXPR_TYPE', 'dateAdd() result is out of range');
+      return result.toISOString();
     },
   },
   date: {

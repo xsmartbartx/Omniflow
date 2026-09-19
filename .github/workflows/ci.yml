@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (typecheck, lint, layers, tests, coverage, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Typecheck, lint, architecture layers, tests
+        run: npm run verify
+      - name: Formatting
+        run: npm run format:check
+      - name: Coverage floor
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+      - name: The compiled CLI works and the shipped examples validate
+        run: |
+          node dist/cli/main.js --version
+          node dist/cli/main.js validate workflows workflows/optional
+      - name: Known vulnerabilities in production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  container:
+    name: Container (build, harden, smoke test, scan)
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: End-to-end deployment check (build → run → publish → backup → restore → restart)
+        run: deploy/smoke-test.sh
+      - name: Build image for scanning
+        run: docker build -t omniflow:scan .
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: omniflow:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
