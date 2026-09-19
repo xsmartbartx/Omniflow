@@ -230,8 +230,7 @@ export interface EngineOptions {
 }
 
 export function makeEngine(opts: EngineOptions = {}): Engine {
-  const state = opts.state ?? makeState();
-  state.clock.set(new Date()); // real time: simulation tests use real timers
+  const state = opts.state ?? makeState({ clock: systemClock }); // real time: simulation tests use real timers
   const world = opts.world ?? newWorld();
   const registry = registryWithSims(world);
   const keyring = opts.keyring ?? createKeyring(generateMasterKey());
