@@ -68,7 +68,9 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     notify: async (alert, event) => {
       const text = formatAlert(alert, event);
       const results = await Promise.allSettled(config.alertChannels.map((name) => sendToChannel(config.adapters, name, text)));
-      results.forEach((r, i) => r.status === 'rejected' && log.error('could not deliver alert', { channel: config.alertChannels[i], key: alert.key, error: r.reason }));
+      for (const [i, r] of results.entries()) {
+        if (r.status === 'rejected') log.error('could not deliver alert', { channel: config.alertChannels[i], key: alert.key, error: r.reason });
+      }
     },
   });
   let analysisTimer: NodeJS.Timeout | undefined;
