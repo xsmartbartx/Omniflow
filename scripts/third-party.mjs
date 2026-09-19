@@ -3,12 +3,13 @@
 //   npm run licenses -- --check   (fails if the file is out of date; used by CI)
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'));
 const rows = [];
 for (const [path, meta] of Object.entries(lock.packages)) {
-  if (!path.startsWith('node_modules/') || meta.dev || meta.optional && meta.dev) continue;
+  if (!path.startsWith('node_modules/') || meta.dev) continue;
   const name = path.replace(/^.*node_modules\//, '');
   const pkgFile = join(root, path, 'package.json');
   const pkg = existsSync(pkgFile) ? JSON.parse(readFileSync(pkgFile, 'utf8')) : {};
@@ -18,7 +19,6 @@ for (const [path, meta] of Object.entries(lock.packages)) {
 }
 rows.sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
 
-const permissive = /^(MIT|ISC|BSD-2-Clause|BSD-3-Clause|Apache-2\.0|0BSD|BlueOak-1\.0\.0|CC0-1\.0|Python-2\.0|MIT-0|Unlicense|\(?[A-Za-z0-9.\-]+( (OR|AND) [A-Za-z0-9.\-]+)*\)?)$/;
 const odd = rows.filter((r) => /GPL|AGPL|SSPL|UNKNOWN|Commons-Clause/i.test(r.license));
 const text = [
   '# Third-party notices',
@@ -47,4 +47,3 @@ if (process.argv.includes('--check')) {
   writeFileSync(out, text);
   console.log(`wrote THIRD_PARTY_NOTICES.md (${rows.length} packages${odd.length ? `, ${odd.length} need review` : ''})`);
 }
-void permissive;

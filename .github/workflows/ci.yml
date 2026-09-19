@@ -28,6 +28,10 @@ jobs:
         run: npm run verify
       - name: Formatting
         run: npm run format:check
+      - name: Third-party notices are current
+        run: npm run licenses -- --check
+      - name: Generated reference docs are current
+        run: npm run docs:generate -- --check
       - name: Coverage floor
         run: npm run test:coverage
       - name: Build

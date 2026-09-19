@@ -31,7 +31,8 @@
     "check:layers": "node scripts/check-layers.ts",
     "verify": "npm run typecheck && npm run lint && npm run check:layers && npm run test",
     "format:check": "biome format .",
-    "licenses": "node scripts/third-party.mjs"
+    "licenses": "node scripts/third-party.mjs",
+    "docs:generate": "node --disable-warning=ExperimentalWarning scripts/emit-docs.ts"
   },
   "dependencies": {
     "@fastify/static": "^10.1.4",
