@@ -395,6 +395,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
           const d = cap.declaration;
           base.capability = { name: cap.name, version: cap.version, hash: cap.hash };
           base.effect = d.effect as EffectClass;
+          base.family = d.family;
           checkWithShape(step.with, d.inputSchema, [...p, 'with'], `'${cap.name}'`);
 
           // -- idempotency (ADR-0002 D3)

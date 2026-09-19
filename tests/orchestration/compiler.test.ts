@@ -197,7 +197,7 @@ describe('compiler: purity and determinism (ADR-0002 D2)', () => {
 
   it('pins the plan hash for a fixture (golden test — update deliberately when compilation semantics change)', () => {
     const { hash } = compileOk(manifest());
-    expect(hash).toBe('sha256:4ab32604b8f5efd1ad8b98a0f6d0b708df745cad46cfb1a41b09e4559d40dca7');
+    expect(hash).toBe('sha256:8532684402cd5200a1b8184ac910f7aa18e1de16870a0e60220f84935280dce9');
   });
 });
 

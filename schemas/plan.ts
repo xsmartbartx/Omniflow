@@ -53,6 +53,8 @@ export interface PlanStep {
 
   // capability + map
   capability?: PlanCapabilityRef;
+  /** Adapter family of the resolved capability (`http`, `shell`, `llm` …). */
+  family?: string;
   effect?: EffectClass;
   with?: JsonObject;
   egress?: string[];
