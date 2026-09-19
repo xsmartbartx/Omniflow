@@ -10,6 +10,7 @@ import type { Omniflow } from './context.ts';
 import { buildOpenApi, fromFastifyValidation, problem, registerRoutes, type RouteDef } from './http.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { authoringRoutes } from './routes/authoring.ts';
 import { insightRoutes } from './routes/insight.ts';
 import { publicRoutes } from './routes/public.ts';
 import { runRoutes } from './routes/runs.ts';
@@ -125,7 +126,7 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
   const defs: RouteDef[] = [];
   let openApi: object | undefined;
   const getOpenApi = () => (openApi ??= buildOpenApi(defs, { version: app.config.version }));
-  defs.push(...publicRoutes(getOpenApi), ...workflowRoutes(), ...runRoutes(), ...insightRoutes(), ...adminRoutes());
+  defs.push(...publicRoutes(getOpenApi), ...workflowRoutes(), ...runRoutes(), ...insightRoutes(), ...authoringRoutes(), ...adminRoutes());
   registerRoutes(server, app, defs, limiters);
 
   // ---------------------------------------------------------------- console

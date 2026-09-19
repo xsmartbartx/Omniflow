@@ -65,6 +65,8 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
+  if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
+  if (e instanceof OmniflowError && (e.code === 'LLM_UNAVAILABLE' || e.code === 'LLM_BAD_RESPONSE' || e.code === 'LLM_AUTH' || e.code === 'LLM_REJECTED')) return 502;
   if (e instanceof OmniflowError) return e.errorClass === 'contract' ? 400 : e.errorClass === 'authorisation' ? 403 : e.errorClass === 'business' ? 409 : 500;
   return 500;
 }

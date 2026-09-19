@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
+import { AuthoringService } from '../authoring/index.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
@@ -13,7 +14,9 @@ import type { Principal } from '../schemas/index.ts';
 import { defaultPolicyConfig, parsePolicyDocument, PolicyEngine } from '../security/policy/index.ts';
 import { createKeyring, SecretBroker } from '../security/secret-broker/index.ts';
 import { openState, type State, stateOptionsFor } from '../state/index.ts';
+import type { LlmClient } from '../authoring/index.ts';
 import type { Config } from './config.ts';
+import { createAnthropicClient } from './llm-client.ts';
 import type { Omniflow } from '../gateway/context.ts';
 
 export type { Omniflow };
@@ -26,6 +29,8 @@ export type { Omniflow };
 
 export interface OmniflowOverrides {
   state?: State;
+  /** Replace the model client (tests). */
+  llm?: LlmClient | null;
   clock?: Clock;
   log?: Logger;
   capabilities?: CapabilityRegistry;
@@ -73,6 +78,8 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       }
     },
   });
+  const llm = overrides.llm === null ? undefined : (overrides.llm ?? createAnthropicClient(config.adapters));
+  const authoring = new AuthoringService({ state, registry, policy, capabilities, clock, ...(llm ? { llm } : {}) });
   let analysisTimer: NodeJS.Timeout | undefined;
 
   const app: Omniflow = {
@@ -94,6 +101,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     metrics,
     analysis,
     alerts,
+    authoring,
 
     async start() {
       state.identity.ensureTenant('default', 'Default');

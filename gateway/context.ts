@@ -1,3 +1,4 @@
+import type { AuthoringService } from '../authoring/index.ts';
 import type { CapabilityRegistry } from '../capabilities/index.ts';
 import type { AdapterConfig } from '../capabilities/index.ts';
 import type { Clock, LogLevel, Logger } from '../core/index.ts';
@@ -69,6 +70,7 @@ export interface Omniflow {
   metrics: MetricsRegistry;
   analysis: AnalysisAgent;
   alerts: AlertManager;
+  authoring: AuthoringService;
   /** Start background loops, recover interrupted runs, bootstrap the first admin. */
   start(): Promise<{ recovered: number; bootstrap?: { email: string; password: string } }>;
   stop(): Promise<void>;
