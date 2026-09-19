@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "omniflow-console-demo",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "rm -rf /tmp/omniflow-console-demo && OMNIFLOW_DATA_DIR=/tmp/omniflow-console-demo OMNIFLOW_PORT=18080 OMNIFLOW_HOST=127.0.0.1 OMNIFLOW_PUBLIC_URL=http://127.0.0.1:18080 OMNIFLOW_ENV=development OMNIFLOW_ADMIN_EMAIL=admin@example.com OMNIFLOW_ADMIN_PASSWORD=correct-horse-battery-staple OMNIFLOW_LOG_LEVEL=warn OMNIFLOW_SHELL_ALLOWED_COMMANDS=/usr/bin/curl exec node --disable-warning=ExperimentalWarning server/main.ts"],
+      "port": 18080
+    }
+  ]
+}

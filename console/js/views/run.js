@@ -3,7 +3,7 @@ import { clear, h } from '../dom.js';
 import { duration, number, shortHash, TERMINAL_RUN, timestamp, tone, truncate } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { can } from '../session.js';
-import { badge, button, card, codeBlock, confirmDialog, dataTable, emptyState, errorBox, formDialog, kv, notice, openDialog, pageHeader, spinner, statusBadge, toast } from '../ui.js';
+import { badge, button, card, codeBlock, dataTable, errorBox, formDialog, kv, notice, openDialog, pageHeader, spinner, statusBadge, toast } from '../ui.js';
 import { runLink, wfLink } from './common.js';
 
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour12: false }) + iso.slice(19, 23);
@@ -136,7 +136,7 @@ async function stepDialog(step, base) {
       clear(out).append(errorBox(e));
     }
   } });
-  const preview = step.output && step.output.redacted ? notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`) : step.output !== null && step.output !== undefined ? codeBlock(JSON.stringify(step.output, null, 2)) : h('span', { class: 'muted' }, 'No output recorded.');
+  const preview = step.output?.redacted ? notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`) : step.output !== null && step.output !== undefined ? codeBlock(JSON.stringify(step.output, null, 2)) : h('span', { class: 'muted' }, 'No output recorded.');
   await openDialog({
     title: `Step ${step.id}`,
     wide: true,
