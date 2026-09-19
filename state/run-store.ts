@@ -369,13 +369,34 @@ export class RunStore {
   private filter(f: RunFilter): { where: string; params: Array<string | number> } {
     const w: string[] = [];
     const params: Array<string | number> = [];
-    if (f.tenant) w.push('tenant_id = ?'), params.push(f.tenant);
-    if (f.workflow) w.push('workflow_name = ?'), params.push(f.workflow);
-    if (f.status?.length) w.push(`status IN (${f.status.map(() => '?').join(',')})`), params.push(...f.status);
-    if (f.triggerType) w.push('trigger_type = ?'), params.push(f.triggerType);
-    if (f.parentRunId) w.push('parent_run_id = ?'), params.push(f.parentRunId);
-    if (f.since) w.push('created_at >= ?'), params.push(f.since);
-    if (f.before) w.push('created_at < ?'), params.push(f.before);
+    if (f.tenant) {
+      w.push('tenant_id = ?');
+      params.push(f.tenant);
+    }
+    if (f.workflow) {
+      w.push('workflow_name = ?');
+      params.push(f.workflow);
+    }
+    if (f.status?.length) {
+      w.push(`status IN (${f.status.map(() => '?').join(',')})`);
+      params.push(...f.status);
+    }
+    if (f.triggerType) {
+      w.push('trigger_type = ?');
+      params.push(f.triggerType);
+    }
+    if (f.parentRunId) {
+      w.push('parent_run_id = ?');
+      params.push(f.parentRunId);
+    }
+    if (f.since) {
+      w.push('created_at >= ?');
+      params.push(f.since);
+    }
+    if (f.before) {
+      w.push('created_at < ?');
+      params.push(f.before);
+    }
     return { where: w.length ? `WHERE ${w.join(' AND ')}` : '', params };
   }
 

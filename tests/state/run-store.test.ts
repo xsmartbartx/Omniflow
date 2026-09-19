@@ -366,10 +366,11 @@ describe('identity, secrets, triggers, authoring and kv stores', () => {
   });
 
   it('registers triggers, dedupes firings and rejects replayed nonces', () => {
-    const [t] = s.triggers.replaceForWorkflow('default', 'wf', '1.0.0', [
+    const registered = s.triggers.replaceForWorkflow('default', 'wf', '1.0.0', [
       { name: 'nightly', type: 'schedule', config: { cron: '0 2 * * *' }, nextFireAt: '2026-06-01T02:00:00.000Z' },
       { name: 'hook', type: 'webhook', config: {} },
     ]);
+    const t = registered.find((x) => x.name === 'nightly')!;
     expect(s.triggers.dueSchedules('2026-06-01T12:00:00.000Z').map((x) => x.name)).toEqual(['nightly']);
     expect(s.triggers.recordFire(t!.id, 'slot-1')).toBe(true);
     expect(s.triggers.recordFire(t!.id, 'slot-1')).toBe(false);

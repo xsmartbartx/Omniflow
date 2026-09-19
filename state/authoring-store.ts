@@ -453,8 +453,14 @@ export class AuthoringStore {
   listFindings(tenant: string, workflow?: string, version?: string): FindingRecord[] {
     const w = ['tenant_id = ?'];
     const p: string[] = [tenant];
-    if (workflow) w.push('workflow_name = ?'), p.push(workflow);
-    if (version) w.push('version = ?'), p.push(version);
+    if (workflow) {
+      w.push('workflow_name = ?');
+      p.push(workflow);
+    }
+    if (version) {
+      w.push('version = ?');
+      p.push(version);
+    }
     return this.db
       .all<FRow>(`SELECT * FROM findings WHERE ${w.join(' AND ')} ORDER BY created_at DESC LIMIT 500`, p)
       .map(toFinding);

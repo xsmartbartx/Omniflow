@@ -121,8 +121,14 @@ export class ApprovalStore {
   list(f: { tenant: string; status?: ApprovalStatus; runId?: string; limit?: number }): ApprovalRecord[] {
     const w = ['tenant_id = ?'];
     const p: string[] = [f.tenant];
-    if (f.status) w.push('status = ?'), p.push(f.status);
-    if (f.runId) w.push('run_id = ?'), p.push(f.runId);
+    if (f.status) {
+      w.push('status = ?');
+      p.push(f.status);
+    }
+    if (f.runId) {
+      w.push('run_id = ?');
+      p.push(f.runId);
+    }
     const limit = Math.min(f.limit ?? 100, 500);
     return this.db
       .all<Row>(`SELECT * FROM approvals WHERE ${w.join(' AND ')} ORDER BY requested_at DESC LIMIT ${limit}`, p)
