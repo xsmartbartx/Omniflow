@@ -39,7 +39,7 @@ export function runSummary(r: RunRecord) {
 const CONFIDENTIAL = new Set(['confidential', 'secret']);
 
 /** A step as shown to a person: plan metadata plus state. Confidential outputs are withheld from listings. */
-export function stepView(plan: Plan, rec: StepRecord, ps: PlanStep | undefined) {
+export function stepView(_plan: Plan | undefined, rec: StepRecord, ps: PlanStep | undefined) {
   const hidden = ps !== undefined && CONFIDENTIAL.has(ps.sensitivity) && rec.output !== undefined;
   return {
     id: rec.stepId,

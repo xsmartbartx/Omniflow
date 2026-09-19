@@ -57,9 +57,9 @@ class Histogram {
     }
     s.sum += value;
     s.count++;
-    this.buckets.forEach((b, i) => {
-      if (value <= b) s!.counts[i]!++;
-    });
+    for (let i = 0; i < this.buckets.length; i++) {
+      if (value <= this.buckets[i]!) s.counts[i]!++;
+    }
   }
 }
 
@@ -113,7 +113,7 @@ export class MetricsRegistry {
     for (const h of this.histograms.values()) {
       out.push(`# HELP ${h.name} ${h.help}`, `# TYPE ${h.name} histogram`);
       for (const [l, s] of h.series) {
-        h.buckets.forEach((b, i) => line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${b}"`, s.counts[i]!));
+        for (let i = 0; i < h.buckets.length; i++) line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${h.buckets[i]}"`, s.counts[i]!);
         line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="+Inf"`, s.count);
         line(`${h.name}_sum`, l, s.sum);
         line(`${h.name}_count`, l, s.count);

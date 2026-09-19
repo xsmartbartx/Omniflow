@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type CapabilityRegistry, createDefaultRegistry } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
-import { Authenticator, hashPassword } from '../gateway/auth.ts';
+import { Authenticator } from '../gateway/auth.ts';
 import { createMetrics, type MetricsRegistry } from '../insight/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
@@ -149,4 +149,3 @@ function seedExamples(app: Omniflow): void {
   }
 }
 
-export { hashPassword };
