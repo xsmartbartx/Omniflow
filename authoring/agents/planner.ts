@@ -21,13 +21,15 @@ export interface ValidationOutcome {
 export interface PlannerDeps {
   llm: LlmClient;
   /** Read-only: parse, compile and risk-review a manifest without saving it. */
-  validate: (manifest: string) => ValidationOutcome;
+  validate: (manifest: string, tenant: string) => ValidationOutcome;
   capabilities: () => CapabilityDeclaration[];
   /** Model calls allowed per request, including the first (default 3). */
   maxAttempts?: number;
 }
 
 export interface PlanRequest {
+  /** Whose registry the draft is validated against (subworkflows, capabilities). */
+  tenant: string;
   /** What the person wants, in their words. */
   intent: string;
   /** Revise this manifest instead of starting from scratch. */
@@ -90,7 +92,7 @@ export class Planner {
         continue;
       }
       last = { manifest: parsed.manifest, rationale: parsed.rationale || last.rationale, openQuestions: parsed.openQuestions };
-      validation = this.validate(parsed.manifest);
+      validation = this.validate(parsed.manifest, req.tenant);
       const blocking = validation.risk?.findings.filter((f) => f.blocking) ?? [];
       if (validation.ok && blocking.length === 0) {
         return { ok: true, ...last, manifest: parsed.manifest, attempts: attempt, validation, usage, model, injectionSignals };

@@ -140,6 +140,11 @@ export class PolicyEngine {
     this.config = config;
   }
 
+  /** Bounds for T3 autonomy (used by the change service to decide what an agent may publish on its own). */
+  get blastRadius(): { maxRunCost: number } {
+    return this.config.blastRadius;
+  }
+
   get environment(): EnvironmentName {
     return this.config.environment;
   }

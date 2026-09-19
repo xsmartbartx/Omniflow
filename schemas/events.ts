@@ -78,6 +78,7 @@ export const EVENT_CATALOGUE = {
   // ---- agents & insight
   'agent.draft-created': { run: false, required: ['agent', 'draftId'] },
   'agent.proposal-created': { run: false, required: ['agent', 'proposalId'] },
+  'authoring.autonomy-applied': { run: false, required: ['draftId', 'tier', 'mode'] },
   'pentest.finding': { run: false, required: ['ruleId', 'severity'] },
   'insight.analysis-completed': { run: false, required: ['findings', 'proposals'] },
   'alert.raised': { run: false, required: ['key', 'severity', 'title'] },

@@ -51,6 +51,8 @@ export interface SubmitOptions {
   origin?: 'human' | 'agent';
   /** Take only this percentage of runs (canary) instead of becoming the stable version. */
   canaryPercent?: number;
+  /** Open a change request even where policy alone would publish — e.g. an autonomy tier that requires a human. */
+  forceApproval?: { code: string; reason: string };
 }
 
 export interface RegistryEvents {
@@ -158,7 +160,13 @@ export class RegistryService {
     this.audit(principal, 'workflow.publish', decision, name);
     if (decision.effect === 'deny') throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: name, version });
 
-    if (decision.effect === 'require-approval') {
+    const gate =
+      decision.effect === 'require-approval'
+        ? decision
+        : opts.forceApproval
+          ? { ...decision, effect: 'require-approval' as const, reasonCode: opts.forceApproval.code, reason: opts.forceApproval.reason, requiredApprovals: 1 }
+          : undefined;
+    if (gate) {
       const change = this.st.authoring.createChange({
         tenant,
         workflowName: name,
@@ -166,9 +174,9 @@ export class RegistryService {
         manifestText: text,
         requestedBy: principal.id,
         requestedByName: principal.name,
-        reasonCode: decision.reasonCode,
-        reason: decision.reason,
-        requiredApprovals: decision.requiredApprovals ?? 1,
+        reasonCode: gate.reasonCode,
+        reason: gate.reason,
+        requiredApprovals: gate.requiredApprovals ?? 1,
         risk: r.risk,
         origin,
       });
@@ -176,9 +184,9 @@ export class RegistryService {
         tenant,
         type: 'workflow.change-requested',
         actor: actorOf(principal),
-        data: { workflow: name, version, changeId: change.id, reasonCode: decision.reasonCode, requiredApprovals: change.requiredApprovals },
+        data: { workflow: name, version, changeId: change.id, reasonCode: gate.reasonCode, requiredApprovals: change.requiredApprovals },
       });
-      return { status: 'pending-approval', change, decision, risk: r.risk };
+      return { status: 'pending-approval', change, decision: gate, risk: r.risk };
     }
     const published = this.publishInternal(tenant, text, r, { publishedBy: principal.id, origin, ...(opts.canaryPercent ? { canaryPercent: opts.canaryPercent } : {}) });
     return { status: 'published', version: published, risk: r.risk };
