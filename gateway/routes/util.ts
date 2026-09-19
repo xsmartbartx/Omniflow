@@ -1,7 +1,7 @@
 import { NotFoundError } from '../../core/index.ts';
 import type { Plan, PlanStep, Principal } from '../../schemas/index.ts';
 import type { RunRecord, StepRecord } from '../../state/index.ts';
-import type { Omniflow } from '../../server/platform.ts';
+import type { Omniflow } from '../context.ts';
 
 export const name = { type: 'string', pattern: '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', maxLength: 64 } as const;
 export const id = { type: 'string', minLength: 1, maxLength: 128 } as const;

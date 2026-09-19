@@ -14,33 +14,15 @@ import { defaultPolicyConfig, parsePolicyDocument, PolicyEngine } from '../secur
 import { createKeyring, SecretBroker } from '../security/secret-broker/index.ts';
 import { openState, type State, stateOptionsFor } from '../state/index.ts';
 import type { Config } from './config.ts';
+import type { Omniflow } from '../gateway/context.ts';
+
+export type { Omniflow };
 
 /**
  * The composition root: every component of architecture §5, wired together. Layers below never
  * import this file — dependencies point inward, and this is the only place that knows about all of
  * them.
  */
-export interface Omniflow {
-  config: Config;
-  log: Logger;
-  clock: Clock;
-  state: State;
-  capabilities: CapabilityRegistry;
-  policy: PolicyEngine;
-  broker: SecretBroker;
-  breakers: CircuitBreakers;
-  orchestrator: Orchestrator;
-  registry: RegistryService;
-  runs: RunService;
-  scheduler: Scheduler;
-  triggers: TriggerManager;
-  approvals: ApprovalService;
-  auth: Authenticator;
-  metrics: MetricsRegistry;
-  /** Start background loops, recover interrupted runs, bootstrap the first admin. */
-  start(): Promise<{ recovered: number; bootstrap?: { email: string; password: string } }>;
-  stop(): Promise<void>;
-}
 
 export interface OmniflowOverrides {
   state?: State;

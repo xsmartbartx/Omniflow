@@ -12,7 +12,7 @@ import {
   ValidationError,
 } from '../core/index.ts';
 import type { Action, Principal } from '../schemas/index.ts';
-import type { Omniflow } from '../server/platform.ts';
+import type { Omniflow } from './context.ts';
 import { SESSION_COOKIE } from './auth.ts';
 import type { RateLimiter } from './rate-limit.ts';
 

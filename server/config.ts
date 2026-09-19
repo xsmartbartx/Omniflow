@@ -4,33 +4,11 @@ import type { AdapterConfig } from '../capabilities/index.ts';
 import { defaultAdapterConfig } from '../capabilities/index.ts';
 import { OmniflowError, type LogLevel } from '../core/index.ts';
 import type { EnvironmentName } from '../schemas/index.ts';
+import type { Config } from '../gateway/context.ts';
 import { generateMasterKey } from '../security/secret-broker/index.ts';
 
-export interface Config {
-  environment: EnvironmentName;
-  dataDir: string;
-  host: string;
-  port: number;
-  /** Public base URL — decides whether cookies are `Secure`. */
-  publicUrl: string;
-  logLevel: LogLevel;
-  masterKey: string;
-  /** Previous master keys, kept readable until secrets are rotated. */
-  previousMasterKeys: string[];
-  admin: { email: string; password: string | undefined };
-  adapters: AdapterConfig;
-  policyDir: string;
-  workflowsDir: string;
-  seedExamples: boolean;
-  publishApprovals: number;
-  maxConcurrentRuns: number;
-  maxConcurrentSteps: number;
-  sessionTtlHours: number;
-  rateLimitPerMinute: number;
-  trustProxy: boolean;
-  metricsToken: string | undefined;
-  version: string;
-}
+export type { Config };
+
 
 type Env = Record<string, string | undefined>;
 

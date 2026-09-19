@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ulid } from '../core/index.ts';
-import type { Omniflow } from '../server/platform.ts';
+import type { Omniflow } from './context.ts';
 import { buildOpenApi, fromFastifyValidation, problem, registerRoutes, type RouteDef } from './http.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
@@ -125,8 +125,8 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
       prefix: '/',
       wildcard: false,
       setHeaders: (res, path) => {
-        res.setHeader('content-security-policy', CONSOLE_CSP);
-        res.setHeader('cache-control', path.endsWith('index.html') ? 'no-cache' : 'public, max-age=300');
+        res.header('content-security-policy', CONSOLE_CSP);
+        res.header('cache-control', path.endsWith('index.html') ? 'no-cache' : 'public, max-age=300');
       },
     });
   }
