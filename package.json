@@ -1,7 +1,7 @@
 {
   "name": "omniflow",
   "version": "1.0.0",
-  "description": "OmniFlow — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
+  "description": "OmniFlow \u2014 AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
   "type": "module",
   "license": "Apache-2.0",
   "private": false,
@@ -18,10 +18,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "biome check .",
+    "lint": "biome lint .",
     "format": "biome check --write .",
     "check:layers": "node scripts/check-layers.ts",
-    "verify": "npm run typecheck && npm run lint && npm run check:layers && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run check:layers && npm run test",
+    "format:check": "biome format ."
   },
   "dependencies": {
     "@fastify/static": "^10.1.4",
