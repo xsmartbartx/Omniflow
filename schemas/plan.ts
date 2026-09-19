@@ -1,14 +1,6 @@
 import type { ErrorClass, JsonObject, Sensitivity } from '../core/index.ts';
 import type { EffectClass } from './capability.ts';
-import type {
-  Guard,
-  InputSpec,
-  Metadata,
-  Observability,
-  OnError,
-  StepType,
-  Trigger,
-} from './manifest.ts';
+import type { Guard, InputSpec, Metadata, Observability, OnError, StepType, Trigger } from './manifest.ts';
 
 /**
  * Execution plan — the immutable, content-addressed output of the (pure) Compiler
