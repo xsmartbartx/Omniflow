@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
+import { Ajv } from 'ajv';
+import addFormats from 'ajv-formats';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ulid } from '../core/index.ts';
 import type { Omniflow } from './context.ts';
@@ -50,8 +52,16 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
       const supplied = req.headers['x-request-id'];
       return typeof supplied === 'string' && /^[A-Za-z0-9._-]{8,64}$/.test(supplied) ? supplied : `req_${ulid()}`;
     },
-    ajv: { customOptions: { removeAdditional: false, coerceTypes: 'array', useDefaults: true, allErrors: true } },
   });
+
+  // JSON bodies are validated strictly (no type coercion: 42 is not "42"); query strings and path
+  // parameters are text by nature, so they are coerced. Unknown properties are rejected, never dropped.
+  const ajvOpts = { allErrors: true, useDefaults: true, removeAdditional: false, strict: false } as const;
+  // ajv-formats ships CommonJS; under NodeNext its default export is the module namespace.
+  const applyFormats = ((addFormats as unknown as { default?: unknown }).default ?? addFormats) as unknown as (a: Ajv) => Ajv;
+  const strictAjv = applyFormats(new Ajv({ ...ajvOpts, coerceTypes: false }));
+  const coercingAjv = applyFormats(new Ajv({ ...ajvOpts, coerceTypes: 'array' }));
+  server.setValidatorCompiler(({ schema, httpPart }) => (httpPart === 'body' ? strictAjv : coercingAjv).compile(schema));
 
   const limiters = {
     api: new RateLimiter(app.config.rateLimitPerMinute),

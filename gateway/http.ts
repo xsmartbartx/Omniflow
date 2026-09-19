@@ -164,6 +164,7 @@ export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: Ro
           }
         }
       }
+      reply.code(def.status ?? 200); // handlers may override (e.g. 201 for a fresh publish, 202 for a change request)
       const result = await def.handler({
         req,
         reply,
@@ -174,7 +175,6 @@ export function registerRoutes(fastify: FastifyInstance, app: Omniflow, defs: Ro
         params: req.params,
       });
       if (def.raw) return reply;
-      reply.code(def.status ?? 200);
       return result === undefined ? null : result;
     };
     fastify.route({
