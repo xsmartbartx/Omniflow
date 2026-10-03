@@ -35,7 +35,7 @@
     "docs:generate": "node --disable-warning=ExperimentalWarning scripts/emit-docs.ts"
   },
   "dependencies": {
-    "@fastify/static": "^10.1.4",
+    "@fastify/static": "^10.1.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "croner": "^10.0.1",
