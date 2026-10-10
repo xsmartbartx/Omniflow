@@ -14,20 +14,27 @@ CREATE TABLE nexora_orgs (
     CHECK (status IN ('active','suspended','disabled')),   -- 'disabled' = product lifecycle switch (T-10)
   plan_synced_at TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  UNIQUE (org_id, tenant_id)                       -- parent key for the composite foreign keys below
 );
+
+-- Parent key so child rows can prove a user belongs to the same tenant (SQLite needs a unique index here).
+CREATE UNIQUE INDEX users_id_tenant ON users (id, tenant_id);
 
 -- NEXORA user in an org <-> OmniFlow user. Created on first sign-in; password_hash stays NULL.
 CREATE TABLE nexora_identities (
-  org_id TEXT NOT NULL REFERENCES nexora_orgs(org_id) ON DELETE CASCADE,
+  org_id TEXT NOT NULL,
   external_user_id TEXT NOT NULL,                  -- Clerk user id
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
   nexora_role TEXT NOT NULL
     CHECK (nexora_role IN ('owner','admin','member','billing','viewer')),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  PRIMARY KEY (org_id, external_user_id)
+  PRIMARY KEY (org_id, external_user_id),
+  -- org and user must both belong to this row's tenant, not merely exist
+  FOREIGN KEY (org_id, tenant_id) REFERENCES nexora_orgs (org_id, tenant_id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id, tenant_id) REFERENCES users (id, tenant_id) ON DELETE CASCADE
 );
 CREATE INDEX nexora_identities_user ON nexora_identities (user_id);
 CREATE INDEX nexora_identities_tenant ON nexora_identities (tenant_id);
@@ -59,18 +66,19 @@ CREATE INDEX nexora_key_cache_org ON nexora_key_cache (org_id);
 -- OmniFlow event it mirrors; a worker delivers it. idempotency_key makes redelivery safe.
 CREATE TABLE nexora_outbox (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  org_id TEXT NOT NULL REFERENCES nexora_orgs(org_id) ON DELETE CASCADE,
+  tenant_id TEXT NOT NULL,
+  org_id TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('usage','audit','health')),
   name TEXT NOT NULL,                              -- <domain>.<object>.<action>, e.g. omniflow.run.started
   payload TEXT NOT NULL,                           -- JSON
-  idempotency_key TEXT NOT NULL UNIQUE,            -- e.g. run id + event name
+  idempotency_key TEXT NOT NULL UNIQUE,            -- = id of the source OmniFlow event, assigned once and reused on retries
   correlation_id TEXT,
   occurred_at TEXT NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT NOT NULL,
   sent_at TEXT,
-  last_error TEXT
+  last_error TEXT,
+  FOREIGN KEY (org_id, tenant_id) REFERENCES nexora_orgs (org_id, tenant_id) ON DELETE CASCADE
 );
 CREATE INDEX nexora_outbox_due ON nexora_outbox (sent_at, next_attempt_at);
 CREATE INDEX nexora_outbox_org ON nexora_outbox (org_id, occurred_at);

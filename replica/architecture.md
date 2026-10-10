@@ -58,7 +58,7 @@ New routes (everything else in `docs/api.md` is unchanged):
 
 | method path | does | who | input | output | flow |
 | --- | --- | --- | --- | --- | --- |
-| GET `/app` | SSO entry: verify NEXORA assertion, provision org + user on first use, set OmniFlow session, redirect to console | NEXORA-signed user | assertion (cookie/header, format per C-AUTH) | 302 to `/#/dashboard` | F10, F12 |
+| GET `/app` | SSO entry: verify NEXORA assertion, provision org + user on first use, set OmniFlow session, redirect to console. The session is short-lived (<= 5 min) and every session-authenticated request re-reads the user's current org membership and role (from a fresh assertion or Core), so removal or demotion applies on the next request | NEXORA-signed user | assertion (cookie/header, format per C-AUTH) | 302 to `/#/dashboard` | F10, F12 |
 | GET `/healthz` | already exists; add `product`, `version`, `mode` fields for T-6 and `health_source` | none | none | 200 JSON | F12 |
 | POST `/v1/nexora/lifecycle` | Core tells the product an org or the product is suspended/disabled (T-10) | Core (signed) | `{orgId, status}` | 204 | F11 |
 | GET `/v1/nexora/usage` | org-visible usage this period (runs used / limit) for the console banner | any signed-in role | none | `{used, limit, period}` | F12 |
@@ -76,9 +76,9 @@ Add `X-RateLimit-Limit/Remaining/Reset` to `/v1/*` responses (feature row "Rate-
 
 ## The parts that bite
 
-- **Identity mapping:** Clerk user ids are not OmniFlow user ids; email can change. Key on `(org_id, external_user_id)`, never email. Role changes in NEXORA must apply on the next request (re-read role from the assertion each time).
-- **Revocation:** "immediate and global" for API keys and sessions. A key cache longer than a few seconds breaks that promise; keep `valid_until` <= 30 s and re-verify on miss.
-- **Idempotency:** the outbox key is `<runId>:<eventName>`; Core must dedupe on it. If C-EVENT cannot dedupe, usage double-counts after a crash between send and mark-sent. Mitigation: reconcile job + local ledger as source of truth.
+- **Identity mapping:** Clerk user ids are not OmniFlow user ids; email can change. Key on `(org_id, external_user_id)`, never email. Role changes and member removal in NEXORA must apply on the next request: an OmniFlow session never carries its own role, it is only a handle that triggers re-verification of current membership and role (`nexora_identities` is refreshed, not trusted).
+- **Revocation:** NEXORA promises immediate, global revocation. A cache cannot deliver that, so the choice is explicit: **default = verify with Core on every request** (no positive caching). If latency forces caching, the accepted exposure window is `valid_until` <= 30 s, it must be approved by the owner, and F11's "revoked key gets 401 immediately" in `recon.md` is then restated as "within 30 s". Until approved, `nexora_key_cache` is not used for positive hits.
+- **Idempotency:** every outbox row gets one stable event id, assigned when the row is written (the id of the source OmniFlow event: run, publication or approval) and reused on every retry; `idempotency_key` = that id, so run, publish and approval events all have a key independent of a run. Core must dedupe on it. If C-EVENT cannot dedupe, usage double-counts after a crash between send and mark-sent. Mitigation: reconcile job + local ledger as source of truth.
 - **Races:** two runs admitted at the last remaining unit. Check-then-act on a cache can overshoot by the concurrency level. Accept overshoot of at most `MAX_CONCURRENT_RUNS` for Free (document it) or reserve units in the cache row atomically.
 - **Tenancy:** isolation already enforced by `tenant_id`; the new risk is a bug in the org -> tenant lookup. One isolation test per new store.
 - **Time:** all stored UTC ISO strings; billing periods are Core's calendar month in UTC; do not compute periods locally.

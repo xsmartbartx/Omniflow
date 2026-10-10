@@ -15,7 +15,7 @@
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "-e",
-        "const h=require('http'),f=require('fs'),p=require('path');const R='/Users/miejskisurfer/Desktop/IT/Projekty 2026/Omniflow/replica/design';const T={'.html':'text/html','.css':'text/css','.json':'application/json'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u==='/')u='/preview.html';const fp=p.join(R,p.normalize(u));if(!fp.startsWith(R)){s.writeHead(403).end();return}f.readFile(fp,(e,b)=>{if(e){s.writeHead(404).end();return}s.writeHead(200,{'content-type':T[p.extname(fp)]||'text/plain'}).end(b)})}).listen(18081,'127.0.0.1')"
+        "const h=require('http'),f=require('fs'),p=require('path');const R=p.resolve(process.cwd(),'replica/design');const T={'.html':'text/html','.css':'text/css','.json':'application/json'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u==='/')u='/preview.html';const fp=p.join(R,p.normalize(u));if(!fp.startsWith(R)){s.writeHead(403).end();return}f.readFile(fp,(e,b)=>{if(e){s.writeHead(404).end();return}s.writeHead(200,{'content-type':T[p.extname(fp)]||'text/plain'}).end(b)})}).listen(18081,'127.0.0.1')"
       ],
       "port": 18081
     }
