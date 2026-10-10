@@ -19,6 +19,7 @@ COPY capabilities ./capabilities
 COPY state ./state
 COPY orchestration ./orchestration
 COPY insight ./insight
+COPY nexora ./nexora
 COPY authoring ./authoring
 COPY gateway ./gateway
 COPY cli ./cli

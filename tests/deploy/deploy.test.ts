@@ -240,3 +240,22 @@ describe('example workflows and policies', () => {
     }
   });
 });
+
+describe('the image build sees every source layer', () => {
+  it('copies each directory that the TypeScript build compiles (a missing COPY only fails inside Docker)', () => {
+    const dockerfile = readFileSync(resolve(ROOT, 'Dockerfile'), 'utf8');
+    const include = (JSON.parse(readFileSync(resolve(ROOT, 'tsconfig.build.json'), 'utf8')) as { include: string[] })
+      .include;
+    // every layer directory the layer checker knows must be compiled and copied
+    const layers = readdirSync(ROOT).filter(
+      (d) => statSync(join(ROOT, d)).isDirectory() && readdirSync(join(ROOT, d)).some((f) => f.endsWith('.ts')),
+    );
+    const source = layers.filter(
+      (d) => !['tests', 'scripts', 'e2e', 'examples', 'dist', 'node_modules', 'coverage'].includes(d),
+    );
+    for (const dir of source) {
+      expect(include, `tsconfig.build.json is missing ${dir}`).toContain(dir);
+      expect(dockerfile, `Dockerfile has no COPY for ${dir}`).toMatch(new RegExp(`^COPY ${dir} \\./${dir}$`, 'm'));
+    }
+  });
+});
