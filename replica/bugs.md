@@ -2,7 +2,7 @@
 
 Found by the axe scans and a visual check while testing PR #19 (`build/nexora-m0`). B-01..B-04 and B-06 were
 introduced by the console restyle in that PR; B-05 predates it. All fixed on `test/e2e-nexora-m0`; every one is
-covered by the "every console screen" scan (F01-E3), which failed before each fix.
+B-01..B-05 are covered by the "every console screen" scan (F01-E3), which failed before each fix. B-06 was found by eye in the browser and has no automated check.
 
 | ID | sev | bug | steps | expected | actual | fix |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -11,7 +11,7 @@ covered by the "every console screen" scan (F01-E3), which failed before each fi
 | B-03 | S3 | Links and selected tabs in the brand colour failed AA in dark | dashboard, sidebar Account/Sign out link, editor tabs | >= 4.5:1 | #695def on the card colour ~3.9:1 | text uses `--link` (NEXORA's lighter link token) |
 | B-04 | S3 | Status badges (tinted background) failed AA | capabilities list | >= 4.5:1 | 4 badges flagged | outline badges (transparent background, coloured border), as NEXORA's own badge |
 | B-05 | S3 | Workflow graph exposed as an image while its nodes are focusable buttons | open a run detail, run axe | nodes reachable and named | axe `nested-interactive`: screen readers may hide the nodes | graph `role="group"` with its label (predates this PR) |
-| B-06 | S4 | Environment pill ("DEVELOPMENT") clipped at the sidebar edge | any screen at ~800px | pill fits | text cut off | pill truncates with an ellipsis |
+| B-06 | S4 (visual, no automated check) | Environment pill ("DEVELOPMENT") clipped at the sidebar edge | any screen at ~800px | pill fits | text cut off | pill truncates with an ellipsis |
 
 ## To check (not reproduced as bugs)
 

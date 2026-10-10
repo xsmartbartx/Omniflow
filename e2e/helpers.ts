@@ -13,6 +13,11 @@ export function watch(page: Page) {
     // The browser logs every non-2xx fetch as a console error; those are asserted through the UI instead.
     if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) problems.push(`console: ${m.text()}`);
   });
+  page.on('requestfailed', (r) => {
+    const why = r.failure()?.errorText ?? '';
+    // A navigation or reload cancels in-flight requests; that is not a failure.
+    if (!/ERR_ABORTED/.test(why)) problems.push(`requestfailed ${r.url()}: ${why}`);
+  });
   page.on('response', (r) => {
     if (r.status() >= 500) problems.push(`${r.status()} ${r.url()}`);
   });

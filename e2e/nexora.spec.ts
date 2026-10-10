@@ -83,6 +83,9 @@ test('F12-E: forged or missing identity is refused', async ({ request }) => {
   expect((await request.get(`${BASE}/app`, { maxRedirects: 0 })).status()).toBe(401);
   const forged = await request.get(`${BASE}/app`, { maxRedirects: 0, headers: { cookie: '__session=fake.AAAA' } });
   expect(forged.status()).toBe(401);
+  // a forged application session cookie is refused too
+  const forgedSession = await request.get(`${BASE}/v1/auth/me`, { headers: { cookie: 'omf_session=fake.AAAA' } });
+  expect(forgedSession.status()).toBe(401);
 });
 
 test('F12-E: 390px width, no horizontal scroll', async ({ browser }) => {

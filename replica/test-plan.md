@@ -5,7 +5,7 @@ NEXORA pages and Stripe that are not built or not ours to load-test). Everything
 (`playwright.config.ts`: standalone on 18091, NEXORA mode with the fake Core on 18092). Nothing touches onenexora.com,
 and no original app is load-tested. Run: `npx playwright test` (uses the installed Google Chrome, no browser download).
 
-Every spec fails on page errors and any 5xx response, and scans the screen with axe (WCAG 2.0/2.1 A and AA).
+Specs that call `watch()` fail on page errors, failed requests and any 5xx response; specs that call `a11y()` scan with axe (WCAG 2.0/2.1 A and AA). Not every spec uses both: the plan-limit, session-renewal, isolation and permission cases and the 390px cases skip `watch()`, and the API-only checks have no page to scan.
 
 ## Cases
 
