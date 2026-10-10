@@ -7,6 +7,7 @@ import { type Clock, createLogger, type Logger, randomToken, systemClock } from 
 import { Authenticator } from '../gateway/auth.ts';
 import type { Omniflow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
+import { FakeCore, NexoraService, OutboxWorker } from '../nexora/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
 import { RegistryService } from '../orchestration/registry/index.ts';
 import { CircuitBreakers, StepRuntime } from '../orchestration/runtime/index.ts';
@@ -34,6 +35,8 @@ export interface OmniflowOverrides {
   clock?: Clock;
   log?: Logger;
   capabilities?: CapabilityRegistry;
+  /** Replace the fake NEXORA Core (tests; `nexora` mode only). */
+  core?: FakeCore;
 }
 
 export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}): Omniflow {
@@ -74,7 +77,17 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const registry = new RegistryService({ state, capabilities, policy, clock });
 
   let scheduler!: Scheduler;
-  const runs = new RunService({ state, orchestrator, registry, policy, clock, onQueued: () => scheduler?.pump() });
+  const fakeCore = config.mode === 'nexora' ? (overrides.core ?? new FakeCore()) : undefined;
+  const nexoraService = fakeCore ? new NexoraService(state, fakeCore, { log }) : undefined;
+  const runs = new RunService({
+    state,
+    orchestrator,
+    registry,
+    policy,
+    clock,
+    onQueued: () => scheduler?.pump(),
+    ...(nexoraService ? { gate: nexoraService.gate } : {}),
+  });
   scheduler = new Scheduler({
     state,
     orchestrator,
@@ -86,6 +99,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const triggers = new TriggerManager({ state, runService: runs, orchestrator, broker, registry, clock, log });
   const approvals = new ApprovalService({ state, orchestrator, policy, clock });
   const auth = new Authenticator(state, { sessionTtlHours: config.sessionTtlHours, log });
+  if (nexoraService) auth.tenantGuard = (t) => nexoraService.isTenantActive(t);
   const metrics = createMetrics(state, {
     version: config.version,
     environment: config.environment,
@@ -133,6 +147,15 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     analysis,
     alerts,
     authoring,
+    ...(nexoraService && fakeCore
+      ? {
+          nexora: {
+            service: nexoraService,
+            fake: fakeCore,
+            worker: new OutboxWorker({ state, events: fakeCore.events, service: nexoraService, log }),
+          },
+        }
+      : {}),
 
     async start() {
       state.identity.ensureTenant('default', 'Default');
@@ -142,6 +165,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.start();
       triggers.start();
       alerts.start();
+      app.nexora?.worker.start();
       if (config.analysisIntervalHours > 0) {
         // First pass a few minutes after boot (so there is history to read), then on the configured cadence.
         const every = config.analysisIntervalHours * 3_600_000;
@@ -175,6 +199,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.stop();
       triggers.stop();
       alerts.stop();
+      app.nexora?.worker.stop();
       if (analysisTimer) clearTimeout(analysisTimer);
       await orchestrator.stop();
       state.events.append({ tenant: 'default', type: 'system.stopped', data: {} });

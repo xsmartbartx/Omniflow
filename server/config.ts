@@ -129,6 +129,16 @@ export function loadConfig(
   if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel))
     fail('OMNIFLOW_LOG_LEVEL', 'must be debug, info, warn, error or silent');
 
+  const mode = (env.OMNIFLOW_MODE ?? 'standalone') as 'standalone' | 'nexora';
+  if (mode !== 'standalone' && mode !== 'nexora') fail('OMNIFLOW_MODE', 'must be standalone or nexora');
+  const nexoraCore = (env.OMNIFLOW_NEXORA_CORE ?? '') as string;
+  if (mode === 'nexora') {
+    if (nexoraCore !== 'fake')
+      fail('OMNIFLOW_NEXORA_CORE', 'must be fake (the only Core implementation until NEXORA publishes its contracts)');
+    if (environment === 'production')
+      fail('OMNIFLOW_NEXORA_CORE', 'fake is unsigned and cannot be used when OMNIFLOW_ENV=production');
+  }
+
   return {
     environment,
     dataDir,
@@ -158,5 +168,11 @@ export function loadConfig(
     analysisIntervalHours: int(env, 'OMNIFLOW_ANALYSIS_INTERVAL_HOURS', 24, 0, 24 * 30),
     alertIntervalSeconds: int(env, 'OMNIFLOW_ALERT_INTERVAL_SECONDS', 60, 5, 3600),
     version: opts.version ?? '1.0.0',
+    mode,
+    nexora: {
+      core: 'fake',
+      sessionTtlMinutes: int(env, 'OMNIFLOW_NEXORA_SESSION_TTL_MINUTES', 5, 1, 60),
+      assertionCookie: env.OMNIFLOW_NEXORA_ASSERTION_COOKIE ?? '__session',
+    },
   };
 }
