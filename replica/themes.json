@@ -1,0 +1,160 @@
+{
+  "_about": "Themes reviews.py sorts feedback into. Patterns are Python regular expressions, matched case-insensitively against the review text. kind is complaint (something users hate) or request (something users want that is missing). Edit freely: add the app category's own words (for a booking app: double booking, time zone, no-show).",
+  "request_patterns": [
+    "\\bi wish\\b",
+    "\\bplease add\\b",
+    "\\bwould be (nice|great|good|helpful)\\b",
+    "\\bwould love\\b",
+    "\\bneeds? (a|an|the|to|more)\\b",
+    "\\bno way to\\b",
+    "\\bthere'?s no (way|option)\\b",
+    "\\b(can'?t|cannot|unable to) (even )?(add|change|edit|set|choose|export|import|customi[sz]e|connect|undo|delete|turn off)\\b",
+    "\\b(missing|lacks|lacking)\\b",
+    "\\bdoesn'?t (have|support|let|allow)\\b",
+    "\\bif only\\b",
+    "\\bfeature request\\b",
+    "\\bwhy (can'?t|isn'?t|doesn'?t)\\b"
+  ],
+  "themes": [
+    {
+      "id": "ops-complexity",
+      "label": "Operational complexity and scale",
+      "kind": "complaint",
+      "patterns": [
+        "\\bcomplex(ity)?\\b",
+        "\\bhard to debug\\b",
+        "\\bcassandra\\b",
+        "\\bmanage\\b",
+        "\\bhorizontally\\b",
+        "\\bscale\\b",
+        "\\bkubernet",
+        "\\bhelm\\b",
+        "\\bself.?host"
+      ]
+    },
+    {
+      "id": "pricing",
+      "label": "Price and metering",
+      "kind": "complaint",
+      "patterns": [
+        "\\bexpensive\\b",
+        "\\bpric(e|es|ing)\\b",
+        "\\bcost",
+        "\\bactions?\\b.*\\bper\\b",
+        "\\bfree\\b",
+        "\\bpaid plan\\b"
+      ]
+    },
+    {
+      "id": "failure-handling",
+      "label": "Retries, failures and recovery",
+      "kind": "complaint",
+      "patterns": [
+        "\\bretr(y|ies)\\b",
+        "\\bfail(s|ed|ure|ures)?\\b",
+        "\\bkilled\\b",
+        "\\bOOM",
+        "\\bstate mismatch\\b",
+        "\\bidempoten",
+        "\\bcrash",
+        "\\bdies\\b",
+        "\\breattach\\b",
+        "\\bregression\\b",
+        "\\bbroken\\b"
+      ]
+    },
+    {
+      "id": "observability",
+      "label": "Visibility, UI and debugging",
+      "kind": "complaint",
+      "patterns": [
+        "\\bUI\\b",
+        "\\bgantt\\b",
+        "\\bvisible\\b",
+        "\\blog\\b",
+        "\\bdebug",
+        "\\bsearch\\b",
+        "\\bfilter",
+        "\\bcallback\\b",
+        "\\bevent log\\b",
+        "\\bwarning\\b"
+      ]
+    },
+    {
+      "id": "storage",
+      "label": "Storage and database support",
+      "kind": "request",
+      "patterns": [
+        "\\bsqlite\\b",
+        "\\bmongodb\\b",
+        "\\bcockroach",
+        "\\bscylla",
+        "\\bkeyspaces\\b",
+        "\\bydb\\b",
+        "\\bpersist(ence|ent)\\b",
+        "\\barchiv"
+      ]
+    },
+    {
+      "id": "orchestration-features",
+      "label": "Workflow control (priority, concurrency, waiting, schedules)",
+      "kind": "request",
+      "patterns": [
+        "\\bpriority\\b",
+        "\\bconcurrency\\b",
+        "\\bpool",
+        "\\bwait for\\b",
+        "\\bschedule",
+        "\\brecurring\\b",
+        "\\bsignal",
+        "\\bsemaphore\\b",
+        "\\bdefer",
+        "\\bretention\\b",
+        "\\bdependenc"
+      ]
+    },
+    {
+      "id": "governance",
+      "label": "Approvals, auditing and safety",
+      "kind": "request",
+      "patterns": [
+        "\\bapproval",
+        "\\baudit\\b",
+        "\\bnotification",
+        "\\bsecret",
+        "\\bpermission",
+        "\\bdeterminism\\b",
+        "\\bgatekeep"
+      ]
+    },
+    {
+      "id": "ai-agents",
+      "label": "AI agent steps misbehaving",
+      "kind": "complaint",
+      "patterns": [
+        "\\bAI agent\\b",
+        "\\bagent\\b",
+        "\\bollama\\b",
+        "\\bdeepseek\\b",
+        "\\bmistral\\b",
+        "\\bopenai\\b",
+        "\\bLLM\\b",
+        "\\bmodel\\b"
+      ]
+    },
+    {
+      "id": "upgrades",
+      "label": "Upgrades and breaking changes",
+      "kind": "complaint",
+      "patterns": [
+        "\\bbreaking\\b",
+        "\\bregression\\b",
+        "\\bupgrade",
+        "\\brolling\\b",
+        "\\bnot working\\b",
+        "\\bno longer\\b",
+        "\\bstill broken\\b"
+      ]
+    }
+  ]
+}

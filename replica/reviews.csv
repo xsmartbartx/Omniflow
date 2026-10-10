@@ -1,0 +1,104 @@
+source,url,date,rating,text
+hacker-news,https://news.ycombinator.com/item?id=47838524,2026-04-20,,"To me it seems like an LLM-based implementation of automation software like Zapier. The problem with Zapier is you need services to provide APIs and Zapier needs to support those APIs to implement it in the automation workflow.
+But because OpenClaw can just use a web browser like a normal user, you don't need all these APIs and there's no theoretical limitations on the services that can be integrated and automated.
+Right now there's a lot of issues/bugs. People have more trust in a deterministic solution like Zapier. But maybe the LLMs and OpenClaw will get there eventually, and if it does, I can see how that's a better solution than a deterministic system."
+hacker-news,https://news.ycombinator.com/item?id=49697521,2026-09-14,,"Say you've got a process that spans a bunch of services and touches the real world. Some ecommerce check out for example.
+You need to reserve some inventory, charge a card, eventually email a customer and steps can go wrong. So you have queues, and retries and ways to back things out, undo changes.
+To my understanding, Temporal's idea is to factor that part out, the queues and retries, and offsetting actions, so you write the logic and not the workflow orchestration."
+hacker-news,https://news.ycombinator.com/item?id=48769191,2026-07-03,,"The part about durable workflows is technically correct, but it's focusing on different things than what I've ever run into in practice. Any mildly complex system will have side effects outside your DB, then you want idempotency. If you have no side effects, you probably don't need a durable workflow in the first place? Maybe there's a more concrete example.
+I have rolled my own little durable workflows in Postgres before, in fact before I even knew durable workflows were a thing with solutions like Temporal. That's fine for many cases where you aren't doing enough steps for it to be tedious, and/or you want permanent records. Would do it again, but not for atomicity reasons.
+Other comments have already discussed the issue with the outbox UDF, your external system has to poll and retry either way. It works though. Maybe I'm misunderstanding this?"
+hacker-news,https://news.ycombinator.com/item?id=48334094,2026-05-30,,"> Depending on how your code is written, modifying code baked into workflows becomes complex, as anything that modifies the history event ordering breaks determinism in already-deployed workers.
+I see this as Temporal surfacing inherent complexity of the domain in a way that forces the developer to consider it, rather than introducing extra complexity.
+If it didn't make workflow determinism a strict requirement, the requirement would still exist - it would just hurt much worse in production when it's broken.
+See also: Rust borrowing"
+hacker-news,https://news.ycombinator.com/item?id=48331337,2026-05-30,,"It sounds like you’re running this mostly on a single machine?
+Temporal gets much more complex with scale. Cassandra isn’t fun to manage. Ringpop and TChannel are hard to debug when things go wrong. The SQL backend support doesn’t support horizontally scaled replicas (just single instance) due to consistency requirements. Depending on how your code is written, modifying code baked into workflows becomes complex, as anything that modifies the history event ordering breaks determinism in already-deployed workers.
+We use it heavily and everyone who started on it doing simple scripting/automation all love it, everyone who built real production systems on top of it all hate it. Possibly operator error, but my experience hasn’t matched the rosy picture painted in these comments."
+hacker-news,https://news.ycombinator.com/item?id=48316355,2026-05-28,,"Honest question: Can you use Temporal Cloud? Have you evaluated Temporal Cloud pricing?
+Ballparking: 200 events/workflow, 200 workflows/per day and assuming 1 event = 1 cloud action[1], that is 1.2M or so actions per month. The $100/month plan includes 1M actions each month, and even the pay-as-you pricing when you exceed that is $50 per 1M actions[2].
+Temporal Cloud seems extremely cheap for your use case, even if I'm off by a factor of 10. Is there a catch? You still need infra to run your Temporal workers, and I assume there are storage and other costs, but I assume action usage is the majority of it.
+1. Not sure exactly what constitutes an ""Action"". At a glance, seems like most events have a corresponding action(?) and a subset of those actions are actually billable(?)
+2. https://docs.temporal.io/cloud/pricing#payg-action-pricing"
+hacker-news,https://news.ycombinator.com/item?id=48313750,2026-05-28,,"Curious to know experience of people using DBOS and Temporal.
+I have used Temporal in the past, works really good, my only problem with it was  some limits on request payload or event sizes, created some inconveniences to us when building solutions. It also enforces good engineering practices, but sometimes you don't want to write special logic if your CSV file is larger than 2Mb, upload it to S3, pass link, then download it in the workflow.
+What is your experience with DBOS? How does it compare to Temporal in terms of operational complexity, feature parity and anything else"
+hacker-news,https://news.ycombinator.com/item?id=32295032,2022-07-31,,ToolJet cannot be used as an alternative for Zapier as it doesn't have workflow automation capabilities. Probably this was the reason for dropping.
+hacker-news,https://news.ycombinator.com/item?id=32294731,2022-07-31,,"Has anyone tried both? I deployed Tooljet at work because I needed a self-hosted Zapier alternative, but I seem to remember running into some issues and ending up dropping it. I can't be more specific than that as I don't remember, though I think it was related to documentation/getting started quickly, so I was wondering whether others had more experience."
+hacker-news,https://news.ycombinator.com/item?id=23757601,2020-07-07,,"I use it as a core part of my self-hosted infrastructure, as an alternative to IFTTT or Zapier.
+I do simple things with it, like monitor GitHub for releases of software I use, filter out release candidates and post the info to a Mattermost server. This helps me stay current With projects where I maintain a public Docker image for them.
+Huginn also does more complex things like act as the engine for an app running as a series of functions in OpenFaaS. That app pulls data from various sources, aggregates it, dedupes it according to various criteria, does a bunch of subsequent lookups, stores results in Mongo and then collects the output once a day and sends it as an email.
+Huginn is an excellent tool."
+hacker-news,https://news.ycombinator.com/item?id=22343820,2020-02-16,,"I always pick Zapier for automation these days, even for production-level projects. Before that I once searched across several other alternatives and came across Tray.io for my project but they seemed to be very expensive and also had less integrations compared to the likes of Zapier, with no free trial.
+I'm not sure why anyone would choose them over Zapier for the prices they were offering but perhaps that's the reason why I wasn't surprised why many developers and businesses keep choosing either Zapier or IFTTT."
+hacker-news,https://news.ycombinator.com/item?id=20530020,2019-07-25,,"It appears that Tray.io is mostly situated for enterprises that wish to automate their API connectors using a GUI tool they created; allowing easy creation of APIs for businesses.
+But compared to the competition however, Tray.io is has less supported APIs, no starter / free trials or signups (You must get a quote from them) and they are somewhat less flexible in customization options when compared with the other alternatives.
+At this point, I would choose Zapier over Tray.io, since Zapier is basically the same thing but can be used by many developers from freelance to enterprise, free trial to try it out and supports more connectors. I cannot comment on Parabola.io though as I have not used it yet."
+github-issues,https://github.com/n8n-io/n8n/issues/14361,2025-04-02,,AI Agent doesn't store the Tool usages in memory [33 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/16005,2025-06-04,,Bearer Authentication Not Working with HTTP Request Node Pagination [22 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/25360,2026-02-05,,Timeout setting does not work for Ollama node when it takes more than 5 minutes [8 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/36972,2026-08-24,,"Regression in 2.36.5 — Mistral Chat Model node fails with ""Failed to parse URL from [object Request]"" (works in 2.35.4) [8 reactions on n8n-io/n8n]"
+github-issues,https://github.com/n8n-io/n8n/issues/13149,2025-02-08,,Need to remove <think></think> from response when using deepseek [8 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/15240,2025-05-09,,Clicking on a folder with N8N_PATH and N8N_EDITOR_BASE_URL set causes 404 [7 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/24042,2026-01-08,,AI Agent node: Tool node errors fail workflow instead of returning error to agent for handling [7 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/19489,2025-09-12,,Breaking issue: Notion Node does not support latest Notion API (2025-09-03) [6 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/25852,2026-02-16,,Chat UI Error: 'type' must be 'output_text' after second message in conversation [6 reactions on n8n-io/n8n]
+github-issues,https://github.com/n8n-io/n8n/issues/37453,2026-08-31,,"Mistral Cloud Chat Model fails in AI Agent: ""Failed to parse URL from [object Request]"" — still broken in 2.36.9 Cloud (same as #25318) [6 reactions on n8n-io/n8n]"
+github-issues,https://github.com/n8n-io/n8n/issues/36093,2026-08-12,,"Instance AI model verification always fails for OpenAI: max_output_tokens is hardcoded to 8, below the Responses API minimum of 16 [5 reactions on n8n-io/n8n]"
+github-issues,https://github.com/apache/airflow/issues/13975,2021-01-29,,Allow multiple pools for one task [38 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/24464,2022-06-15,,Showing DAGs in folder like structure [32 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/40799,2024-07-15,,Support named mapping for task group  [28 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/22001,2022-03-04,,Global gantt chart (across all DAGs) [23 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/16432,2021-06-14,,Colour options for tags on DAGS [20 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/21867,2022-02-28,,Retry for TaskGroup [15 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/11708,2020-10-21,,Git sync for plugins in the Helm Chart [30 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/30451,2023-04-04,,Add defer support for SQLExecuteQueryOperator [13 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/44151,2024-11-18,,Solve executor state mismatch / task killed externally [10 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/53905,2025-07-29,,Duplicate rows on rendered_task_instance_fields [10 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/10867,2020-09-10,,Warning about invisible connections/variable in the Web UI [14 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/27476,2022-11-02,,Volume is missing for sshKeySecret when dag persistence is enabled. [10 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/30974,2023-04-30,,Datasets: Allow time based force dependency when dataset is not ready. [9 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/73164,2026-09-15,,"KubernetesExecutor: Event log says ""Pod failed because of None"" for OOMKilled pods [15 reactions on apache/airflow]"
+github-issues,https://github.com/apache/airflow/issues/19884,2021-11-30,,Type hinted `@task` decorated functions to create typed XComs [9 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/36516,2023-12-31,,Hook notification when you turn on/off (pause/unpause) a DAG from the UI [12 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/53040,2025-07-08,,Improve filtering support in Airflow 3.x UI Views [8 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/65708,2026-04-23,,Airflow 3.2 Worker Failures on TaskInstance Finish (HTTP 409 invalid_state) [8 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/12199,2020-11-09,,New dag run / task state: disposed [7 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/19251,2021-10-27,,Add a way to skip the secret_backend [7 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/21900,2022-03-01,,Enable kubernetes_pod_operator to reattach_on_restart when the worker dies [7 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/56750,2025-10-17,,Grouped Issue: Asset Scheduling behavior changes based on DAG performance settings (and it shouldn't) [7 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/42492,2024-09-26,,Provide configuration option to configure path of OTEL metrics exporter [7 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/32379,2023-07-05,,Handling of the DagRun callback log should be visible on the UI somewhere [5 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/33448,2023-08-16,,Select multiple tasks at once with keyboard and mouse in Grid View [5 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/35803,2023-11-22,,Allow dynamically set `pool_slots` for potentially heavy tasks.   [5 reactions on apache/airflow]
+github-issues,https://github.com/apache/airflow/issues/35689,2023-11-16,,Pool Support for Task Groups in Apache Airflow [5 reactions on apache/airflow]
+github-issues,https://github.com/temporalio/temporal/issues/680,2020-08-18,,Add ability for workflow to wait for completion of an external workflow [76 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/1507,2021-04-29,,Provide priority task queues [55 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/2318,2021-12-21,,MongoDB as Persistent [59 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/131,2020-02-09,,Different retry options based on failure type [35 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/537,2020-07-13,,Add SignalWithStart\UpdateWithStart command [33 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/1797,2021-08-04,,Ability to get all task queues per namespace [26 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/2609,2022-03-14,,Add ability to transfer child workflows to new parent run when parent calls continue as new [24 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/5302,2024-01-16,,YDB Temporal support. [53 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/328,2020-04-25,,Try to run temporal on top of  Amazon Keyspaces [24 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/5811,2024-04-29,,Support last day of month as a recurring schedule option [24 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/3366,2022-09-12,,Support sqlite in production. [18 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/4795,2023-08-23,,"Schedules - add option for execution workflowid to be ""as-is"" (not unique per run) [27 reactions on temporalio/temporal]"
+github-issues,https://github.com/temporalio/temporal/issues/1460,2021-04-14,,Add task queue query [18 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/1988,2021-09-28,,Implement dynamic task queue routing [21 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/4180,2023-04-18,,Official CockroachDB (CRDB) support [24 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/7666,2025-04-27,,Сoncurrency limit (built-in semaphore) per Workflow type [15 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/6799,2024-11-12,,Support `WorkflowIdConflictPolicy` for child workflow [13 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/2617,2022-03-17,,Allow retention period to be set per workflow completion type [13 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/1492,2021-04-25,,Optimize large payload fan-out to activities and child workflows [12 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/1428,2021-04-02,,Aim for error free rolling bounces and upgrades of Temporal [11 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/3056,2022-07-05,,Support wildcard search for workflows [11 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/4383,2023-05-22,,"Support log-less graceful shutdown without ""Error looking up host for shardID"" errors [11 reactions on temporalio/temporal]"
+github-issues,https://github.com/temporalio/temporal/issues/5516,2024-03-12,,Support for Azure Blob Storage for Archival [11 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/685,2020-08-24,,Delay workflow completion until abandoned children start  [9 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/3709,2022-12-14,,Workflows/activities to post event notifications that could be listened to [9 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/8356,2025-09-20,,Resource-Aware Worker Concurrency [9 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/4829,2023-09-01,,Allow to specify task queue when resetting an execution [9 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/487,2020-06-30,,Consider separating retention period from uniqueness guarantee period [8 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/4105,2023-03-26,,Full support for scylladb as persistence layer [9 reactions on temporalio/temporal]
+github-issues,https://github.com/temporalio/temporal/issues/6995,2024-12-15,,Error during VisibilityDeleteExecution [7 reactions on temporalio/temporal]
