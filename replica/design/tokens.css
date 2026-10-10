@@ -85,5 +85,8 @@
   color-scheme: light;
 }
 @media (prefers-reduced-motion: reduce) {
-  :root { --dur-fast: 0ms; --dur-base: 0ms; }
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
 }

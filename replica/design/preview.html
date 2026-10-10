@@ -55,7 +55,7 @@
         <header class="card-header"><h3 class="card-title">hello-world</h3><p class="card-desc">v1.0.0 · owner you@example.com</p></header>
         <div class="card-content row between"><span class="badge badge-success">active</span><span class="muted">12 runs today</span></div>
       </article>
-      <a class="card card-interactive" href="#">
+      <a class="card card-interactive" href="#form">
         <header class="card-header"><h3 class="card-title">approval-gated-refund</h3><p class="card-desc">Interactive card, hover and focus it</p></header>
         <div class="card-content"><span class="badge badge-warning">2 pending</span></div>
       </a>
@@ -63,7 +63,7 @@
     </div>
   </section>
 
-  <section>
+  <section id="form">
     <h2>Form</h2>
     <form class="stack" onsubmit="return false">
       <label class="field"><span>Workflow name</span>
@@ -92,9 +92,7 @@
 
   <section>
     <h2>Usage meter (new, NEXORA mode)</h2>
-    <div class="meter" role="meter" aria-valuemin="0" aria-valuemax="1500" aria-valuenow="1180" aria-label="Runs used this month">
-      <div class="meter-bar" style="width:78.7%"></div>
-    </div>
+    <meter class="meter" min="0" max="1500" value="1180" aria-label="Runs used this month">1,180 of 1,500</meter>
     <p class="muted">1,180 of 1,500 runs this month · Pro plan</p>
   </section>
 </main>
