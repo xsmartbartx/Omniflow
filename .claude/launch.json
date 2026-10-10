@@ -9,6 +9,15 @@
         "rm -rf /tmp/omniflow-console-demo && OMNIFLOW_DATA_DIR=/tmp/omniflow-console-demo OMNIFLOW_PORT=18080 OMNIFLOW_HOST=127.0.0.1 OMNIFLOW_PUBLIC_URL=http://127.0.0.1:18080 OMNIFLOW_ENV=development OMNIFLOW_ADMIN_EMAIL=admin@example.com OMNIFLOW_ADMIN_PASSWORD=correct-horse-battery-staple OMNIFLOW_LOG_LEVEL=warn OMNIFLOW_SHELL_ALLOWED_COMMANDS=/usr/bin/curl exec node --disable-warning=ExperimentalWarning server/main.ts"
       ],
       "port": 18080
+    },
+    {
+      "name": "design-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "-e",
+        "const h=require('http'),f=require('fs'),p=require('path');const R='/Users/miejskisurfer/Desktop/IT/Projekty 2026/Omniflow/replica/design';const T={'.html':'text/html','.css':'text/css','.json':'application/json'};h.createServer((q,s)=>{let u=decodeURIComponent(q.url.split('?')[0]);if(u==='/')u='/preview.html';const fp=p.join(R,p.normalize(u));if(!fp.startsWith(R)){s.writeHead(403).end();return}f.readFile(fp,(e,b)=>{if(e){s.writeHead(404).end();return}s.writeHead(200,{'content-type':T[p.extname(fp)]||'text/plain'}).end(b)})}).listen(18081,'127.0.0.1')"
+      ],
+      "port": 18081
     }
   ]
 }

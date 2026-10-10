@@ -1,0 +1,86 @@
+{
+  "_about": "OmniFlow design tokens (light theme). Source: NEXORA packages/ui/src/tokens.css (owner's own platform). Roles stay, values may change.",
+  "color": {
+    "bg": "#ffffff",
+    "surface": "#ffffff",
+    "surface-muted": "#f3f4f7",
+    "border": "#dcdfe5",
+    "border-input": "#6a7181",
+    "text": "#0b111e",
+    "text-muted": "#5c6370",
+    "accent": "#4536e2",
+    "on-accent": "#f9fafb",
+    "link": "#4536e2",
+    "secondary": "#096c9a",
+    "on-secondary": "#f9fafb",
+    "danger": "#dc2828",
+    "on-danger": "#f9fafb",
+    "success": "#1c6e48",
+    "warning": "#845606",
+    "ring": "#4536e2"
+  },
+  "pairs": [
+    [
+      "text",
+      "bg"
+    ],
+    [
+      "text",
+      "surface"
+    ],
+    [
+      "text-muted",
+      "bg"
+    ],
+    [
+      "text-muted",
+      "surface"
+    ],
+    [
+      "text-muted",
+      "surface-muted"
+    ],
+    [
+      "on-accent",
+      "accent"
+    ],
+    [
+      "link",
+      "bg"
+    ],
+    [
+      "on-secondary",
+      "secondary"
+    ],
+    [
+      "on-danger",
+      "danger"
+    ],
+    [
+      "danger",
+      "bg"
+    ],
+    [
+      "success",
+      "bg"
+    ],
+    [
+      "warning",
+      "bg"
+    ],
+    [
+      "border-input",
+      "bg",
+      "ui"
+    ],
+    [
+      "ring",
+      "bg",
+      "ui"
+    ],
+    [
+      "secondary",
+      "bg"
+    ]
+  ]
+}
