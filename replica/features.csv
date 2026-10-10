@@ -23,7 +23,7 @@ Status component on status.onenexora.com,ops,should,yes,no,manual component list
 Rate-limit headers X-RateLimit-* on API,api,should,yes,no,OmniFlow has rate limits; header parity unverified
 Per-org data isolation of SQLite state,state,should,yes,yes,"single file, tenant_id on every row, composite FKs, isolation tests"
 Replace SQLite state plane with Postgres,state,could,yes,skip,README says single-node by design; reopen only if scaling demands
-Licence consistency (LICENSE vs package.json vs README),legal,must,yes,no,Apache-2.0 text still in package.json and README
+Licence consistency (LICENSE vs package.json vs README),legal,must,yes,yes,"LICENSE, package.json, README, CONTRIBUTING, Dockerfile label and notices all say proprietary"
 Terms/Privacy/Security statement for the product,legal,must,yes,skip,NEXORA drafts await a lawyer; not generated here
 Multi-region / data residency,ops,could,yes,skip,deferred by NEXORA itself
 Partner marketplace listing for OmniFlow,marketplace,could,yes,skip,deferred by NEXORA itself

@@ -37,7 +37,7 @@ FROM node:${NODE_VERSION}-alpine AS runtime
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="OmniFlow" \
       org.opencontainers.image.description="AI workflow substrate: declarative, deterministic, auditable workflows" \
-      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.licenses="LicenseRef-Proprietary" \
       org.opencontainers.image.version="${VERSION}"
 
 # tini reaps zombies and forwards signals, so shutdown is graceful and shell steps cannot linger.

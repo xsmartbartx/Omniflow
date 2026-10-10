@@ -1,0 +1,5 @@
+{
+  "avoid": ["n8n", "Zapier", "Temporal", "Airflow", "Camunda"],
+  "domains": ["n8n.io", "zapier.com", "temporal.io", "airflow.apache.org"],
+  "colors": []
+}
