@@ -238,7 +238,8 @@ async function showLogin() {
   clearSession();
   shellParts = undefined;
   const mod = await import('./views/login.js');
-  clear(root).append(mod.default({ onSignedIn: start }));
+  const info = await api.get('/v1/info').catch(() => undefined);
+  clear(root).append(info?.mode === 'nexora' ? mod.nexoraSignIn() : mod.default({ onSignedIn: start }));
   document.title = 'Sign in · OmniFlow';
 }
 

@@ -5,6 +5,50 @@ import { duration, number, percent } from '../format.js';
 import { badge, button, card, dataTable, notice, pageHeader } from '../ui.js';
 import { wfLink } from './common.js';
 
+/** Runs used this month against the plan (NEXORA mode). Always shows the numbers as text, not just a bar. */
+function usageMeter(u) {
+  const unlimited = u.limit === null;
+  const left = unlimited ? null : Math.max(0, u.limit - u.used);
+  const ratio = unlimited || u.limit === 0 ? 0 : u.used / u.limit;
+  const summary = unlimited
+    ? `${number(u.used)} runs this month · ${u.plan} plan, no limit`
+    : `${number(u.used)} of ${number(u.limit)} runs this month · ${u.plan} plan`;
+  return h(
+    'div',
+    { class: 'stack' },
+    card(
+      'Plan usage',
+      h(
+        'div',
+        { class: 'usage' },
+        unlimited
+          ? null
+          : h(
+              'meter',
+              {
+                class: 'meter',
+                min: 0,
+                max: u.limit,
+                value: Math.min(u.used, u.limit),
+                'aria-label': 'Runs used this month',
+              },
+              summary,
+            ),
+        h('p', { class: 'muted' }, summary),
+      ),
+    ),
+    left === 0
+      ? notice(
+          'bad',
+          h('strong', {}, 'Plan limit reached'),
+          h('p', {}, 'New runs are refused until the next period or an upgrade. Dry runs still work.'),
+        )
+      : ratio >= 0.8
+        ? notice('warn', h('strong', {}, 'Running low'), h('p', {}, `${number(left)} runs left this month.`))
+        : null,
+  );
+}
+
 export default async function dashboard(ctx) {
   const body = h('div', { class: 'stack' });
   const hours = h(
@@ -19,10 +63,12 @@ export default async function dashboard(ctx) {
   );
 
   async function load() {
-    const [o, alerts, approvals] = await Promise.all([
+    const [o, alerts, approvals, usage] = await Promise.all([
       api.get(`/v1/insights/overview?hours=${hours.value}`),
       api.get('/v1/insights/alerts'),
       api.get('/v1/approvals?status=pending&limit=200'),
+      // Only exists in NEXORA mode; a standalone install answers 404 and simply shows no meter.
+      api.get('/v1/nexora/usage').catch(() => ({ metered: false })),
     ]);
     const mine = approvals.items.filter((a) => a.canDecide).length;
     const kpi = (label, value, hint, kind) =>
@@ -35,6 +81,7 @@ export default async function dashboard(ctx) {
       );
     const rate = o.runs.successRate;
     clear(body).append(
+      usage.metered ? usageMeter(usage) : null,
       alerts.active.length
         ? h(
             'div',
@@ -83,9 +130,9 @@ export default async function dashboard(ctx) {
             h(
               'div',
               { class: 'legend' },
-              h('span', {}, h('i', { class: 'bar-ok', style: { background: 'var(--good)' } }), 'Succeeded'),
-              h('span', {}, h('i', { style: { background: 'var(--bad)' } }), 'Failed'),
-              h('span', {}, h('i', { style: { background: 'var(--muted)' } }), 'Other'),
+              h('span', {}, h('i', { class: 'bar-ok', style: { background: 'var(--success)' } }), 'Succeeded'),
+              h('span', {}, h('i', { style: { background: 'var(--destructive)' } }), 'Failed'),
+              h('span', {}, h('i', { style: { background: 'var(--muted-foreground)' } }), 'Other'),
             ),
           ),
         ),

@@ -12,6 +12,7 @@ import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { authoringRoutes } from './routes/authoring.ts';
 import { insightRoutes } from './routes/insight.ts';
+import { nexoraRoutes } from './routes/nexora.ts';
 import { publicRoutes } from './routes/public.ts';
 import { runRoutes } from './routes/runs.ts';
 import { workflowRoutes } from './routes/workflows.ts';
@@ -77,6 +78,8 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     ipGlobal: new RateLimiter(app.config.rateLimitPerMinute * 2),
     login: new RateLimiter(10, 10),
     webhook: new RateLimiter(300, 60),
+    // NEXORA sign-in verifies a signed assertion locally; a whole office can share one IP, so this is looser than password login.
+    sso: new RateLimiter(240, 120),
   };
   const headers = securityHeaders(app);
 
@@ -175,6 +178,7 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     ...insightRoutes(),
     ...authoringRoutes(),
     ...adminRoutes(),
+    ...(app.config.mode === 'nexora' ? nexoraRoutes() : []),
   );
   registerRoutes(server, app, defs, limiters);
 

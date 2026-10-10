@@ -26,8 +26,10 @@ const ALLOWED: Record<string, string[]> = {
   state: ['core', 'schemas', 'security'],
   orchestration: ['core', 'schemas', 'security', 'capabilities', 'state'],
   insight: ['core', 'schemas', 'security', 'capabilities', 'state'],
+  // NEXORA integration: implements ports declared by orchestration. Nothing below `gateway` may import it.
+  nexora: ['core', 'schemas', 'security', 'state', 'orchestration'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
-  gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring'],
+  gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'nexora'],
   // The CLI is an entry point like `server`, and its embedded mode (`omniflow dev`) uses the composition root.
   cli: [
     'core',
@@ -38,10 +40,22 @@ const ALLOWED: Record<string, string[]> = {
     'orchestration',
     'insight',
     'authoring',
+    'nexora',
     'gateway',
     'server',
   ],
-  server: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'gateway'],
+  server: [
+    'core',
+    'schemas',
+    'security',
+    'capabilities',
+    'state',
+    'orchestration',
+    'insight',
+    'authoring',
+    'nexora',
+    'gateway',
+  ],
 };
 
 /** Agent modules: may only *propose*. They may never import these execution-plane modules. */

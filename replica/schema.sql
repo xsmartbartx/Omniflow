@@ -44,7 +44,8 @@ CREATE TABLE nexora_entitlement_cache (
   org_id TEXT NOT NULL REFERENCES nexora_orgs(org_id) ON DELETE CASCADE,
   action TEXT NOT NULL,                            -- e.g. 'run.start'
   allowed INTEGER NOT NULL CHECK (allowed IN (0,1)),
-  remaining INTEGER,                               -- NULL = unlimited / unknown
+  remaining INTEGER,                               -- NULL = unlimited
+  limit_total INTEGER,                             -- NULL = unlimited; shown in the usage meter
   fetched_at TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   PRIMARY KEY (org_id, action)

@@ -32,6 +32,15 @@ export type TriggerResult =
   | { status: 'deduplicated'; run: RunRecord }
   | { status: 'skipped'; reason: string };
 
+/**
+ * Optional admission gate (the NEXORA entitlement hook). `check` throws to refuse a run before anything is
+ * written; `admitted` runs in the same transaction as the run's creation. Dry runs never reach the gate.
+ */
+export interface AdmissionGate {
+  check(tenant: string): void;
+  admitted(run: RunRecord): void;
+}
+
 export interface RunServiceDeps {
   state: State;
   orchestrator: Orchestrator;
@@ -40,6 +49,7 @@ export interface RunServiceDeps {
   clock?: Clock;
   /** Called after a run is queued so the scheduler can admit it promptly. */
   onQueued?: () => void;
+  gate?: AdmissionGate;
 }
 
 /**
@@ -53,6 +63,7 @@ export class RunService {
   private readonly orch: Orchestrator;
   private readonly reg: RegistryService;
   private readonly policy: PolicyEngine;
+  private readonly gate: AdmissionGate | undefined;
   private readonly clock: Clock;
   private readonly onQueued: (() => void) | undefined;
 
@@ -63,6 +74,7 @@ export class RunService {
     this.policy = deps.policy;
     this.clock = deps.clock ?? systemClock;
     this.onQueued = deps.onQueued;
+    this.gate = deps.gate;
   }
 
   trigger(req: TriggerRequest): TriggerResult {
@@ -179,18 +191,26 @@ export class RunService {
       }
     }
 
-    const run = this.orch.createRun({
-      tenant,
-      plan,
-      planHash: version.planHash,
-      inputs,
-      principal,
-      trigger: req.trigger,
-      ...(req.dryRun ? { dryRun: true } : {}),
-      ...(req.priority !== undefined ? { priority: req.priority } : {}),
-      ...(req.correlationId ? { correlationId: req.correlationId } : {}),
-      canary,
-      ...(dedupKey ? { dedupKey } : {}),
+    if (!req.dryRun) this.gate?.check(tenant);
+    const gate = this.gate;
+    const create = () =>
+      this.orch.createRun({
+        tenant,
+        plan,
+        planHash: version.planHash,
+        inputs,
+        principal,
+        trigger: req.trigger,
+        ...(req.dryRun ? { dryRun: true } : {}),
+        ...(req.priority !== undefined ? { priority: req.priority } : {}),
+        ...(req.correlationId ? { correlationId: req.correlationId } : {}),
+        canary,
+        ...(dedupKey ? { dedupKey } : {}),
+      });
+    const run = this.st.db.transaction(() => {
+      const created = create();
+      if (!req.dryRun) gate?.admitted(created);
+      return created;
     });
     this.onQueued?.();
     return { status: 'queued', run };

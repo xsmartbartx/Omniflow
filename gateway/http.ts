@@ -49,7 +49,7 @@ export interface RouteDef {
   /** Handler takes over the raw response (streaming). */
   raw?: boolean;
   /** Stricter per-IP rate limit bucket name. */
-  limit?: 'login' | 'webhook';
+  limit?: 'login' | 'webhook' | 'sso';
   handler: (ctx: Ctx) => unknown | Promise<unknown>;
 }
 
@@ -65,6 +65,9 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
+  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_EXCEEDED') return 429;
+  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_DENIED') return 403;
+  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
   if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
   if (e instanceof OmniflowError && e.code.startsWith('LLM_')) return 502;
   if (e instanceof OmniflowError)
@@ -80,6 +83,7 @@ export function statusFor(e: unknown): number {
 
 /** Server-side conditions whose messages are written for the caller (configuration and upstream-provider problems). */
 const USER_FACING_5XX = new Set([
+  'ENTITLEMENT_UNAVAILABLE',
   'AI_NOT_CONFIGURED',
   'LLM_UNAVAILABLE',
   'LLM_BAD_RESPONSE',
@@ -190,12 +194,19 @@ export function registerRoutes(
   fastify: FastifyInstance,
   app: Omniflow,
   defs: RouteDef[],
-  limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter },
+  limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter; sso: RateLimiter },
 ): void {
   for (const def of defs) {
     const handler: RouteHandlerMethod = async (req, reply) => {
       const ip = req.ip;
-      const bucket = def.limit === 'login' ? limiters.login : def.limit === 'webhook' ? limiters.webhook : undefined;
+      const bucket =
+        def.limit === 'login'
+          ? limiters.login
+          : def.limit === 'webhook'
+            ? limiters.webhook
+            : def.limit === 'sso'
+              ? limiters.sso
+              : undefined;
       if (bucket) {
         const wait = bucket.take(`${def.limit}:${ip}`);
         if (wait > 0) throw new RateLimitedError(wait);

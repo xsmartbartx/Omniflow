@@ -12,7 +12,10 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       summary: 'Liveness probe',
       tag: 'Meta',
       public: true,
-      handler: () => ({ status: 'ok' }),
+      handler: ({ app }) =>
+        app.config.mode === 'nexora'
+          ? { status: 'ok', product: 'omniflow', version: app.config.version, mode: 'nexora' }
+          : { status: 'ok' },
     },
     {
       method: 'GET',
@@ -35,6 +38,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         name: 'OmniFlow',
         version: app.config.version,
         environment: app.config.environment,
+        mode: app.config.mode,
         capabilities: app.capabilities.latest().length,
         setupRequired: app.state.identity.countUsers() === 0,
       }),

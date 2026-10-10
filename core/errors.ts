@@ -145,6 +145,25 @@ export class RateLimitedError extends OmniflowError {
   }
 }
 
+/**
+ * A NEXORA entitlement check refused the action. `ENTITLEMENT_EXCEEDED` (plan limit reached) and
+ * `ENTITLEMENT_DENIED` (org suspended/disabled) are the caller's to resolve; `ENTITLEMENT_UNAVAILABLE`
+ * means the answer could not be established (Core unreachable and no usable cached answer).
+ */
+export class EntitlementError extends OmniflowError {
+  constructor(
+    code: 'ENTITLEMENT_EXCEEDED' | 'ENTITLEMENT_DENIED' | 'ENTITLEMENT_UNAVAILABLE',
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    super(code, message, {
+      errorClass: code === 'ENTITLEMENT_UNAVAILABLE' ? 'transient' : 'business',
+      retryable: code === 'ENTITLEMENT_UNAVAILABLE',
+      ...(details ? { details } : {}),
+    });
+  }
+}
+
 /** Normalise anything thrown into an `ErrorInfo` without leaking stack traces. */
 export function toErrorInfo(error: unknown): ErrorInfo {
   if (error instanceof OmniflowError) return error.toInfo();

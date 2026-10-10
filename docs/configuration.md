@@ -89,3 +89,16 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 
 `omniflow admin …` commands run against a data directory directly and read `OMNIFLOW_DATA_DIR`,
 `OMNIFLOW_MASTER_KEY` and `OMNIFLOW_PREVIOUS_MASTER_KEYS` like the server does.
+
+## NEXORA integration (optional)
+
+Off unless `OMNIFLOW_MODE=nexora`. In that mode organisations signing in through NEXORA get their own tenant, runs are
+metered against their plan, and usage is reported to NEXORA. **This is a first milestone: only a fake, unsigned NEXORA Core
+exists**, so it is for development and staging, and the server refuses to start with it in production.
+
+| Variable | Default | |
+|---|---|---|
+| `OMNIFLOW_MODE` | `standalone` | `standalone` (OmniFlow as shipped) or `nexora`. |
+| `OMNIFLOW_NEXORA_CORE` | | Required in `nexora` mode. Only `fake` is accepted; it is refused when `OMNIFLOW_ENV=production`. |
+| `OMNIFLOW_NEXORA_SESSION_TTL_MINUTES` | `5` | Lifetime of a session created by NEXORA sign-in (1-60). Short on purpose: it bounds how long a removed member keeps access. |
+| `OMNIFLOW_NEXORA_ASSERTION_COOKIE` | `__session` | Name of the cookie that carries the NEXORA identity assertion read by `GET /app`. |
