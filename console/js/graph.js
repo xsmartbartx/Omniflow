@@ -106,7 +106,7 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
   );
   const root = svg(
     'svg',
-    { class: 'dag', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Workflow graph' },
+    { class: 'dag', viewBox: `0 0 ${width} ${height}`, width, height, role: 'group', 'aria-label': 'Workflow graph' },
     svg(
       'defs',
       {},

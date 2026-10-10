@@ -1,7 +1,7 @@
 {
   "name": "omniflow",
   "version": "1.0.0",
-  "description": "OmniFlow \u2014 AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
+  "description": "OmniFlow — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
   "type": "module",
   "license": "Apache-2.0",
   "private": false,
@@ -47,7 +47,9 @@
     "yaml": "^2.9.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "^2.5.14",
+    "@playwright/test": "^1.64.0",
     "@types/node": "^26.6.2",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
