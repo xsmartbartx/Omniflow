@@ -9,6 +9,7 @@ import { EventLog } from './event-log.ts';
 import { IdempotencyStore } from './idempotency-store.ts';
 import { IdentityStore } from './identity-store.ts';
 import { KvStore } from './kv-store.ts';
+import { NexoraStore } from './nexora-store.ts';
 import { RegistryStore } from './registry-store.ts';
 import { RunStore } from './run-store.ts';
 import { SecretStore } from './secret-store.ts';
@@ -23,6 +24,7 @@ export * from './event-log.ts';
 export * from './idempotency-store.ts';
 export * from './identity-store.ts';
 export * from './kv-store.ts';
+export * from './nexora-store.ts';
 export * from './registry-store.ts';
 export * from './run-store.ts';
 export * from './secret-store.ts';
@@ -42,6 +44,7 @@ export interface State {
   triggers: TriggerStore;
   authoring: AuthoringStore;
   kv: KvStore;
+  nexora: NexoraStore;
   analytics: AnalyticsStore;
   clock: Clock;
   close(): void;
@@ -73,6 +76,7 @@ export function openState(opts: OpenStateOptions): State {
     triggers: new TriggerStore(db, clock),
     authoring: new AuthoringStore(db, clock),
     kv: new KvStore(db, clock),
+    nexora: new NexoraStore(db, clock),
     analytics: new AnalyticsStore(db, clock),
     close: () => db.close(),
   };

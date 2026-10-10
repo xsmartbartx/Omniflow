@@ -103,6 +103,8 @@ export class Authenticator {
   private readonly sessionTtlMs: number;
   private readonly log: Logger;
   private dummyHash: Promise<string> | undefined;
+  /** Extra per-request check on a session's tenant (NEXORA: is the org still active). */
+  tenantGuard: ((tenant: string) => boolean) | undefined;
 
   constructor(state: State, opts: { sessionTtlHours: number; log?: Logger }) {
     this.st = state;
@@ -185,11 +187,36 @@ export class Authenticator {
     };
   }
 
+  /** Start a session for a user who was authenticated elsewhere (NEXORA SSO). The caller sets the cookie. */
+  issueSession(
+    user: UserRecord,
+    ttlMs: number,
+    opts: { ip?: string; userAgent?: string } = {},
+  ): { token: string; expiresAt: string } {
+    const token = randomToken(32);
+    const session = this.st.identity.createSession({
+      id: sha256(token),
+      userId: user.id,
+      tenant: user.tenant,
+      ttlMs,
+      ...(opts.ip ? { ip: opts.ip } : {}),
+      ...(opts.userAgent ? { userAgent: opts.userAgent.slice(0, 200) } : {}),
+    });
+    this.audit(
+      'auth.login',
+      user.tenant,
+      { userId: user.id, sso: 'nexora', ...(opts.ip ? { ip: opts.ip } : {}) },
+      { type: 'user', id: user.id },
+    );
+    return { token, expiresAt: session.expiresAt };
+  }
+
   authenticateSession(token: string): { principal: Principal; user: UserRecord } | undefined {
     const session = this.st.identity.getSession(sha256(token));
     if (!session || session.expiresAt <= new Date().toISOString()) return undefined;
     const user = this.st.identity.getUser(session.userId);
     if (!user || user.disabled || this.st.identity.getTenant(user.tenant)?.disabled) return undefined;
+    if (this.tenantGuard && !this.tenantGuard(user.tenant)) return undefined;
     this.st.identity.touchSession(session.id);
     return { principal: toPrincipalFromUser(user), user };
   }

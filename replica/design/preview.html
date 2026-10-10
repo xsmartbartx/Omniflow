@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniFlow design primitives</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="primitives.css">
+</head>
+<body>
+<main class="page">
+  <header class="row between">
+    <div>
+      <p class="eyebrow">Design system check</p>
+      <h1>OmniFlow primitives</h1>
+      <p class="muted">Tokens from NEXORA <code>packages/ui</code>, plus the OmniFlow-specific parts. Toggle the theme to check both.</p>
+    </div>
+    <button class="btn btn-outline md" id="theme" type="button">Switch theme</button>
+  </header>
+
+  <section>
+    <h2>Buttons</h2>
+    <div class="row wrap">
+      <button class="btn btn-primary md" type="button">Run workflow</button>
+      <button class="btn btn-secondary md" type="button">Explain</button>
+      <button class="btn btn-outline md" type="button">Cancel</button>
+      <button class="btn btn-ghost md" type="button">Details</button>
+      <button class="btn btn-destructive md" type="button">Kill workflow</button>
+      <button class="btn btn-primary md" type="button" disabled>Disabled</button>
+      <button class="btn btn-primary md" type="button" aria-busy="true"><span class="spinner" aria-hidden="true"></span>Publishing</button>
+    </div>
+    <div class="row wrap">
+      <button class="btn btn-primary sm" type="button">Small</button>
+      <button class="btn btn-primary md" type="button">Medium</button>
+      <button class="btn btn-primary lg" type="button">Large</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Badges</h2>
+    <div class="row wrap">
+      <span class="badge">neutral</span>
+      <span class="badge badge-brand">beta</span>
+      <span class="badge badge-success">succeeded</span>
+      <span class="badge badge-warning">awaiting approval</span>
+      <span class="badge badge-danger">failed</span>
+      <span class="badge badge-info">running</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cards, alert, empty state</h2>
+    <div class="grid">
+      <article class="card">
+        <header class="card-header"><h3 class="card-title">hello-world</h3><p class="card-desc">v1.0.0 · owner you@example.com</p></header>
+        <div class="card-content row between"><span class="badge badge-success">active</span><span class="muted">12 runs today</span></div>
+      </article>
+      <a class="card card-interactive" href="#form">
+        <header class="card-header"><h3 class="card-title">approval-gated-refund</h3><p class="card-desc">Interactive card, hover and focus it</p></header>
+        <div class="card-content"><span class="badge badge-warning">2 pending</span></div>
+      </a>
+      <div class="alert" role="status">No runs yet. Start one from a workflow page and it shows up here.</div>
+    </div>
+  </section>
+
+  <section id="form">
+    <h2>Form</h2>
+    <form class="stack" onsubmit="return false">
+      <label class="field"><span>Workflow name</span>
+        <input class="input" value="hello-world" autocomplete="off">
+      </label>
+      <label class="field"><span>Owner</span>
+        <input class="input" aria-invalid="true" aria-describedby="e1" value="not-an-email">
+        <span class="field-error" id="e1">Enter an email address.</span>
+      </label>
+    </form>
+  </section>
+
+  <section>
+    <h2>Table</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Run</th><th>Workflow</th><th>Status</th><th class="num">Duration</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">run_01J9X</td><td>hello-world</td><td><span class="badge badge-success">succeeded</span></td><td class="num mono">0.4 s</td></tr>
+          <tr><td class="mono">run_01J9Y</td><td>approval-gated-refund</td><td><span class="badge badge-warning">awaiting approval</span></td><td class="num mono">2 m 10 s</td></tr>
+          <tr><td class="mono">run_01J9Z</td><td>order-router</td><td><span class="badge badge-danger">failed</span></td><td class="num mono">3.1 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Usage meter (new, NEXORA mode)</h2>
+    <meter class="meter" min="0" max="1500" value="1180" aria-label="Runs used this month">1,180 of 1,500</meter>
+    <p class="muted">1,180 of 1,500 runs this month · Pro plan</p>
+  </section>
+</main>
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const r = document.documentElement;
+    const light = r.classList.contains('light') || (!r.classList.contains('dark') && matchMedia('(prefers-color-scheme: light)').matches);
+    r.classList.toggle('light', !light);
+    r.classList.toggle('dark', light);
+  });
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import type { EnvironmentName } from '../schemas/index.ts';
 import type { PolicyEngine } from '../security/policy/index.ts';
 import type { SecretBroker } from '../security/secret-broker/index.ts';
 import type { State } from '../state/index.ts';
+import type { NexoraService, OutboxWorker } from '../nexora/index.ts';
 import type { Authenticator } from './auth.ts';
 
 /**
@@ -50,6 +51,16 @@ export interface Config {
   /** How often alert conditions are evaluated. */
   alertIntervalSeconds: number;
   version: string;
+  /** `standalone` is OmniFlow as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
+  mode: 'standalone' | 'nexora';
+  nexora: {
+    /** Which Core implementation to use. Only `fake` exists until NEXORA publishes its contracts. */
+    core: 'fake';
+    /** Lifetime of a session created by NEXORA sign-in. Short, so membership changes apply quickly. */
+    sessionTtlMinutes: number;
+    /** Cookie that carries the NEXORA identity assertion. */
+    assertionCookie: string;
+  };
 }
 
 export interface Omniflow {
@@ -72,6 +83,8 @@ export interface Omniflow {
   analysis: AnalysisAgent;
   alerts: AlertManager;
   authoring: AuthoringService;
+  /** Present only in `nexora` mode. */
+  nexora?: { service: NexoraService; worker: OutboxWorker; fake?: import('../nexora/index.ts').FakeCore };
   /** Start background loops, recover interrupted runs, bootstrap the first admin. */
   start(): Promise<{ recovered: number; bootstrap?: { email: string; password: string } }>;
   stop(): Promise<void>;

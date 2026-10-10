@@ -1,0 +1,30 @@
+feature,area,priority,original,clone,notes
+Workflow manifest validate/compile/publish,engine,must,yes,yes,exists in OmniFlow
+Exactly-once effects with idempotency keys,engine,must,yes,yes,exists; tested
+Approvals and four-eyes change control,governance,must,yes,yes,exists
+Hash-chained audit log with verify/export,governance,must,yes,yes,exists
+Web console (dashboard/workflows/runs/editor),console,must,yes,yes,16 screens exist
+REST API + SSE + OpenAPI,api,must,yes,yes,exists under /v1
+Sign in through NEXORA identity (Clerk SSO),identity,must,yes,partial,fake Core only (unsigned); real Clerk assertion verification is M1
+Map NEXORA organisation to OmniFlow tenant,identity,must,yes,yes,first sign-in provisions tenant nx_<orgId>; tested incl. isolation
+Map NEXORA roles to OmniFlow roles,identity,must,yes,yes,"owner/admin->admin+approver, member->author+operator, others viewer; unconfirmed against NEXORA role model"
+Accept nx_live_ org API keys on /v1,api,must,yes,no,omf_ keys stay for self-hosted mode
+Register OmniFlow in Product Registry (slug/tagline/pillar/lifecycle),registry,must,yes,no,appears in GET /v1/products and site
+Product page on onenexora.com following the Gateway template,website,must,yes,no,owner publishes; draft only in this session
+Plan ladder Free/Starter/Pro/Business/Scale with run quotas,billing,must,yes,no,price points are an owner decision
+Stripe products/prices for OmniFlow plans,billing,must,yes,no,test mode only until owner approves live
+Entitlement enforcement (Free blocked at limit; Pro not),entitlements,must,yes,partial,gate + 429 + local reservation + outage grace done against fake Core; real C-ENT in M1
+Usage metering runs per org into NEXORA telemetry,telemetry,must,yes,partial,"run.started via outbox with dedupe and retry; run.completed, publish, approval and audit events not yet"
+Product switcher / shared shell in console,ui,should,yes,no,needs NEXORA shell package decision (architecture R5)
+Match NEXORA UI tokens in console,ui,should,yes,yes,"console restyled to NEXORA tokens, dark default + light; AA checked"
+Docs section at docs.onenexora.com,docs,should,yes,no,reuse docs/*.md
+Add OmniFlow to Bundle Builder and bundle discount,billing,should,yes,no,bundle currently covers Sentinel/CSPM/Gateway
+Status component on status.onenexora.com,ops,should,yes,no,manual component list
+Rate-limit headers X-RateLimit-* on API,api,should,yes,no,OmniFlow has rate limits; header parity unverified
+Per-org data isolation of SQLite state,state,should,yes,yes,"single file, tenant_id on every row, composite FKs, isolation tests"
+Replace SQLite state plane with Postgres,state,could,yes,skip,README says single-node by design; reopen only if scaling demands
+Licence consistency (LICENSE vs package.json vs README),legal,must,yes,no,Apache-2.0 text still in package.json and README
+Terms/Privacy/Security statement for the product,legal,must,yes,skip,NEXORA drafts await a lawyer; not generated here
+Multi-region / data residency,ops,could,yes,skip,deferred by NEXORA itself
+Partner marketplace listing for OmniFlow,marketplace,could,yes,skip,deferred by NEXORA itself
+Browser end-to-end tests for console,test,should,no,no,README admits none exist

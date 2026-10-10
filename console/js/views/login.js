@@ -53,6 +53,32 @@ export default function login({ onSignedIn }) {
   );
 }
 
+/** Sign-in screen for NEXORA mode: identity comes from NEXORA, so there is no password form. */
+export function nexoraSignIn() {
+  return h(
+    'div',
+    { class: 'login' },
+    h(
+      'div',
+      { class: 'login-card' },
+      card(
+        null,
+        h(
+          'div',
+          { class: 'stack' },
+          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
+          h(
+            'p',
+            { class: 'muted' },
+            'OmniFlow uses your NEXORA account. Sessions last a few minutes and renew when you continue.',
+          ),
+          h('a', { class: 'btn btn-primary', href: '/app' }, 'Continue with NEXORA'),
+        ),
+      ),
+    ),
+  );
+}
+
 /** Forced password change (first sign-in with a temporary password). */
 export function changePassword({ onDone }) {
   const current = input({ type: 'password', autocomplete: 'current-password' });

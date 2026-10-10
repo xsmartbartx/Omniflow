@@ -44,7 +44,10 @@ RUN apk add --no-cache tini \
  && addgroup -S -g 10001 omniflow \
  && adduser -S -u 10001 -G omniflow -h /app omniflow \
  && mkdir -p /data /etc/omniflow/policies \
- && chown -R omniflow:omniflow /data
+ && chown -R omniflow:omniflow /data \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+# ^ the runtime never runs npm; dropping it removes the base image's bundled npm (and its CVEs) from the image.
 
 WORKDIR /app
 ENV NODE_ENV=production \

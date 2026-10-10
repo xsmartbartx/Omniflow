@@ -1,0 +1,92 @@
+/* OmniFlow design tokens. Names match NEXORA packages/ui/src/tokens.css so shared NEXORA components work unchanged.
+   Values are hex (NEXORA uses HSL triplets) because three roles were adjusted to pass WCAG AA; see components.md "Deviations".
+   Dark is the default, like NEXORA; the OS light preference and an explicit .light / .dark class override it. */
+:root {
+  --background: #070a13;
+  --foreground: #edf0f3;
+  --card: #0b0f19;
+  --card-foreground: #edf0f3;
+  --popover: #0b0f19;
+  --popover-foreground: #edf0f3;
+  --primary: #695def;
+  --primary-foreground: #f9fafb;
+  --link: #8f86f3;
+  --secondary: #35b7f3;
+  --secondary-foreground: #070a13;
+  --muted: #1b202d;
+  --muted-foreground: #98a3b3;
+  --destructive: #e14747;
+  --destructive-foreground: #070a13;
+  --success: #2eb877;
+  --warning: #f6a823;
+  --border: #252a37;
+  --input: #6c7789;
+  --ring: #695def;
+  --accent: #1e2431;
+  --accent-foreground: #edf0f3;
+  --radius: 0.625rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not(.dark) {
+    --background: #ffffff;
+    --foreground: #0b111e;
+    --card: #ffffff;
+    --card-foreground: #0b111e;
+    --popover: #ffffff;
+    --popover-foreground: #0b111e;
+    --primary: #4536e2;
+    --primary-foreground: #f9fafb;
+    --link: #4536e2;
+    --secondary: #096c9a;
+    --secondary-foreground: #f9fafb;
+    --muted: #f3f4f7;
+    --muted-foreground: #5c6370;
+    --destructive: #dc2828;
+    --destructive-foreground: #f9fafb;
+    --success: #1c6e48;
+    --warning: #845606;
+    --border: #dcdfe5;
+    --input: #6a7181;
+    --ring: #4536e2;
+    --accent: #eceff4;
+    --accent-foreground: #0b111e;
+    color-scheme: light;
+  }
+}
+.light {
+  --background: #ffffff;
+  --foreground: #0b111e;
+  --card: #ffffff;
+  --card-foreground: #0b111e;
+  --popover: #ffffff;
+  --popover-foreground: #0b111e;
+  --primary: #4536e2;
+  --primary-foreground: #f9fafb;
+  --link: #4536e2;
+  --secondary: #096c9a;
+  --secondary-foreground: #f9fafb;
+  --muted: #f3f4f7;
+  --muted-foreground: #5c6370;
+  --destructive: #dc2828;
+  --destructive-foreground: #f9fafb;
+  --success: #1c6e48;
+  --warning: #845606;
+  --border: #dcdfe5;
+  --input: #6a7181;
+  --ring: #4536e2;
+  --accent: #eceff4;
+  --accent-foreground: #0b111e;
+  color-scheme: light;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+  }
+}
