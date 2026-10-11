@@ -20,7 +20,7 @@ Match NEXORA UI tokens in console,ui,should,yes,yes,"console restyled to NEXORA 
 Docs section at docs.onenexora.com,docs,should,yes,no,reuse docs/*.md
 Add OmniFlow to Bundle Builder and bundle discount,billing,should,yes,no,bundle currently covers Sentinel/CSPM/Gateway
 Status component on status.onenexora.com,ops,should,yes,no,manual component list
-Rate-limit headers X-RateLimit-* on API,api,should,yes,no,OmniFlow has rate limits; header parity unverified
+Rate-limit headers X-RateLimit-* on API,api,should,yes,yes,"X-RateLimit-Limit/Remaining/Reset on authenticated responses, tested incl. 429 with Retry-After"
 Per-org data isolation of SQLite state,state,should,yes,yes,"single file, tenant_id on every row, composite FKs, isolation tests"
 Replace SQLite state plane with Postgres,state,could,yes,skip,README says single-node by design; reopen only if scaling demands
 Licence consistency (LICENSE vs package.json vs README),legal,must,yes,yes,"LICENSE, package.json, README, CONTRIBUTING, Dockerfile label and notices all say proprietary"

@@ -46,6 +46,9 @@ attempts lock an account for 15 minutes; login is rate-limited per address.
   | 502 / 503 | The AI provider failed / AI authoring is not configured |
   | 500 | A bug; quote `requestId` |
 
+- Authenticated responses, success or error, carry `X-RateLimit-Limit` (bucket size), `X-RateLimit-Remaining` (whole
+  requests left) and `X-RateLimit-Reset` (seconds until the bucket is full again), per principal. A `429` also sends
+  `Retry-After`.
 - Lists are newest-first and bounded (`limit`, `offset`/`afterSeq`/`beforeSeq` where relevant).
 - Every request gets a `requestId`; it appears in errors and in server logs.
 

@@ -28,6 +28,17 @@ export class RateLimiter {
     return Math.max(1, Math.ceil(((1 - b.tokens) / this.perMinute) * 60));
   }
 
+  /** The bucket as the caller should see it: size, whole requests left, and seconds until it is full again. Call after `take`. */
+  snapshot(key: string): { limit: number; remaining: number; resetSeconds: number } {
+    const b = this.buckets.get(key);
+    const tokens = b ? b.tokens : this.burst;
+    return {
+      limit: this.burst,
+      remaining: Math.max(0, Math.floor(tokens)),
+      resetSeconds: Math.max(0, Math.ceil(((this.burst - tokens) / this.perMinute) * 60)),
+    };
+  }
+
   private sweep(now: number): void {
     this.lastSweep = now;
     for (const [k, b] of this.buckets) if (now - b.last > 10 * 60_000) this.buckets.delete(k);
