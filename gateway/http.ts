@@ -65,8 +65,10 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
-  if (e instanceof ConstansError)
-    return CODE_STATUS[e.code] ?? (e.code.startsWith('LLM_') ? 502 : (CLASS_STATUS[e.errorClass] ?? 500));
+  if (e instanceof ConstansError) {
+    if (Object.hasOwn(CODE_STATUS, e.code)) return CODE_STATUS[e.code]!;
+    return e.code.startsWith('LLM_') ? 502 : (CLASS_STATUS[e.errorClass] ?? 500);
+  }
   return 500;
 }
 
