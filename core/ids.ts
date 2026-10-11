@@ -67,7 +67,8 @@ export type IdPrefix =
   | 'lse'
   | 'art'
   | 'sec'
-  | 'fnd';
+  | 'fnd'
+  | 'whd';
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${ulid()}`;

@@ -15,6 +15,7 @@ import { insightRoutes } from './routes/insight.ts';
 import { nexoraRoutes } from './routes/nexora.ts';
 import { publicRoutes } from './routes/public.ts';
 import { runRoutes } from './routes/runs.ts';
+import { webhookRoutes } from './routes/webhooks.ts';
 import { workflowRoutes } from './routes/workflows.ts';
 
 /** Walk up from this file to the directory holding `package.json`. */
@@ -178,6 +179,7 @@ export async function buildServer(app: Constans): Promise<{ server: FastifyInsta
     ...insightRoutes(),
     ...authoringRoutes(),
     ...adminRoutes(),
+    ...webhookRoutes(),
     ...(app.config.mode === 'nexora' ? nexoraRoutes() : []),
   );
   registerRoutes(server, app, defs, limiters);

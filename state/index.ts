@@ -14,6 +14,7 @@ import { RegistryStore } from './registry-store.ts';
 import { RunStore } from './run-store.ts';
 import { SecretStore } from './secret-store.ts';
 import { TriggerStore } from './trigger-store.ts';
+import { WebhookStore } from './webhook-store.ts';
 
 export * from './analytics-store.ts';
 export * from './approval-store.ts';
@@ -29,6 +30,7 @@ export * from './registry-store.ts';
 export * from './run-store.ts';
 export * from './secret-store.ts';
 export * from './trigger-store.ts';
+export * from './webhook-store.ts';
 
 /** The state plane: durable facts about what ran, what it produced, and what it consumed. */
 export interface State {
@@ -45,6 +47,7 @@ export interface State {
   authoring: AuthoringStore;
   kv: KvStore;
   nexora: NexoraStore;
+  webhooks: WebhookStore;
   analytics: AnalyticsStore;
   clock: Clock;
   close(): void;
@@ -77,6 +80,7 @@ export function openState(opts: OpenStateOptions): State {
     authoring: new AuthoringStore(db, clock),
     kv: new KvStore(db, clock),
     nexora: new NexoraStore(db, clock),
+    webhooks: new WebhookStore(db, clock),
     analytics: new AnalyticsStore(db, clock),
     close: () => db.close(),
   };

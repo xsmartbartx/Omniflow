@@ -19,6 +19,7 @@ import { createKeyring, SecretBroker } from '../security/secret-broker/index.ts'
 import { openState, type State, stateOptionsFor } from '../state/index.ts';
 import type { Config } from './config.ts';
 import { createAnthropicClient } from './llm-client.ts';
+import { WebhookDispatcher } from './webhooks.ts';
 
 export type { Constans };
 
@@ -77,6 +78,14 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
   const registry = new RegistryService({ state, capabilities, policy, clock });
 
   let scheduler!: Scheduler;
+  const webhooks = config.runWebhooks.length
+    ? new WebhookDispatcher({
+        state,
+        hooks: config.runWebhooks as ConstructorParameters<typeof WebhookDispatcher>[0]['hooks'],
+        adapters: config.adapters,
+        log,
+      })
+    : undefined;
   const fakeCore = config.mode === 'nexora' ? (overrides.core ?? new FakeCore()) : undefined;
   const nexoraService = fakeCore ? new NexoraService(state, fakeCore, { log }) : undefined;
   const runs = new RunService({
@@ -147,6 +156,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
     analysis,
     alerts,
     authoring,
+    ...(webhooks ? { webhooks } : {}),
     ...(nexoraService && fakeCore
       ? {
           nexora: {
@@ -166,6 +176,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
       triggers.start();
       alerts.start();
       app.nexora?.worker.start();
+      app.webhooks?.start();
       if (config.analysisIntervalHours > 0) {
         // First pass a few minutes after boot (so there is history to read), then on the configured cadence.
         const every = config.analysisIntervalHours * 3_600_000;
@@ -200,6 +211,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
       triggers.stop();
       alerts.stop();
       app.nexora?.worker.stop();
+      app.webhooks?.stop();
       if (analysisTimer) clearTimeout(analysisTimer);
       await orchestrator.stop();
       state.events.append({ tenant: 'default', type: 'system.stopped', data: {} });

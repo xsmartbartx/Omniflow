@@ -51,6 +51,8 @@ export interface Config {
   /** How often alert conditions are evaluated. */
   alertIntervalSeconds: number;
   version: string;
+  /** Outbound run-lifecycle webhooks (CONSTANS_RUN_WEBHOOKS). */
+  runWebhooks: Array<{ id: string; url: string; secret: string; events: string[]; tenant: string }>;
   /** `standalone` is Constans as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
   mode: 'standalone' | 'nexora';
   nexora: {
@@ -83,6 +85,8 @@ export interface Constans {
   analysis: AnalysisAgent;
   alerts: AlertManager;
   authoring: AuthoringService;
+  /** Present only when CONSTANS_RUN_WEBHOOKS is set. */
+  webhooks?: { tick(): Promise<number>; start(): void; stop(): void };
   /** Present only in `nexora` mode. */
   nexora?: { service: NexoraService; worker: OutboxWorker; fake?: import('../nexora/index.ts').FakeCore };
   /** Start background loops, recover interrupted runs, bootstrap the first admin. */

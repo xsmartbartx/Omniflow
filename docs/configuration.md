@@ -90,6 +90,12 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 `constans admin …` commands run against a data directory directly and read `CONSTANS_DATA_DIR`,
 `CONSTANS_MASTER_KEY` and `CONSTANS_PREVIOUS_MASTER_KEYS` like the server does.
 
+## Outbound run webhooks (optional)
+
+| Variable | Default | |
+|---|---|---|
+| `CONSTANS_RUN_WEBHOOKS` | | JSON array of receivers for run lifecycle events: `[{"url":"https://…","secret":"16+ characters","events":["run.failed"],"tenant":"default"}]`. `url` must be https (plain http only for localhost outside production) and carry no credentials. `events` defaults to `run.succeeded`, `run.failed`, `run.cancelled`, `run.rolled-back`, `run.compensation-failed`; `run.started` is also allowed. `tenant` defaults to `default`. Private addresses are refused unless `CONSTANS_ALLOW_PRIVATE_EGRESS` is on. See [Outbound webhooks](api.md#outbound-webhooks). |
+
 ## NEXORA integration (optional)
 
 Off unless `CONSTANS_MODE=nexora`. In that mode organisations signing in through NEXORA get their own tenant, runs are
