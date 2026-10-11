@@ -12,7 +12,7 @@ was bought, signed in to, created, pushed to a host or switched live.
 | `npx playwright test` (e2e + axe) | **pass**, 15 of 15 |
 | brand sweep (`sweep.py --config replica/brand.json`) | **pass**, clean (competitor names and domains) |
 | licence consistency | **pass**: `package.json` "SEE LICENSE IN LICENSE", README, CONTRIBUTING, Dockerfile label, notices all proprietary |
-| parity (`parity.py`) | **fail**: 54.6 / 100, **9 of 17 must-haves done**, verdict "not shippable" |
+| parity (`parity.py`) | **fail**: 54.6 / 100, **9 of 17 must-haves done, 8 open** (re-run on 2026-10-11 after the licence fix; `parity.md` was written earlier, when 9 were open), verdict "not shippable" |
 | open S1/S2 bugs | pass: none (`bugs.md`: six S3/S4, fixed) |
 | container smoke test (`deploy/smoke-test.sh`) | **not run**: the Docker daemon is not running on this machine now (it was on 2026-10-10 and passed). Start Docker and re-run |
 | `listing.py` | not applicable: web product, no store listing |
@@ -22,16 +22,16 @@ was bought, signed in to, created, pushed to a host or switched live.
 | favicon, titles, OG image are yours | partial: favicon exists; no OG image; product name pending |
 | cookie banner | not needed to assess yet: the console sets only the session cookie, no analytics |
 
-## Blockers (any one stops the deploy)
+## Blockers for the NEXORA product (any one stops that deploy)
 
 1. **No real NEXORA Core.** Identity assertions are fake and unsigned; entitlement and event contracts are not defined. Nexora mode cannot run in production. Needed: real assertion verification, `nx_live_` keys, real entitlement and event clients (milestone M1).
-2. **Must-haves open (9 of 17):** the five above plus plan ladder, Stripe prices, registry record, product page (see `parity.md`).
+2. **Must-haves open: 8 of 17** (9 are done): `nx_live_` keys, plan ladder, Stripe prices, registry record, product page, and the three partly built ones (NEXORA sign-in, entitlements, usage events). See `parity.md` for the earlier snapshot.
 3. **Name not chosen or cleared** (Constans or Tenax). Renaming after deploy is costly: CLI, env vars, key prefix, image, docs.
 4. **Legal pages are drafts.** NEXORA's Terms, Privacy and Security statement need a lawyer.
 
 ## Two ways to deploy, once the gates clear
 
-**A. Standalone (could be done today, not as a NEXORA product).** The deployment kit already exists and was smoke-tested: `docker compose --profile tls up -d` with Caddy for HTTPS. This is OmniFlow as shipped, single node. It is a legitimate path if you want to host it yourself without NEXORA integration, with the limits stated in the README.
+**A. Standalone (not as a NEXORA product).** Blockers 1-4 above are about the NEXORA integration and do not apply to a self-hosted standalone install. It is **not authorized by this document**: before it, the preflight checks that do apply must pass (build, `npm run verify`, e2e, brand sweep, licence), the container smoke test must be re-run and pass on the current commit (Docker was down on 2026-10-11), `omniflow admin doctor` (`constans admin doctor` after the rename) must pass on the target host, and **you must approve**. The deployment kit already exists and was smoke-tested on 2026-10-10: `docker compose --profile tls up -d` with Caddy for HTTPS. This is OmniFlow as shipped, single node. It is a legitimate path if you want to host it yourself without NEXORA integration, with the limits stated in the README.
 
 You do:
 1. Buy or choose a domain, e.g. `flow.example.com`, at your registrar.
