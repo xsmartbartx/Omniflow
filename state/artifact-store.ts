@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type Clock, NotFoundError, OmniflowError, systemClock } from '../core/index.ts';
+import { type Clock, NotFoundError, ConstansError, systemClock } from '../core/index.ts';
 import type { Db } from './database.ts';
 
 export interface ArtifactMeta {
@@ -93,7 +93,7 @@ export class ArtifactStore {
     const meta = this.meta(tenant, ref);
     if (!meta) throw new NotFoundError('Artifact', ref);
     if (meta.tombstonedAt) {
-      throw new OmniflowError(
+      throw new ConstansError(
         'ARTIFACT_ERASED',
         `Artifact '${ref}' was erased (${meta.tombstoneReason ?? 'no reason recorded'})`,
         {
@@ -105,7 +105,7 @@ export class ArtifactStore {
     const data = readFileSync(this.pathFor(tenant, ref.slice('sha256:'.length)));
     // Verify integrity on every read: a bit-flipped or swapped file must never be served as valid.
     if (`sha256:${createHash('sha256').update(data).digest('hex')}` !== ref) {
-      throw new OmniflowError('ARTIFACT_CORRUPT', `Artifact '${ref}' failed its integrity check`, {
+      throw new ConstansError('ARTIFACT_CORRUPT', `Artifact '${ref}' failed its integrity check`, {
         errorClass: 'catastrophic',
         retryable: false,
       });

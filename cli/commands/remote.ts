@@ -6,7 +6,7 @@ import { type CliContext, client, emit, need } from '../context.ts';
 import { ago, humanDuration, renderIssue, statusColour, table } from '../format.ts';
 import { expandFiles } from './local.ts';
 
-/** Commands that talk to a running OmniFlow server over its HTTP API. */
+/** Commands that talk to a running Constans server over its HTTP API. */
 
 const TERMINAL = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled']);
 
@@ -18,7 +18,7 @@ export async function statusCommand(ctx: CliContext): Promise<number> {
   emit(ctx, { info, ready }, () => {
     const s = ctx.style;
     return [
-      `${s.bold('OmniFlow')} ${info.version}  ${s.dim(`(${info.environment})`)}`,
+      `${s.bold('Constans')} ${info.version}  ${s.dim(`(${info.environment})`)}`,
       `ready: ${ready.ready ? s.green('yes') : s.red('no')}${ready.error ? s.dim(`  ${ready.error}`) : ''}`,
       ...(info.capabilities !== undefined ? [`capabilities: ${info.capabilities}`] : []),
     ].join('\n');
@@ -36,7 +36,7 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   if (sub === 'list') {
     const { items } = await api.get('/v1/workflows');
     emit(ctx, items, () => {
-      if (items.length === 0) return 'No workflows yet. Publish one with: omniflow publish <file>';
+      if (items.length === 0) return 'No workflows yet. Publish one with: constans publish <file>';
       return table(
         items.map((w: any) => [
           w.name,
@@ -125,7 +125,7 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
 
 export async function publishCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
-  if (paths.length === 0) throw new UsageError('Usage: omniflow publish <file|dir> [--canary <percent>]');
+  if (paths.length === 0) throw new UsageError('Usage: constans publish <file|dir> [--canary <percent>]');
   const api = client(ctx);
   const s = ctx.style;
   const canaryPercent = intFlag(ctx.args, 'canary');
@@ -191,7 +191,7 @@ export async function runCommand(ctx: CliContext): Promise<number> {
     ctx.out(
       ctx.json
         ? `${JSON.stringify(r)}\n`
-        : `${s.green('✓')} ${r.status} run ${s.bold(r.run.id)}\n  follow it with: omniflow runs tail ${r.run.id}\n`,
+        : `${s.green('✓')} ${r.status} run ${s.bold(r.run.id)}\n  follow it with: constans runs tail ${r.run.id}\n`,
     );
     return 0;
   }
@@ -266,7 +266,7 @@ export async function runsCommand(ctx: CliContext): Promise<number> {
           ? [
               '',
               s.yellow(
-                `Waiting for approval: omniflow approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
+                `Waiting for approval: constans approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
               ),
             ]
           : []),
@@ -475,13 +475,13 @@ export async function secretsCommand(ctx: CliContext): Promise<number> {
   const name = need(ctx, 2, 'name');
   if (sub === 'set') {
     // The value is read from stdin (or an interactive-free env var) so it never appears in shell history or `ps`.
-    const value = (has(ctx.args, 'stdin') ? await ctx.readStdin() : ctx.env.OMNIFLOW_SECRET_VALUE)?.replace(
+    const value = (has(ctx.args, 'stdin') ? await ctx.readStdin() : ctx.env.CONSTANS_SECRET_VALUE)?.replace(
       /\r?\n$/,
       '',
     );
     if (!value)
       throw new UsageError(
-        'Provide the value on stdin: echo -n "$VALUE" | omniflow secrets set NAME --stdin  (or set OMNIFLOW_SECRET_VALUE)',
+        'Provide the value on stdin: echo -n "$VALUE" | constans secrets set NAME --stdin  (or set CONSTANS_SECRET_VALUE)',
       );
     await api.put(`/v1/secrets/${encodeURIComponent(name)}`, {
       value,
@@ -514,8 +514,8 @@ export async function auditCommand(ctx: CliContext): Promise<number> {
   if (sub === 'export') {
     const out = flag(ctx.args, 'out');
     const res = await fetch(
-      `${flag(ctx.args, 'url') ?? ctx.env.OMNIFLOW_URL ?? 'http://127.0.0.1:8080'}/v1/audit/export`,
-      { headers: { authorization: `Bearer ${flag(ctx.args, 'key') ?? ctx.env.OMNIFLOW_API_KEY ?? ''}` } },
+      `${flag(ctx.args, 'url') ?? ctx.env.CONSTANS_URL ?? 'http://127.0.0.1:8080'}/v1/audit/export`,
+      { headers: { authorization: `Bearer ${flag(ctx.args, 'key') ?? ctx.env.CONSTANS_API_KEY ?? ''}` } },
     );
     if (!res.ok) throw new ApiError(res.status, `HTTP_${res.status}`, `Export failed (HTTP ${res.status})`);
     const text = await res.text();

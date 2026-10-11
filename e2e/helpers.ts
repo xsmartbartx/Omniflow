@@ -31,7 +31,7 @@ export async function a11y(page: Page, label: string) {
   expect(summary, `axe on ${label}`).toEqual([]);
 }
 
-export const echoWorkflow = (name: string) => `apiVersion: omniflow.dev/v1
+export const echoWorkflow = (name: string) => `apiVersion: constans/v1
 kind: Workflow
 metadata: { name: ${name}, version: 1.0.0, owner: qa@example.com, criticality: low }
 triggers: [{ type: manual }]
@@ -49,4 +49,4 @@ export async function apiLogin(request: APIRequestContext, base: string) {
   expect(res.status()).toBe(200);
 }
 
-export const csrf = { 'x-requested-with': 'omniflow' };
+export const csrf = { 'x-requested-with': 'constans' };

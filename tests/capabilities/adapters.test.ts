@@ -20,7 +20,7 @@ import {
 } from '../../capabilities/index.ts';
 import { makeCtx } from '../helpers/ctx.ts';
 
-const tmp = mkdtempSync(join(tmpdir(), 'omniflow-adapters-'));
+const tmp = mkdtempSync(join(tmpdir(), 'constans-adapters-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 const cfg = (over: Partial<AdapterConfig> = {}): AdapterConfig =>
   defaultAdapterConfig({ allowPrivateNetworks: true, ...over });
@@ -370,7 +370,7 @@ describe('database capabilities', () => {
         query: async (q: unknown) => {
           const text = typeof q === 'string' ? q : (q as { text: string }).text;
           log.push(text.replace(/\s+/g, ' ').slice(0, 60));
-          if (text.startsWith('INSERT INTO omniflow_idempotency')) return { rows: [], rowCount: idemRows };
+          if (text.startsWith('INSERT INTO constans_idempotency')) return { rows: [], rowCount: idemRows };
           return { rows: [{ n: 1n }, { n: 2n }], rowCount: 2 };
         },
         release: () => {},
@@ -395,7 +395,7 @@ describe('database capabilities', () => {
     expect(log).toEqual(
       expect.arrayContaining([
         'BEGIN',
-        expect.stringContaining('CREATE TABLE IF NOT EXISTS omniflow_idempotency'),
+        expect.stringContaining('CREATE TABLE IF NOT EXISTS constans_idempotency'),
         'UPDATE t SET a = $1',
         'COMMIT',
       ]),

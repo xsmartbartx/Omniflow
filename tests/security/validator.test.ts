@@ -12,7 +12,7 @@ import {
 } from '../../security/validator/index.ts';
 
 const base = () => ({
-  apiVersion: 'omniflow.dev/v1',
+  apiVersion: 'constans/v1',
   kind: 'Workflow',
   metadata: {
     name: 'demo-flow',
@@ -72,7 +72,7 @@ describe('manifest validator: happy path', () => {
 
 describe('manifest validator: YAML handling and positions', () => {
   it('reports YAML syntax errors with line and column', () => {
-    const r = validateManifest('apiVersion: omniflow.dev/v1\nkind: [unclosed\n');
+    const r = validateManifest('apiVersion: constans/v1\nkind: [unclosed\n');
     expect(r.ok).toBe(false);
     expect(r.errors[0]!.code).toMatch(/^YAML_/);
     expect(r.errors[0]!.line).toBeGreaterThanOrEqual(1);
@@ -97,7 +97,7 @@ describe('manifest validator: YAML handling and positions', () => {
 
   it('points at the exact line of a schema error', () => {
     const text = [
-      'apiVersion: omniflow.dev/v1',
+      'apiVersion: constans/v1',
       'kind: Workflow',
       'metadata:',
       '  name: demo-flow',
@@ -122,7 +122,7 @@ describe('manifest validator: YAML handling and positions', () => {
 
   it('points at the offending step in a semantic error', () => {
     const text = [
-      'apiVersion: omniflow.dev/v1',
+      'apiVersion: constans/v1',
       'kind: Workflow',
       'metadata: {name: demo-flow, version: 1.0.0, owner: a@b.c}',
       'triggers: [{type: manual}]',

@@ -6,41 +6,41 @@ import { systemClock } from '../../core/index.ts';
 import { createRegistry, lookupCustomer } from '../../examples/custom-capability/server.ts';
 import { buildServer } from '../../gateway/server.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createOmniflow } from '../../server/platform.ts';
+import { createConstans } from '../../server/platform.ts';
 import { type Client, until, yamlWf } from '../helpers/api.ts';
 import { makeState } from '../helpers/state.ts';
 
 describe('the documented extension path: a custom distribution with its own capability', () => {
-  let app: ReturnType<typeof createOmniflow>;
+  let app: ReturnType<typeof createConstans>;
   let admin: Client;
   let server: Awaited<ReturnType<typeof buildServer>>['server'];
 
   beforeAll(async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omniflow-ext-'));
+    const dir = mkdtempSync(join(tmpdir(), 'constans-ext-'));
     const config = loadConfig(
       {
-        OMNIFLOW_DATA_DIR: dir,
-        OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple',
-        OMNIFLOW_LOG_LEVEL: 'silent',
-        OMNIFLOW_ENV: 'development',
+        CONSTANS_DATA_DIR: dir,
+        CONSTANS_ADMIN_PASSWORD: 'correct-horse-battery-staple',
+        CONSTANS_LOG_LEVEL: 'silent',
+        CONSTANS_ENV: 'development',
       },
       { cwd: dir },
     );
-    app = createOmniflow(config, { state: makeState({ clock: systemClock }), capabilities: createRegistry(config) });
+    app = createConstans(config, { state: makeState({ clock: systemClock }), capabilities: createRegistry(config) });
     await app.start();
     ({ server } = await buildServer(app));
     await server.ready();
     const res = await server.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'admin@omniflow.local', password: 'correct-horse-battery-staple' },
+      payload: { email: 'admin@constans.local', password: 'correct-horse-battery-staple' },
     });
     const cookie = String(res.headers['set-cookie']).split(';')[0]!;
     const call = async (method: string, url: string, body?: unknown) => {
       const r = await server.inject({
         method: method as never,
         url,
-        headers: { cookie, 'x-requested-with': 'omniflow', ...(body ? { 'content-type': 'application/json' } : {}) },
+        headers: { cookie, 'x-requested-with': 'constans', ...(body ? { 'content-type': 'application/json' } : {}) },
         ...(body ? { payload: JSON.stringify(body) } : {}),
       });
       return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : null };

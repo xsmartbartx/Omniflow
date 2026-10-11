@@ -152,7 +152,7 @@ function buildShell() {
       'div',
       { class: 'brand' },
       h('img', { src: '/favicon.svg', alt: '' }),
-      'OmniFlow',
+      'Constans',
       h('span', { class: ['env-pill', me.environment] }, me.environment),
     ),
     nav,
@@ -201,7 +201,7 @@ async function renderRoute() {
   }
 
   if (!match.route || (match.route.can && !can(match.route.can))) {
-    document.title = 'Not found · OmniFlow';
+    document.title = 'Not found · Constans';
     return clear(main).append(
       errorBox(new Error(match.route ? 'You do not have access to this page.' : 'That page does not exist.'), {
         title: 'Not found',
@@ -209,7 +209,7 @@ async function renderRoute() {
       h('p', {}, h('a', { href: '#/dashboard' }, 'Back to the dashboard')),
     );
   }
-  document.title = `${match.route.title} · OmniFlow`;
+  document.title = `${match.route.title} · Constans`;
   clear(main).append(spinner());
   try {
     const mod = await match.route.view();
@@ -240,7 +240,7 @@ async function showLogin() {
   const mod = await import('./views/login.js');
   const info = await api.get('/v1/info').catch(() => undefined);
   clear(root).append(info?.mode === 'nexora' ? mod.nexoraSignIn() : mod.default({ onSignedIn: start }));
-  document.title = 'Sign in · OmniFlow';
+  document.title = 'Sign in · Constans';
 }
 
 async function start() {

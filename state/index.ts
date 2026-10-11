@@ -84,5 +84,5 @@ export function openState(opts: OpenStateOptions): State {
 
 /** Standard layout under a data directory. */
 export function stateOptionsFor(dataDir: string, clock?: Clock): OpenStateOptions {
-  return { dbPath: join(dataDir, 'omniflow.db'), artifactDir: join(dataDir, 'artifacts'), ...(clock ? { clock } : {}) };
+  return { dbPath: join(dataDir, 'constans.db'), artifactDir: join(dataDir, 'artifacts'), ...(clock ? { clock } : {}) };
 }

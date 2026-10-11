@@ -51,7 +51,7 @@ export interface Config {
   /** How often alert conditions are evaluated. */
   alertIntervalSeconds: number;
   version: string;
-  /** `standalone` is OmniFlow as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
+  /** `standalone` is Constans as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
   mode: 'standalone' | 'nexora';
   nexora: {
     /** Which Core implementation to use. Only `fake` exists until NEXORA publishes its contracts. */
@@ -63,7 +63,7 @@ export interface Config {
   };
 }
 
-export interface Omniflow {
+export interface Constans {
   config: Config;
   log: Logger;
   clock: Clock;

@@ -8,7 +8,7 @@ import { runCli } from '../../cli/main.ts';
 import { systemClock } from '../../core/index.ts';
 import { compile } from '../../orchestration/compiler/index.ts';
 import { parsePolicyDocument } from '../../security/policy/index.ts';
-import { createOmniflow } from '../../server/platform.ts';
+import { createConstans } from '../../server/platform.ts';
 import { makeApi, until } from '../helpers/api.ts';
 import { makeState } from '../helpers/state.ts';
 
@@ -21,13 +21,13 @@ const walk = (dir: string): string[] =>
 
 describe('configuration documentation cannot drift from the code', () => {
   const documented = new Set(
-    [...read('.env.example').matchAll(/\b((?:OMNIFLOW|ANTHROPIC)_[A-Z_]+)\b/g)].map((m) => m[1]!),
+    [...read('.env.example').matchAll(/\b((?:CONSTANS|ANTHROPIC)_[A-Z_]+)\b/g)].map((m) => m[1]!),
   );
   const sources = ['server', 'gateway', 'capabilities', 'insight', 'authoring']
     .flatMap((d) => walk(d))
     .filter((f) => f.endsWith('.ts'));
   const used = new Set(
-    sources.flatMap((f) => [...read(f).matchAll(/\b(OMNIFLOW_[A-Z_]+|ANTHROPIC_API_KEY)\b/g)].map((m) => m[1]!)),
+    sources.flatMap((f) => [...read(f).matchAll(/\b(CONSTANS_[A-Z_]+|ANTHROPIC_API_KEY)\b/g)].map((m) => m[1]!)),
   );
 
   it('every variable the server reads is documented in .env.example', () => {
@@ -35,7 +35,7 @@ describe('configuration documentation cannot drift from the code', () => {
   });
 
   it('every variable documented there is really read (or is a compose-level setting)', () => {
-    const composeLevel = new Set(['OMNIFLOW_BIND', 'OMNIFLOW_DOMAIN', 'OMNIFLOW_IMAGE', 'OMNIFLOW_ENV_FILE']);
+    const composeLevel = new Set(['CONSTANS_BIND', 'CONSTANS_DOMAIN', 'CONSTANS_IMAGE', 'CONSTANS_ENV_FILE']);
     expect([...documented].filter((v) => !used.has(v) && !composeLevel.has(v)).sort()).toEqual([]);
   });
 
@@ -46,17 +46,17 @@ describe('configuration documentation cannot drift from the code', () => {
       const m = /^([A-Z_]+)=(.*)$/.exec(line);
       if (m) env[m[1]!] = m[2]!; // blanks included: that is what `cp .env.example .env` produces
     }
-    expect(env.OMNIFLOW_ADMIN_PASSWORD).toBe('');
-    expect(env.OMNIFLOW_MASTER_KEY).toBe('');
-    const dir = mkdtempSync(join(tmpdir(), 'omniflow-envtest-'));
-    const cfg = loadConfig({ ...env, OMNIFLOW_DATA_DIR: dir, OMNIFLOW_LOG_LEVEL: 'silent' }, { cwd: dir });
+    expect(env.CONSTANS_ADMIN_PASSWORD).toBe('');
+    expect(env.CONSTANS_MASTER_KEY).toBe('');
+    const dir = mkdtempSync(join(tmpdir(), 'constans-envtest-'));
+    const cfg = loadConfig({ ...env, CONSTANS_DATA_DIR: dir, CONSTANS_LOG_LEVEL: 'silent' }, { cwd: dir });
     expect(cfg.environment).toBe('production');
     expect(cfg.analysisIntervalHours).toBe(24);
     expect(cfg.alertChannels).toEqual([]);
     expect(cfg.admin.password).toBeUndefined();
     expect(cfg.masterKeySource).toBe('generated');
 
-    const app = createOmniflow(cfg, { state: makeState({ clock: systemClock }) });
+    const app = createConstans(cfg, { state: makeState({ clock: systemClock }) });
     const started = await app.start();
     try {
       // no password was configured, so one is generated for the first sign-in and must be changed
@@ -91,19 +91,19 @@ describe('container image and compose file', () => {
 
   it('compose hardens the container and keeps the port on loopback by default', () => {
     const c = parse(read('docker-compose.yml'));
-    const svc = c.services.omniflow;
+    const svc = c.services.constans;
     expect(svc.read_only).toBe(true);
     expect(svc.cap_drop).toEqual(['ALL']);
     expect(svc.security_opt).toContain('no-new-privileges:true');
     expect(svc.ports[0]).toContain('127.0.0.1');
-    expect(svc.volumes).toContain('omniflow-data:/data');
+    expect(svc.volumes).toContain('constans-data:/data');
     expect(c.services.caddy.profiles).toEqual(['tls']);
-    expect(c.services.caddy.depends_on.omniflow.condition).toBe('service_healthy');
+    expect(c.services.caddy.depends_on.constans.condition).toBe('service_healthy');
   });
 });
 
 describe('Kubernetes manifests', () => {
-  const docs = parseAllDocuments(read('deploy/k8s/omniflow.yaml')).map((d) => d.toJS());
+  const docs = parseAllDocuments(read('deploy/k8s/constans.yaml')).map((d) => d.toJS());
   const byKind = (k: string) => docs.filter((d) => d.kind === k);
 
   it('are well-formed and cover the whole stack', () => {
@@ -147,8 +147,8 @@ describe('Kubernetes manifests', () => {
   });
 
   it('every secret the deployment expects is listed in the header instructions', () => {
-    const text = read('deploy/k8s/omniflow.yaml');
-    for (const v of ['OMNIFLOW_MASTER_KEY', 'OMNIFLOW_ADMIN_PASSWORD', 'OMNIFLOW_METRICS_TOKEN'])
+    const text = read('deploy/k8s/constans.yaml');
+    for (const v of ['CONSTANS_MASTER_KEY', 'CONSTANS_ADMIN_PASSWORD', 'CONSTANS_METRICS_TOKEN'])
       expect(text).toContain(v);
   });
 });
@@ -193,9 +193,9 @@ describe('example workflows and policies', () => {
   it('seeding publishes the examples on first start, and they run', async () => {
     const api = await makeApi({
       env: {
-        OMNIFLOW_SEED_EXAMPLES: 'true',
-        OMNIFLOW_WORKFLOWS_DIR: join(ROOT, 'workflows'),
-        OMNIFLOW_ENV: 'development',
+        CONSTANS_SEED_EXAMPLES: 'true',
+        CONSTANS_WORKFLOWS_DIR: join(ROOT, 'workflows'),
+        CONSTANS_ENV: 'development',
       },
     });
     try {

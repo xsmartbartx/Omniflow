@@ -133,7 +133,7 @@ export default async function workflow(ctx) {
             ['Steps', p.analysis.stepCount],
             ['Worst-case cost', number(p.analysis.maxCost)],
             ['Data sensitivity', p.analysis.maxSensitivity],
-            ['Can reach', p.analysis.egress.length ? p.analysis.egress.join(', ') : 'nothing outside OmniFlow'],
+            ['Can reach', p.analysis.egress.length ? p.analysis.egress.join(', ') : 'nothing outside Constans'],
           ]),
         ),
         card(

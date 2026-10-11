@@ -10,7 +10,7 @@ Accepted
 
 ## Context
 
-`omniflow-architecture-and-vision.md` and `ADR-0002-workflow-execution-model.md` both extend a
+`constans-architecture-and-vision.md` and `ADR-0002-workflow-execution-model.md` both extend a
 foundational decision, `ADR-0001-core-architecture`, that was referenced but not present in the
 repository. This ADR records that foundation so the extension documents are self-consistent. It
 captures the decisions those documents *assume*; it introduces no new constraint beyond them.

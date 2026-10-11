@@ -1,0 +1,43 @@
+# Bare-metal install:
+#   useradd --system --home /var/lib/constans --shell /usr/sbin/nologin constans
+#   install -d -o constans -g constans -m 0700 /var/lib/constans
+#   install -d /opt/constans && tar -xzf constans-<version>.tgz -C /opt/constans   # or: npm ci --omit=dev && npm run build
+#   install -m 0640 -o root -g constans .env.example /etc/constans/constans.env    # then edit it
+#   systemctl enable --now constans
+[Unit]
+Description=Constans workflow engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=constans
+Group=constans
+WorkingDirectory=/opt/constans
+EnvironmentFile=/etc/constans/constans.env
+Environment=NODE_ENV=production CONSTANS_DATA_DIR=/var/lib/constans NODE_OPTIONS=--disable-warning=ExperimentalWarning
+ExecStart=/usr/bin/node dist/server/main.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillMode=mixed
+
+# Sandboxing. (No MemoryDenyWriteExecute: V8's JIT needs writable+executable memory.)
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/constans
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

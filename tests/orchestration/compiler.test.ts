@@ -13,7 +13,7 @@ const opts = (over: Partial<CompileOptions> = {}): CompileOptions => ({
 });
 
 const manifest = (): any => ({
-  apiVersion: 'omniflow.dev/v1',
+  apiVersion: 'constans/v1',
   kind: 'Workflow',
   metadata: { name: 'order-flow', version: '1.2.0', owner: 'ops@example.com', description: 'd', criticality: 'high' },
   triggers: [{ type: 'manual' }, { type: 'schedule', cron: '  0   2 * * * ' }, { type: 'webhook', name: 'incoming' }],
@@ -197,7 +197,7 @@ describe('compiler: purity and determinism (ADR-0002 D2)', () => {
 
   it('pins the plan hash for a fixture (golden test — update deliberately when compilation semantics change)', () => {
     const { hash } = compileOk(manifest());
-    expect(hash).toBe('sha256:8532684402cd5200a1b8184ac910f7aa18e1de16870a0e60220f84935280dce9');
+    expect(hash).toBe('sha256:8451b8e37edaedf953f0b1aa2e2ca52ffb562819114d0769e6cd90d84b20ec66');
   });
 });
 

@@ -1,6 +1,6 @@
 # Implementation status
 
-How the build maps onto [the vision and design document](omniflow-architecture-and-vision.md) and
+How the build maps onto [the vision and design document](constans-architecture-and-vision.md) and
 [ADR-0002](adr/ADR-0002-workflow-execution-model.md). Stack: TypeScript on Node 24+ (ESM, run directly in
 development, compiled for production), SQLite (`node:sqlite`, WAL) for the state plane, Fastify for the
 gateway, a dependency-free static console.
@@ -61,9 +61,9 @@ Each is asserted by tests, not just designed:
 
 - **Single node.** One process, one SQLite database. High availability is fast restart plus tested restores.
   The state stores are the seam where a network database would go; that is not built.
-- **Shell steps are sandboxed by your container**, not by OmniFlow (argv-only, allow-listed, scrubbed
+- **Shell steps are sandboxed by your container**, not by Constans (argv-only, allow-listed, scrubbed
   environment, throw-away working directory, process-group kill — but no in-process network or resource jail).
-- **Exactly-once needs a cooperating downstream** for the effect itself; OmniFlow guarantees it does not repeat
+- **Exactly-once needs a cooperating downstream** for the effect itself; Constans guarantees it does not repeat
   the call for the same key.
 - **No automatic retention.** The audit log and run history grow until you archive them.
 - **AI features need an external model provider** and send prompts (intent, imported scripts, analysis

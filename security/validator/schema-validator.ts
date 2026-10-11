@@ -28,7 +28,7 @@ function createAjv(options: { useDefaults: boolean; strict: boolean }): AjvInsta
   return ajv;
 }
 
-/** Strict instance for OmniFlow's own schemas (manifest, events …). */
+/** Strict instance for Constans's own schemas (manifest, events …). */
 const strictAjv = createAjv({ useDefaults: false, strict: true });
 /** Lenient instance for author-supplied schemas (inputs, `produces`, capability contracts). */
 const authorAjv = createAjv({ useDefaults: true, strict: false });
@@ -165,7 +165,7 @@ export interface SchemaResult {
   issues: Issue[];
 }
 
-/** Validate an OmniFlow-owned document against one of our own (strict) schemas. */
+/** Validate an Constans-owned document against one of our own (strict) schemas. */
 export function validateAgainstSchema(schema: object, value: unknown, locate?: Locator): SchemaResult {
   const fn = compileCached(strictAjv, 'strict', schema);
   const ok = fn(value) as boolean;

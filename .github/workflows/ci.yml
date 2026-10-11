@@ -59,11 +59,11 @@ jobs:
       - name: End-to-end deployment check (build → run → publish → backup → restore → restart)
         run: deploy/smoke-test.sh
       - name: Build image for scanning
-        run: docker build -t omniflow:scan .
+        run: docker build -t constans:scan .
       - name: Scan the image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: omniflow:scan
+          image-ref: constans:scan
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"

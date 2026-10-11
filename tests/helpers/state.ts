@@ -16,7 +16,7 @@ export interface TestState extends State {
  */
 export function makeState(opts: { clock?: Clock } = {}): TestState {
   const clock = opts.clock ?? new ManualClock('2026-06-01T12:00:00.000Z');
-  const dir = mkdtempSync(join(tmpdir(), 'omniflow-test-'));
+  const dir = mkdtempSync(join(tmpdir(), 'constans-test-'));
   const state = openState({ dbPath: ':memory:', artifactDir: join(dir, 'artifacts'), clock });
   state.identity.ensureTenant('default', 'Default');
   return Object.assign(state, { clock, dir }) as TestState;

@@ -6,7 +6,7 @@ import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ulid } from '../core/index.ts';
-import type { Omniflow } from './context.ts';
+import type { Constans } from './context.ts';
 import { buildOpenApi, fromFastifyValidation, problem, type RouteDef, registerRoutes } from './http.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
@@ -30,7 +30,7 @@ export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url
 const CONSOLE_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
-function securityHeaders(app: Omniflow): Record<string, string> {
+function securityHeaders(app: Constans): Record<string, string> {
   return {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
@@ -49,7 +49,7 @@ function securityHeaders(app: Omniflow): Record<string, string> {
  * Authentication, rate limiting, request correlation and transport-level validation — no business
  * logic; every decision is delegated to the Policy Engine and the services below it.
  */
-export async function buildServer(app: Omniflow): Promise<{ server: FastifyInstance; routes: RouteDef[] }> {
+export async function buildServer(app: Constans): Promise<{ server: FastifyInstance; routes: RouteDef[] }> {
   const server = Fastify({
     logger: false,
     trustProxy: app.config.trustProxy,
@@ -91,9 +91,9 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     return defaultJson(req, body as string, done);
   });
 
-  const httpRequests = app.metrics.counter('omniflow_http_requests_total', 'HTTP requests by route and status.');
+  const httpRequests = app.metrics.counter('constans_http_requests_total', 'HTTP requests by route and status.');
   const httpSeconds = app.metrics.histogram(
-    'omniflow_http_request_duration_seconds',
+    'constans_http_request_duration_seconds',
     'HTTP request duration by route.',
   );
 

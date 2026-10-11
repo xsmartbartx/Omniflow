@@ -163,7 +163,7 @@ describe('publishing and change control', () => {
     p = makePlatform();
     p.policy.loadDocuments([
       parsePolicyDocument({
-        apiVersion: 'omniflow.dev/v1',
+        apiVersion: 'constans/v1',
         kind: 'Policy',
         metadata: { name: 'house' },
         rules: [

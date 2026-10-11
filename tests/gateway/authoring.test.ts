@@ -22,7 +22,7 @@ let admin: Client;
 let author: Client;
 
 beforeAll(async () => {
-  api = await makeApi({ llm: brain, env: { OMNIFLOW_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl,/bin/true' } });
+  api = await makeApi({ llm: brain, env: { CONSTANS_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl,/bin/true' } });
   admin = await api.login();
   author = await api.key(['author']);
 });
@@ -50,7 +50,7 @@ describe('status and availability', () => {
       const r = await a.post('/v1/authoring/plan', { intent: 'do something useful' });
       expect(r.status).toBe(503);
       expect(r.body.error.code).toBe('AI_NOT_CONFIGURED');
-      expect(r.body.error.message).toContain('OMNIFLOW_LLM_API_KEY');
+      expect(r.body.error.message).toContain('CONSTANS_LLM_API_KEY');
       expect((await a.post('/v1/import/script', { script: 'echo hi' })).status).toBe(503);
       expect((await a.post('/v1/drafts', { manifest: wf('manual-one', '1.0.0') })).status).toBe(201);
     } finally {

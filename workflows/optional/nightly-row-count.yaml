@@ -1,6 +1,6 @@
 # Reads a number from a database each night and alerts when it looks wrong.
-#   OMNIFLOW_DATASOURCES='{"warehouse":"postgres://user:pass@db:5432/warehouse"}'
-apiVersion: omniflow.dev/v1
+#   CONSTANS_DATASOURCES='{"warehouse":"postgres://user:pass@db:5432/warehouse"}'
+apiVersion: constans/v1
 kind: Workflow
 metadata:
   name: nightly-row-count

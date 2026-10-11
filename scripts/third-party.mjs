@@ -31,7 +31,7 @@ const odd = rows.filter((r) => /GPL|AGPL|SSPL|UNKNOWN|Commons-Clause/i.test(r.li
 const text = [
   '# Third-party notices',
   '',
-  'OmniFlow is proprietary software (see `LICENSE`). It includes the following third-party',
+  'Constans is proprietary software (see `LICENSE`). It includes the following third-party',
   'packages in its production dependency tree. Each is distributed under its own license; the license texts',
   'are included in the packages themselves (`node_modules/<name>/LICENSE`) and in the container image.',
   '',

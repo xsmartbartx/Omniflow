@@ -1,6 +1,6 @@
 # The smallest useful workflow: one input, two steps, one output.
-# Run it:  omniflow run hello-world --input name=Ada --wait
-apiVersion: omniflow.dev/v1
+# Run it:  constans run hello-world --input name=Ada --wait
+apiVersion: constans/v1
 kind: Workflow
 metadata:
   name: hello-world

@@ -1,7 +1,7 @@
-# An external system POSTs a signed event; OmniFlow relays it to a chat channel.
+# An external system POSTs a signed event; Constans relays it to a chat channel.
 # Create the signing secret in the console (Triggers → Signing secret) and configure the channel:
-#   OMNIFLOW_CHANNELS='{"ops":"https://hooks.slack.com/services/..."}'
-apiVersion: omniflow.dev/v1
+#   CONSTANS_CHANNELS='{"ops":"https://hooks.slack.com/services/..."}'
+apiVersion: constans/v1
 kind: Workflow
 metadata:
   name: webhook-to-channel

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildServer, packageRoot } from '../gateway/server.ts';
 import { loadConfig } from './config.ts';
-import { createOmniflow } from './platform.ts';
+import { createConstans } from './platform.ts';
 
 /** Process entry point: `node dist/server/main.js`. */
 async function main(): Promise<void> {
@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig(process.env, { version });
-  const app = createOmniflow(config);
+  const app = createConstans(config);
   const started = await app.start();
   const { server } = await buildServer(app);
   await server.listen({ host: config.host, port: config.port });

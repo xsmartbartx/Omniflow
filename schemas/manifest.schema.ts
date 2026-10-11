@@ -217,14 +217,14 @@ const guard: Schema = obj({ name: kebab(), expr: expr(), message: str() }, ['nam
 export function buildManifestSchema(): Schema {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: 'https://omniflow.dev/schemas/workflow-manifest.v1.json',
-    title: 'OmniFlow Workflow Manifest',
+    $id: 'https://constans.onenexora.com/schemas/workflow-manifest.v1.json',
+    title: 'Constans Workflow Manifest',
     description: 'Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.',
     type: 'object',
     required: ['apiVersion', 'kind', 'metadata', 'triggers', 'inputs', 'steps'],
     additionalProperties: false,
     properties: {
-      apiVersion: { const: 'omniflow.dev/v1' },
+      apiVersion: { const: 'constans/v1' },
       kind: { const: 'Workflow' },
       metadata: obj(
         {

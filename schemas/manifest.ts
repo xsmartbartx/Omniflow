@@ -5,7 +5,7 @@ import type { ErrorClass, JsonObject, JsonValue, Sensitivity } from '../core/ind
  * Everything not described here is a validation error (architecture §6.2).
  */
 
-export const API_VERSION = 'omniflow.dev/v1' as const;
+export const API_VERSION = 'constans/v1' as const;
 
 export type Criticality = 'low' | 'medium' | 'high' | 'critical';
 export type Duration = string | number;

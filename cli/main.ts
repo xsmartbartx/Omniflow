@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { OmniflowError } from '../core/index.ts';
+import { ConstansError } from '../core/index.ts';
 import { has, parseArgs, UsageError } from './args.ts';
 import { ApiError, ConnectionError } from './client.ts';
 import { adminCommand } from './commands/admin.ts';
@@ -90,9 +90,9 @@ export async function runCli(
   cwd: string = process.cwd(),
 ): Promise<number> {
   const args = parseArgs(argv);
-  // Colour only when the entry point saw a terminal (it sets OMNIFLOW_COLOR_FORCE) and nobody opted out.
+  // Colour only when the entry point saw a terminal (it sets CONSTANS_COLOR_FORCE) and nobody opted out.
   const color =
-    env.OMNIFLOW_COLOR_FORCE !== undefined &&
+    env.CONSTANS_COLOR_FORCE !== undefined &&
     !has(args, 'no-color') &&
     env.NO_COLOR === undefined &&
     env.TERM !== 'dumb';
@@ -128,13 +128,13 @@ export async function runCli(
     return await command(ctx);
   } catch (e) {
     if (e instanceof UsageError) {
-      io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'omniflow --help' for usage.")}\n`);
+      io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'constans --help' for usage.")}\n`);
       return 2;
     }
     if (e instanceof ApiError) {
       const hint =
         e.status === 401
-          ? `\n${style.dim('Check OMNIFLOW_API_KEY. Create a key with: omniflow admin create-api-key --name cli')}`
+          ? `\n${style.dim('Check CONSTANS_API_KEY. Create a key with: constans admin create-api-key --name cli')}`
           : '';
       io.err(`${style.red('error')}${style.dim(`[${e.code}]`)}: ${e.message}${hint}\n`);
       const issues = (e.details as { issues?: Array<{ path: string; message: string }> } | undefined)?.issues;
@@ -145,7 +145,7 @@ export async function runCli(
       io.err(`${style.red('error')}: ${e.message}\n`);
       return 1;
     }
-    if (e instanceof OmniflowError) {
+    if (e instanceof ConstansError) {
       io.err(`${style.red('error')}${style.dim(`[${e.code}]`)}: ${e.message}\n`);
       return 1;
     }
@@ -164,7 +164,7 @@ if (import.meta.main) {
   runCli(
     process.argv.slice(2),
     { out: (t) => process.stdout.write(t), err: (t) => process.stderr.write(t), readStdin: readAllStdin },
-    { ...process.env, ...(process.stdout.isTTY ? { OMNIFLOW_COLOR_FORCE: '1' } : {}) },
+    { ...process.env, ...(process.stdout.isTTY ? { CONSTANS_COLOR_FORCE: '1' } : {}) },
   ).then(
     (code) => {
       process.exitCode = code;

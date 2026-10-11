@@ -1,11 +1,11 @@
 # Architecture
 
-The full reasoning is in [the vision and design document](omniflow-architecture-and-vision.md) and the
+The full reasoning is in [the vision and design document](constans-architecture-and-vision.md) and the
 [ADRs](adr/); this page is the map of what was built and where it lives.
 
 ## The shape
 
-OmniFlow separates *deciding* from *doing* and *reasoning* from *acting*:
+Constans separates *deciding* from *doing* and *reasoning* from *acting*:
 
 1. **Authoring** turns intent into a **manifest** (a human, an importer, or an AI Planner — all producing drafts).
 2. The **Compiler** validates it and produces an immutable, content-addressed **plan**: resolved capability
@@ -38,7 +38,7 @@ insight/         observability (metrics, dashboard overview) · analysis agent �
 authoring/       planner · importer · explainer · docs generator · the governed change service
 gateway/         REST API, auth, RBAC enforcement, CSRF, rate limits, SSE, OpenAPI, static console
 server/          composition root (wires everything together) and the process entry point
-cli/             the `omniflow` command
+cli/             the `constans` command
 console/         the web UI (vanilla JS, no build step, strict CSP)
 ```
 

@@ -5,10 +5,10 @@
 Please **do not open a public issue** for a security problem.
 
 Use GitHub's private reporting on this repository (**Security → Report a vulnerability**). Include what you
-found, how to reproduce it, and the version (`omniflow --version`). We aim to acknowledge within three
+found, how to reproduce it, and the version (`constans --version`). We aim to acknowledge within three
 working days, agree a fix and disclosure timeline with you, and credit you in the release notes if you wish.
 
-> *Maintainers: if you distribute or operate OmniFlow commercially, add your own security contact and PGP
+> *Maintainers: if you distribute or operate Constans commercially, add your own security contact and PGP
 > key here before publishing.*
 
 ## Supported versions

@@ -3,9 +3,9 @@
 # Command-line reference
 
 ```text
-omniflow — the AI workflow substrate
+constans — the AI workflow substrate
 
-Usage: omniflow <command> [options]
+Usage: constans <command> [options]
 
 Work on manifest files (no server needed)
   validate <file|dir|->        Validate, compile and risk-review manifests. Exit 1 on errors (use in CI).
@@ -13,7 +13,7 @@ Work on manifest files (no server needed)
   dev <file>                   Run a workflow end to end on a throw-away platform
                                [--input k=v] [--secret NAME=value] [--dry-run] [--auto-approve]
 
-Talk to a server (set OMNIFLOW_URL and OMNIFLOW_API_KEY)
+Talk to a server (set CONSTANS_URL and CONSTANS_API_KEY)
   status                       Server version and readiness
   workflows [list]             List workflows
   workflows show <name>        Versions, triggers and recent runs
@@ -42,7 +42,7 @@ Talk to a server (set OMNIFLOW_URL and OMNIFLOW_API_KEY)
   docs workflow <n>|capabilities|index  Generated docs (Markdown / Mermaid)  [--out f]
   audit verify|export          Check the tamper-evident audit chain / export it  [--out file]
 
-Operate the data directory (run on the server host; OMNIFLOW_DATA_DIR)
+Operate the data directory (run on the server host; CONSTANS_DATA_DIR)
   admin create-user --email e [--name n] [--role r]
   admin reset-password --email e
   admin create-api-key --name label [--role r] [--tenant t]
@@ -52,8 +52,8 @@ Operate the data directory (run on the server host; OMNIFLOW_DATA_DIR)
 
 Global options
   --json           Machine-readable output
-  --url <url>      Server URL (default $OMNIFLOW_URL or http://127.0.0.1:8080)
-  --key <key>      API key (default $OMNIFLOW_API_KEY)
+  --url <url>      Server URL (default $CONSTANS_URL or http://127.0.0.1:8080)
+  --key <key>      API key (default $CONSTANS_API_KEY)
   --no-color       Disable colours (also honours NO_COLOR)
   -h, --help       Show help
   -v, --version    Show the version
