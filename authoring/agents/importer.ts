@@ -79,34 +79,49 @@ export function needsShell(command: string): boolean {
 
 /** Split a command line into words, honouring single and double quotes and backslash escapes. */
 export function tokenize(command: string): string[] | undefined {
-  const out: string[] = [];
-  let cur = '';
-  let inWord = false;
-  let quote: '"' | "'" | undefined;
-  for (let i = 0; i < command.length; i++) {
-    const c = command[i]!;
-    if (quote) {
-      if (c === quote) quote = undefined;
-      else if (c === '\\' && quote === '"' && i + 1 < command.length) cur += command[++i];
-      else cur += c;
-    } else if (c === '"' || c === "'") {
-      quote = c;
-      inWord = true;
-    } else if (c === '\\' && i + 1 < command.length) {
-      cur += command[++i];
-      inWord = true;
-    } else if (/\s/.test(c)) {
-      if (inWord) out.push(cur);
-      cur = '';
-      inWord = false;
-    } else {
-      cur += c;
-      inWord = true;
-    }
+  const st: LexState = { out: [], cur: '', inWord: false, i: 0 };
+  for (; st.i < command.length; st.i++) {
+    if (st.quote) lexQuoted(command, st);
+    else lexBare(command, st);
   }
-  if (quote) return undefined;
-  if (inWord) out.push(cur);
-  return out;
+  if (st.quote) return undefined;
+  if (st.inWord) st.out.push(st.cur);
+  return st.out;
+}
+
+interface LexState {
+  out: string[];
+  cur: string;
+  inWord: boolean;
+  quote?: '"' | "'";
+  i: number;
+}
+
+/** One character inside quotes: the closing quote ends it, `\\` escapes only inside double quotes. */
+function lexQuoted(command: string, st: LexState): void {
+  const c = command[st.i]!;
+  if (c === st.quote) st.quote = undefined;
+  else if (c === '\\' && st.quote === '"' && st.i + 1 < command.length) st.cur += command[++st.i];
+  else st.cur += c;
+}
+
+/** One character outside quotes: opens a quote, escapes the next character, ends a word, or extends it. */
+function lexBare(command: string, st: LexState): void {
+  const c = command[st.i]!;
+  if (c === '"' || c === "'") {
+    st.quote = c;
+    st.inWord = true;
+  } else if (c === '\\' && st.i + 1 < command.length) {
+    st.cur += command[++st.i];
+    st.inWord = true;
+  } else if (/\s/.test(c)) {
+    if (st.inWord) st.out.push(st.cur);
+    st.cur = '';
+    st.inWord = false;
+  } else {
+    st.cur += c;
+    st.inWord = true;
+  }
 }
 
 const slug = (s: string) =>

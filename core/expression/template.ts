@@ -145,16 +145,18 @@ export interface FoundTemplate {
 /** Find and parse every template inside a JSON-like value, reporting syntax errors by location. */
 export function scanTemplates(value: unknown, basePath = ''): FoundTemplate[] {
   const found: FoundTemplate[] = [];
+  const scanString = (v: string, path: string) => {
+    if (!hasTemplate(v)) return;
+    try {
+      found.push({ path, template: parseTemplate(v), source: v });
+    } catch (e) {
+      if (!(e instanceof ExpressionSyntaxError)) throw e;
+      found.push({ path, error: e, source: v });
+    }
+  };
   const walk = (v: unknown, path: string) => {
-    if (typeof v === 'string') {
-      if (!hasTemplate(v)) return;
-      try {
-        found.push({ path, template: parseTemplate(v), source: v });
-      } catch (e) {
-        if (e instanceof ExpressionSyntaxError) found.push({ path, error: e, source: v });
-        else throw e;
-      }
-    } else if (Array.isArray(v)) {
+    if (typeof v === 'string') scanString(v, path);
+    else if (Array.isArray(v)) {
       for (let i = 0; i < v.length; i++) walk(v[i], `${path}[${i}]`);
     } else if (v !== null && typeof v === 'object') {
       for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);
