@@ -244,8 +244,8 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
       `- **Network:** ${networkNote(c.egress)}`,
       `- **Data classification:** ${c.dataClassification}${undo}`,
       '',
+      ...inputTable(props),
     );
-    out.push(...inputTable(props));
     if (c.failureModes.length) {
       out.push(
         'Failure modes: ' +
