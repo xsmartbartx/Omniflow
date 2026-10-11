@@ -215,7 +215,12 @@ export function registerRoutes(
       if (!def.public) {
         principal = authenticate(app, req);
         req.principal = principal;
-        const wait = limiters.api.take(`p:${principal.id}`);
+        const key = `p:${principal.id}`;
+        const wait = limiters.api.take(key);
+        const rl = limiters.api.snapshot(key);
+        reply.header('x-ratelimit-limit', String(rl.limit));
+        reply.header('x-ratelimit-remaining', String(rl.remaining));
+        reply.header('x-ratelimit-reset', String(rl.resetSeconds));
         if (wait > 0) throw new RateLimitedError(wait);
         if (def.action) {
           const decision = app.policy.decide({ principal, action: def.action, resource: { tenant: principal.tenant } });

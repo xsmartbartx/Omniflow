@@ -693,3 +693,42 @@ describe('confidential data handling', () => {
     expect((await (await api.key(['author'])).get(`/v1/runs/${id}/steps/id/output`)).status).toBe(403);
   });
 });
+
+describe('rate-limit headers', () => {
+  it('reports the bucket on authenticated responses, success and error, and counts down', async () => {
+    const a = await makeApi();
+    try {
+      const c = await a.key(['viewer']);
+      const first = await c.get('/v1/workflows');
+      const second = await c.get('/v1/workflows');
+      for (const r of [first, second]) {
+        expect(Number(r.headers['x-ratelimit-limit'])).toBeGreaterThan(0);
+        expect(Number(r.headers['x-ratelimit-reset'])).toBeGreaterThanOrEqual(0);
+      }
+      expect(Number(second.headers['x-ratelimit-remaining'])).toBeLessThan(
+        Number(first.headers['x-ratelimit-remaining']),
+      );
+      const missing = await c.get('/v1/workflows/does-not-exist');
+      expect(missing.status).toBe(404);
+      expect(missing.headers['x-ratelimit-remaining']).toBeDefined();
+      // public routes are not per-principal and carry no such headers
+      expect((await a.anon.get('/healthz')).headers['x-ratelimit-limit']).toBeUndefined();
+    } finally {
+      await a.stop();
+    }
+  });
+
+  it('sends the headers and Retry-After on a 429', async () => {
+    const a = await makeApi({ env: { CONSTANS_RATE_LIMIT_PER_MIN: '10' } });
+    try {
+      const c = await a.key(['viewer']);
+      let last = await c.get('/v1/workflows');
+      for (let i = 0; i < 12 && last.status !== 429; i++) last = await c.get('/v1/workflows');
+      expect(last.status).toBe(429);
+      expect(last.headers['retry-after']).toBeDefined();
+      expect(last.headers['x-ratelimit-remaining']).toBe('0');
+    } finally {
+      await a.stop();
+    }
+  });
+});
