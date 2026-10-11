@@ -53,4 +53,4 @@ Docker is only needed for `deploy/smoke-test.sh` (CI runs it).
 ## Pull requests
 
 Small and focused. Say what changed and why; note anything that affects operators or the security model.
-CI must be green. By contributing you agree your work is licensed under the Apache License 2.0.
+CI must be green. This is proprietary software (see [LICENSE](LICENSE)): contact the copyright holder before sending a contribution, so the terms are agreed in writing first.

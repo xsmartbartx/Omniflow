@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "OmniFlow — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "private": false,
   "engines": {
     "node": ">=24"
