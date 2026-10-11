@@ -9,6 +9,7 @@ import {
   systemClock,
   ValidationError,
 } from '../../core/index.ts';
+import type { Plan } from '../../schemas/plan.ts';
 import type { Principal } from '../../schemas/policy.ts';
 import type { PolicyEngine } from '../../security/policy/index.ts';
 import { validateValue } from '../../security/validator/index.ts';
@@ -91,44 +92,8 @@ export class RunService {
       : this.reg.resolveActive(tenant, req.workflow, key);
     const { version, plan, canary } = resolved;
 
-    // ---- authorisation and operator controls
-    const decision = this.policy.decide({
-      principal,
-      action: 'workflow.run',
-      resource: {
-        tenant,
-        workflow: req.workflow,
-        version: version.version,
-        criticality: plan.workflow.criticality,
-        environment: this.policy.environment,
-        plan,
-        dryRun: req.dryRun ?? false,
-      },
-    });
-    if (decision.effect === 'deny') {
-      this.st.events.append({
-        tenant,
-        type: 'policy.decision',
-        actor: { type: principal.type, id: principal.id, name: principal.name },
-        data: {
-          action: 'workflow.run',
-          effect: 'deny',
-          reasonCode: decision.reasonCode,
-          reason: decision.reason,
-          workflow: req.workflow,
-        },
-      });
-      throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: req.workflow });
-    }
-    if (!settings.enabled)
-      throw new ConflictError(`Workflow '${req.workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
-    if (settings.killed) {
-      const reason = settings.killReason ? `: ${settings.killReason}` : '';
-      throw new ConflictError(`Workflow '${req.workflow}' is stopped by its kill switch${reason}`, {
-        code: 'WORKFLOW_KILLED',
-      });
-    }
-    if (version.status === 'frozen') throw new ConflictError(`${req.workflow}@${version.version} is frozen`);
+    this.authorise(req, plan, version.version);
+    this.assertRunnable(req.workflow, settings, version);
 
     // ---- validate inputs against the plan's schema; defaults are applied here, once
     const checked = validateValue<Record<string, unknown>>(plan.inputSchema, req.inputs ?? {});
@@ -140,58 +105,11 @@ export class RunService {
     }
     const inputs = checked.value;
 
-    // ---- deduplication window
-    let dedupKey: string | undefined;
-    if (plan.policy.dedupKey && plan.policy.dedupWindowMs) {
-      try {
-        dedupKey = String(resolveValue(plan.policy.dedupKey, { inputs, context: plan.context }));
-      } catch {
-        dedupKey = undefined;
-      }
-      if (dedupKey) {
-        const since = new Date(this.clock.now().getTime() - plan.policy.dedupWindowMs).toISOString();
-        const existing = this.st.runs.findByDedupKey(tenant, req.workflow, dedupKey, since);
-        if (existing) {
-          this.st.events.append({
-            tenant,
-            type: 'run.deduplicated',
-            data: { workflow: req.workflow, existingRunId: existing.id, dedupKey },
-          });
-          return { status: 'deduplicated', run: existing };
-        }
-      }
-    }
-
-    // ---- concurrency policy: `skip` drops the run rather than queueing behind the limit
-    if (plan.policy.concurrencyPolicy === 'skip') {
-      const busy =
-        this.st.runs.activeCount(tenant, req.workflow) +
-        this.st.runs.countRuns({ tenant, workflow: req.workflow, status: ['queued'] });
-      if (busy >= plan.policy.concurrency) {
-        this.st.events.append({
-          tenant,
-          type: 'run.skipped',
-          data: { workflow: req.workflow, reason: 'concurrency-limit', limit: plan.policy.concurrency },
-        });
-        return { status: 'skipped', reason: `Concurrency limit of ${plan.policy.concurrency} reached (policy: skip)` };
-      }
-    }
-
-    // ---- cost ceilings
-    if (plan.policy.maxDailyCost !== undefined) {
-      const spent = this.st.runs.dailyCost(tenant, req.workflow);
-      if (spent + plan.analysis.estimatedCost > plan.policy.maxDailyCost) {
-        this.st.events.append({
-          tenant,
-          type: 'run.skipped',
-          data: { workflow: req.workflow, reason: 'daily-cost-ceiling', spent, ceiling: plan.policy.maxDailyCost },
-        });
-        throw new PolicyDeniedError(
-          'DAILY_COST_CEILING',
-          `Daily cost ceiling of ${plan.policy.maxDailyCost} would be exceeded (spent ${spent}, this run ≈ ${plan.analysis.estimatedCost})`,
-        );
-      }
-    }
+    const dedupKey = this.dedupKeyOf(plan, inputs);
+    const early =
+      this.checkDedup(tenant, req.workflow, plan, dedupKey) ?? this.checkConcurrency(tenant, req.workflow, plan);
+    if (early) return early;
+    this.checkDailyCost(tenant, req.workflow, plan);
 
     if (!req.dryRun) this.gate?.check(tenant);
     const gate = this.gate;
@@ -216,6 +134,112 @@ export class RunService {
     });
     this.onQueued?.();
     return { status: 'queued', run };
+  }
+
+  /** Run-permission check; a denial is recorded in the audit log before it is thrown. */
+  private authorise(req: TriggerRequest, plan: Plan, version: string): void {
+    const { principal } = req;
+    const tenant = principal.tenant;
+    const decision = this.policy.decide({
+      principal,
+      action: 'workflow.run',
+      resource: {
+        tenant,
+        workflow: req.workflow,
+        version,
+        criticality: plan.workflow.criticality,
+        environment: this.policy.environment,
+        plan,
+        dryRun: req.dryRun ?? false,
+      },
+    });
+    if (decision.effect !== 'deny') return;
+    this.st.events.append({
+      tenant,
+      type: 'policy.decision',
+      actor: { type: principal.type, id: principal.id, name: principal.name },
+      data: {
+        action: 'workflow.run',
+        effect: 'deny',
+        reasonCode: decision.reasonCode,
+        reason: decision.reason,
+        workflow: req.workflow,
+      },
+    });
+    throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: req.workflow });
+  }
+
+  /** Operator controls: a disabled, killed or frozen workflow does not run. */
+  private assertRunnable(
+    workflow: string,
+    settings: { enabled: boolean; killed: boolean; killReason?: string | undefined },
+    version: { version: string; status: string },
+  ): void {
+    if (!settings.enabled) throw new ConflictError(`Workflow '${workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
+    if (settings.killed) {
+      const reason = settings.killReason ? `: ${settings.killReason}` : '';
+      throw new ConflictError(`Workflow '${workflow}' is stopped by its kill switch${reason}`, {
+        code: 'WORKFLOW_KILLED',
+      });
+    }
+    if (version.status === 'frozen') throw new ConflictError(`${workflow}@${version.version} is frozen`);
+  }
+
+  private dedupKeyOf(plan: Plan, inputs: Record<string, unknown>): string | undefined {
+    if (!plan.policy.dedupKey || !plan.policy.dedupWindowMs) return undefined;
+    try {
+      return String(resolveValue(plan.policy.dedupKey, { inputs, context: plan.context })) || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** A run with the same dedup key inside the window is not started again. */
+  private checkDedup(
+    tenant: string,
+    workflow: string,
+    plan: Plan,
+    dedupKey: string | undefined,
+  ): TriggerResult | undefined {
+    if (!dedupKey || !plan.policy.dedupWindowMs) return undefined;
+    const since = new Date(this.clock.now().getTime() - plan.policy.dedupWindowMs).toISOString();
+    const existing = this.st.runs.findByDedupKey(tenant, workflow, dedupKey, since);
+    if (!existing) return undefined;
+    this.st.events.append({
+      tenant,
+      type: 'run.deduplicated',
+      data: { workflow, existingRunId: existing.id, dedupKey },
+    });
+    return { status: 'deduplicated', run: existing };
+  }
+
+  /** Concurrency policy `skip` drops the run rather than queueing behind the limit. */
+  private checkConcurrency(tenant: string, workflow: string, plan: Plan): TriggerResult | undefined {
+    if (plan.policy.concurrencyPolicy !== 'skip') return undefined;
+    const busy =
+      this.st.runs.activeCount(tenant, workflow) + this.st.runs.countRuns({ tenant, workflow, status: ['queued'] });
+    if (busy < plan.policy.concurrency) return undefined;
+    this.st.events.append({
+      tenant,
+      type: 'run.skipped',
+      data: { workflow, reason: 'concurrency-limit', limit: plan.policy.concurrency },
+    });
+    return { status: 'skipped', reason: `Concurrency limit of ${plan.policy.concurrency} reached (policy: skip)` };
+  }
+
+  private checkDailyCost(tenant: string, workflow: string, plan: Plan): void {
+    if (plan.policy.maxDailyCost === undefined) return;
+    const spent = this.st.runs.dailyCost(tenant, workflow);
+    if (spent + plan.analysis.estimatedCost <= plan.policy.maxDailyCost) return;
+    this.st.events.append({
+      tenant,
+      type: 'run.skipped',
+      data: { workflow, reason: 'daily-cost-ceiling', spent, ceiling: plan.policy.maxDailyCost },
+    });
+    throw new PolicyDeniedError(
+      'DAILY_COST_CEILING',
+      `Daily cost ceiling of ${plan.policy.maxDailyCost} would be exceeded (spent ${spent}, this run ≈ ${plan.analysis.estimatedCost})`,
+    );
   }
 
   /** Cancel a run on behalf of a principal. */
