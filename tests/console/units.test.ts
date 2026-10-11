@@ -4,6 +4,7 @@ import {
   ago,
   coerceInput,
   duration,
+  matcher,
   number,
   percent,
   shortHash,
@@ -222,5 +223,24 @@ describe('diff', () => {
     expect(c.filter((o: { op: string }) => o.op === 'gap')).toHaveLength(2);
     expect(c.filter((o: { op: string }) => o.op !== 'gap')).toHaveLength(2 + 1 + 1 + 2); // two lines of context, the removed and added line, two lines of context
     expect(collapse(diffLines('a', 'a'), 3)).toEqual([]);
+  });
+});
+
+describe('workflow search matcher', () => {
+  it('matches plain text anywhere, ignoring case when the caller lower-cases', () => {
+    expect(matcher('order')('order-router ops')).toBe(true);
+    expect(matcher('refund')('order-router ops')).toBe(false);
+    expect(matcher('  ')('anything')).toBe(true);
+  });
+
+  it('treats * as "anything" and everything else as literal text', () => {
+    expect(matcher('order-*')('order-router')).toBe(true);
+    expect(matcher('*router')('order-router')).toBe(true);
+    expect(matcher('order*ops')('order-router ops')).toBe(true);
+    expect(matcher('order*refund')('order-router ops')).toBe(false);
+    // regex characters are not special
+    expect(matcher('a.c*')('abc')).toBe(false);
+    expect(matcher('a.c*')('a.c-x')).toBe(true);
+    expect(matcher('(*')('(x')).toBe(true);
   });
 });

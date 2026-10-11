@@ -146,3 +146,26 @@ test('F01-E: every console screen passes the accessibility scan, dark and light'
   }
   w.assertClean();
 });
+
+test('F01-E: workflow search supports * and the last-run filter narrows the list', async ({ page, request }) => {
+  await apiLogin(request, BASE);
+  for (const n of ['find-alpha', 'find-beta', 'other-gamma'])
+    expect(
+      (await request.post(`${BASE}/v1/workflows`, { data: { manifest: echoWorkflow(n) }, headers: csrf })).status(),
+    ).toBeLessThan(300);
+  await request.post(`${BASE}/v1/workflows/find-alpha/run`, { data: { inputs: {} }, headers: csrf });
+  await page.goto(BASE);
+  await page.getByLabel('Email').fill(ADMIN.email);
+  await page.getByLabel('Password').fill(ADMIN.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('link', { name: 'Workflows' }).click();
+  const search = page.getByLabel('Filter workflows');
+  await search.fill('find-*');
+  await expect(page.getByRole('link', { name: 'find-alpha' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'find-beta' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'other-gamma' })).toHaveCount(0);
+  await page.getByLabel('Last run').selectOption('succeeded');
+  await expect(page.getByRole('link', { name: 'find-alpha' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('link', { name: 'find-beta' })).toHaveCount(0);
+  await a11y(page, 'workflows (filtered)');
+});

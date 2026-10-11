@@ -122,3 +122,17 @@ export function coerceInput(type, raw) {
       return v;
   }
 }
+
+/** Turn a search term into a test. `*` matches any run of characters; everything else is literal text. */
+export function matcher(term) {
+  const t = term.trim().toLowerCase();
+  if (!t) return () => true;
+  if (!t.includes('*')) return (text) => text.includes(t);
+  const re = new RegExp(
+    t
+      .split('*')
+      .map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*'),
+  );
+  return (text) => re.test(text);
+}
