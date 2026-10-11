@@ -44,7 +44,11 @@ function usageMeter(u) {
           h('p', {}, 'New runs are refused until the next period or an upgrade. Dry runs still work.'),
         )
       : ratio >= 0.8
-        ? notice('warn', h('strong', {}, 'Running low'), h('p', {}, `${number(left)} runs left this month.`))
+        ? notice(
+            'warn',
+            h('strong', {}, `${number(left)} runs left this month`),
+            h('p', {}, 'Dry runs never count against the plan.'),
+          )
         : null,
   );
 }

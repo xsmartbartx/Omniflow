@@ -81,7 +81,7 @@ Three words: **plain, exact, calm.**
 | "Retried 3 times, then stopped: the server kept answering 503." | "Failed after multiple attempts." |
 | "No runs yet. Start one from a workflow page." | "Nothing to see here." |
 
-Ten most-seen strings, rewritten (**proposed, not applied**; applying waits for the name):
+Ten most-seen strings, rewritten. **Applied 2026-10-11** (name chosen): sign-in subtitle, NEXORA sign-in text, session-ended toast, empty run list and the low-quota notice. The plan-limit text already matched. Not applied because those screens have no such string yet or already read well: run started toast, run-failed text, approvals empty.
 
 | where | now | proposed |
 | --- | --- | --- |
