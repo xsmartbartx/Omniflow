@@ -117,17 +117,22 @@ export function collectReferences(node: Node): Reference[] {
     return { root: cur.name, path, dynamic, pos: cur.pos };
   };
 
+  /** A member/index/ident chain: record it, then descend into whatever hangs off it. */
+  const walkChain = (n: Node): void => {
+    const ref = chain(n);
+    if (ref) refs.push(ref);
+    // Still descend into computed indexes, whose expressions may reference other data.
+    let cur: Node = n;
+    while (cur.type === 'member' || cur.type === 'index') {
+      if (cur.type === 'index' && cur.index.type !== 'literal') walk(cur.index);
+      cur = cur.object;
+    }
+    if (cur.type !== 'ident') walk(cur);
+  };
+
   const walk = (n: Node): void => {
     if (n.type === 'member' || n.type === 'index' || n.type === 'ident') {
-      const ref = chain(n);
-      if (ref) refs.push(ref);
-      // Still descend into computed indexes, whose expressions may reference other data.
-      let cur: Node = n;
-      while (cur.type === 'member' || cur.type === 'index') {
-        if (cur.type === 'index' && cur.index.type !== 'literal') walk(cur.index);
-        cur = cur.object;
-      }
-      if (cur.type !== 'ident') walk(cur);
+      walkChain(n);
       return;
     }
     switch (n.type) {

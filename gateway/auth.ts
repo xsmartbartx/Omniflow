@@ -121,6 +121,21 @@ export class Authenticator {
     this.st.events.append({ tenant, type, ...(actor ? { actor } : {}), data });
   }
 
+  /** Sign-in for an account that does not exist (or cannot sign in): spend the same time as a real check, then fail. */
+  private async rejectUnknownUser(
+    password: string,
+    matches: number,
+    opts: { tenant?: string; ip?: string },
+  ): Promise<never> {
+    this.dummyHash ??= hashPassword('not-a-real-password');
+    await verifyPassword(password, await this.dummyHash);
+    this.audit('auth.login-failed', opts.tenant ?? 'default', {
+      reason: matches > 1 ? 'ambiguous' : 'unknown-or-disabled',
+      ...(opts.ip ? { ip: opts.ip } : {}),
+    });
+    throw new AuthenticationError('Invalid email or password');
+  }
+
   async login(
     email: string,
     password: string,
@@ -131,15 +146,7 @@ export class Authenticator {
     const user = candidates.length === 1 ? candidates[0] : undefined;
 
     // Always burn the same amount of time, whether or not the account exists.
-    if (!user || user.disabled || !user.passwordHash) {
-      this.dummyHash ??= hashPassword('not-a-real-password');
-      await verifyPassword(password, await this.dummyHash);
-      this.audit('auth.login-failed', opts.tenant ?? 'default', {
-        reason: candidates.length > 1 ? 'ambiguous' : 'unknown-or-disabled',
-        ...(opts.ip ? { ip: opts.ip } : {}),
-      });
-      throw generic;
-    }
+    if (!user || user.disabled || !user.passwordHash) return this.rejectUnknownUser(password, candidates.length, opts);
     if (user.lockedUntil && user.lockedUntil > new Date().toISOString()) {
       this.audit('auth.login-failed', user.tenant, { reason: 'locked', userId: user.id });
       throw new AuthenticationError(

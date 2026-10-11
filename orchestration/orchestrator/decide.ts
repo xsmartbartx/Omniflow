@@ -56,24 +56,28 @@ export function classifyPending(plan: Plan, steps: ReadonlyMap<string, StepRecor
   for (const step of plan.steps) {
     if (steps.get(step.id)?.status !== 'pending') continue;
     const deps = step.dependsOn.map((d) => steps.get(d)).filter((d): d is StepRecord => d !== undefined);
-
-    if (step.type === 'parallel' && step.join === 'any') {
-      // First success releases the join; once every dependency is terminal without one, the join itself fails.
-      if (deps.some((d) => d.status === 'succeeded') || deps.every((d) => isTerminalStep(d.status)))
-        runnable.push(step);
-      continue;
-    }
-    if (!deps.every((d) => isTerminalStep(d.status))) continue;
-    if (deps.length === 0) {
-      runnable.push(step);
-      continue;
-    }
-    const outcomes = deps.map((d) => outcomeOf(d, step, routes));
-    if (outcomes.includes('blocked')) skips.push({ step, reason: 'upstream-failed' });
-    else if (outcomes.every((o) => o === 'skipped')) skips.push({ step, reason: 'upstream-skipped' });
-    else runnable.push(step);
+    const verdict = classifyStep(step, deps, routes);
+    if (verdict === 'run') runnable.push(step);
+    else if (verdict !== 'wait') skips.push({ step, reason: verdict });
   }
   return { runnable, skips };
+}
+
+/** What to do with one pending step given its dependencies: run it, skip it (with the reason), or keep waiting. */
+function classifyStep(
+  step: PlanStep,
+  deps: StepRecord[],
+  routes: ReadonlyMap<string, string>,
+): 'run' | 'wait' | 'upstream-failed' | 'upstream-skipped' {
+  if (step.type === 'parallel' && step.join === 'any') {
+    // First success releases the join; once every dependency is terminal without one, the join itself fails.
+    return deps.some((d) => d.status === 'succeeded') || deps.every((d) => isTerminalStep(d.status)) ? 'run' : 'wait';
+  }
+  if (!deps.every((d) => isTerminalStep(d.status))) return 'wait';
+  if (deps.length === 0) return 'run';
+  const outcomes = deps.map((d) => outcomeOf(d, step, routes));
+  if (outcomes.includes('blocked')) return 'upstream-failed';
+  return outcomes.every((o) => o === 'skipped') ? 'upstream-skipped' : 'run';
 }
 
 export function unhandledFailures(steps: ReadonlyMap<string, StepRecord>): StepRecord[] {

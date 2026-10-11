@@ -170,25 +170,29 @@ export async function importCommand(ctx: CliContext): Promise<number> {
     throw new UsageError(
       'Usage: constans import crontab <file|-> [--owner e] [--timezone tz] [--out-dir dir]\n       constans import script <file> [--name n]',
     );
+  const text = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
+  return kind === 'script' ? importScript(ctx, text) : importCrontab(ctx, text);
+}
+
+async function importScript(ctx: CliContext, text: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post('/v1/import/script', {
+    script: text,
+    ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name') } : {}),
+  });
+  emit(ctx, r, () =>
+    [
+      r.plan.rationale ?? '',
+      ...(r.plan.openQuestions ?? []).map((q: string) => `  ? ${q}`),
+      ...(r.draft ? summarise(ctx, r.draft) : [s.red('No usable draft was produced.')]),
+    ].join('\n'),
+  );
+  return r.plan.ok ? 0 : 1;
+}
+
+async function importCrontab(ctx: CliContext, text: string): Promise<number> {
   const s = ctx.style;
   const api = client(ctx);
-  const text = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-
-  if (kind === 'script') {
-    const r = await api.post('/v1/import/script', {
-      script: text,
-      ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name') } : {}),
-    });
-    emit(ctx, r, () =>
-      [
-        r.plan.rationale ?? '',
-        ...(r.plan.openQuestions ?? []).map((q: string) => `  ? ${q}`),
-        ...(r.draft ? summarise(ctx, r.draft) : [s.red('No usable draft was produced.')]),
-      ].join('\n'),
-    );
-    return r.plan.ok ? 0 : 1;
-  }
-
   const r = await api.post('/v1/import/crontab', {
     text,
     ...(flag(ctx.args, 'owner') ? { owner: flag(ctx.args, 'owner') } : {}),
