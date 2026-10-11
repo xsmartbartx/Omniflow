@@ -1,7 +1,7 @@
 {
-  "name": "omniflow",
+  "name": "constans",
   "version": "1.0.0",
-  "description": "OmniFlow — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
+  "description": "Constans — AI workflow substrate: declarative, deterministic, auditable workflow engine with an AI authoring plane.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
   "private": false,
@@ -17,7 +17,7 @@
     "README.md"
   ],
   "bin": {
-    "omniflow": "dist/cli/main.js"
+    "constans": "dist/cli/main.js"
   },
   "scripts": {
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.ts",

@@ -183,7 +183,7 @@ export function explainPlan(plan: Plan): PlanExplanation {
   if (effectful.length) {
     const uncompensated = effectful.filter((s) => !s.compensate);
     risks.push(
-      `${effectful.length} step${effectful.length === 1 ? ' changes' : 's change'} things outside OmniFlow (${effectful.map((s) => `“${s.name ?? s.id}”`).join(', ')}).`,
+      `${effectful.length} step${effectful.length === 1 ? ' changes' : 's change'} things outside Constans (${effectful.map((s) => `“${s.name ?? s.id}”`).join(', ')}).`,
     );
     if (uncompensated.length === effectful.length)
       risks.push(
@@ -205,7 +205,7 @@ export function explainPlan(plan: Plan): PlanExplanation {
     `It runs ${triggers.length ? triggers.join(', or ') : 'only when started manually'} and has ${ordered.length} step${ordered.length === 1 ? '' : 's'}.`,
     effectful.length
       ? ` It changes things in ${effectful.length} of them.`
-      : ' It only reads and computes; it changes nothing outside OmniFlow.',
+      : ' It only reads and computes; it changes nothing outside Constans.',
   ]
     .join('')
     .trim();

@@ -14,7 +14,7 @@ Extends `ADR-0001-core-architecture.md`. Does not supersede it. The five layers 
 
 ## Related Documents
 
-- `omniflow-architecture-and-vision.md` — the full architecture and vision this decision underpins
+- `constans-architecture-and-vision.md` — the full architecture and vision this decision underpins
 - `.github/copilot-instructions.md` — repository behavioural rules
 - `docs/architecture.md`, `docs/modules.md`, `docs/data-flow.md`
 - `docs/agent-workflow.md`, `docs/agent-safety.md`
@@ -180,7 +180,7 @@ Dependency rules from ADR-0001 are extended:
 
 ### A3. Adopt an existing workflow engine unchanged
 
-**Partially rejected; revisit as an implementation question.** Existing engines solve durable execution well. None of them, as adopted wholesale, provide the capability contract with effect classification, the AI authoring plane with an enforced validation invariant, or the zero-trust posture this repository mandates. The state plane specifically remains an open build-versus-buy question (see `omniflow-architecture-and-vision.md` §20, Q2); adopting a durable-execution engine *beneath* this model is compatible with this ADR. Adopting one *instead of* this model is not.
+**Partially rejected; revisit as an implementation question.** Existing engines solve durable execution well. None of them, as adopted wholesale, provide the capability contract with effect classification, the AI authoring plane with an enforced validation invariant, or the zero-trust posture this repository mandates. The state plane specifically remains an open build-versus-buy question (see `constans-architecture-and-vision.md` §20, Q2); adopting a durable-execution engine *beneath* this model is compatible with this ADR. Adopting one *instead of* this model is not.
 
 ### A4. Extend the existing CI/CD pipeline to run business workflows
 

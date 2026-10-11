@@ -1,7 +1,7 @@
 # Operator policy: rules on top of the built-in ones (which can never be weakened).
-# To use: copy into the directory named by OMNIFLOW_POLICY_DIR and restart. A rule that fails to
+# To use: copy into the directory named by CONSTANS_POLICY_DIR and restart. A rule that fails to
 # parse stops the server from starting — a broken governance rule is never silently skipped.
-apiVersion: omniflow.dev/v1
+apiVersion: constans/v1
 kind: Policy
 metadata:
   name: house-rules

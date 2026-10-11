@@ -221,7 +221,7 @@ export function registryWithSims(world: World): CapabilityRegistry {
 }
 
 export const wf = (steps: unknown[], extra: Record<string, unknown> = {}, name = 'wf'): any => ({
-  apiVersion: 'omniflow.dev/v1',
+  apiVersion: 'constans/v1',
   kind: 'Workflow',
   metadata: { name, version: '1.0.0', owner: 'test@example.com', description: 'test', criticality: 'low' },
   triggers: [{ type: 'manual' }],

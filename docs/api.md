@@ -1,6 +1,6 @@
 # API
 
-OmniFlow's HTTP API is what the console and the CLI use; anything they can do, you can do. The machine
+Constans's HTTP API is what the console and the CLI use; anything they can do, you can do. The machine
 description is the OpenAPI 3.1 document at **`GET /v1/openapi.json`** (generated from the same route
 definitions that serve requests, so it cannot lie). This page covers the conventions.
 
@@ -8,12 +8,12 @@ definitions that serve requests, so it cannot lie). This page covers the convent
 
 Two ways in, both resolved to a *principal* (a person or an API key) with roles:
 
-- **API keys** for scripts, CI and integrations: `Authorization: Bearer omf_<prefix>_<secret>`. Create one in
+- **API keys** for scripts, CI and integrations: `Authorization: Bearer cns_<prefix>_<secret>`. Create one in
   the console (**Users & keys → API keys**), or on the server host with
-  `omniflow admin create-api-key --name ci --role operator`. Keys are stored hashed and shown once; they can
+  `constans admin create-api-key --name ci --role operator`. Keys are stored hashed and shown once; they can
   expire and be revoked.
 - **Sessions** for people: `POST /v1/auth/login {"email","password"}` sets an `HttpOnly`, `SameSite=Strict`
-  cookie. Requests that change state with a cookie must also send `X-Requested-With: omniflow` (CSRF
+  cookie. Requests that change state with a cookie must also send `X-Requested-With: constans` (CSRF
   protection); Bearer-authenticated requests need no such header.
 
 Roles: `admin`, `author` (write and publish workflows, use AI authoring), `operator` (run, cancel, retry),
@@ -89,8 +89,8 @@ Paths are under `/v1`. The *Needs* column names the roles that may call it (`adm
 ## Starting a run
 
 ```bash
-curl -sS -X POST "$OMNIFLOW_URL/v1/workflows/hello-world/run" \
-  -H "Authorization: Bearer $OMNIFLOW_API_KEY" -H 'content-type: application/json' \
+curl -sS -X POST "$CONSTANS_URL/v1/workflows/hello-world/run" \
+  -H "Authorization: Bearer $CONSTANS_API_KEY" -H 'content-type: application/json' \
   -d '{"inputs":{"name":"Ada"},"correlationId":"order-1042"}'
 # 202 {"status":"queued","run":{"id":"run_01J…","status":"queued", …}}
 ```
@@ -120,9 +120,9 @@ Send `Last-Event-ID` to resume without gaps. Behind a reverse proxy, disable buf
 authenticated with an HMAC over the *exact* body bytes:
 
 ```
-X-OmniFlow-Timestamp: <unix seconds>
-X-OmniFlow-Signature: v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>
-X-OmniFlow-Delivery:  <unique id>          (optional; makes retries idempotent)
+X-Constans-Timestamp: <unix seconds>
+X-Constans-Signature: v1=<hex HMAC-SHA256(secret, "<timestamp>.<raw body>")>
+X-Constans-Delivery:  <unique id>          (optional; makes retries idempotent)
 ```
 
 The timestamp must be within five minutes of the server's clock, and a signature is accepted once, so
@@ -133,8 +133,8 @@ secret**) or with `POST /v1/workflows/{name}/triggers/{trigger}/rotate-secret` �
 ts=$(date +%s)
 body='{"orderId":"A-1042","amount":129.9}'
 sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')
-curl -X POST "$OMNIFLOW_URL/v1/hooks/default/order-fulfilment/order-created" \
-  -H "X-OmniFlow-Timestamp: $ts" -H "X-OmniFlow-Signature: v1=$sig" \
+curl -X POST "$CONSTANS_URL/v1/hooks/default/order-fulfilment/order-created" \
+  -H "X-Constans-Timestamp: $ts" -H "X-Constans-Signature: v1=$sig" \
   -H 'content-type: application/json' -d "$body"
 ```
 
@@ -143,8 +143,8 @@ curl -X POST "$OMNIFLOW_URL/v1/hooks/default/order-fulfilment/order-created" \
 import { createHmac } from 'node:crypto';
 const ts = Math.floor(Date.now() / 1000).toString();
 const sig = createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-headers['X-OmniFlow-Timestamp'] = ts;
-headers['X-OmniFlow-Signature'] = `v1=${sig}`;
+headers['X-Constans-Timestamp'] = ts;
+headers['X-Constans-Signature'] = `v1=${sig}`;
 ```
 
 Failed authentication always answers the same way, whatever was wrong (unknown workflow, bad signature,
@@ -158,8 +158,8 @@ for that event (a `wait` step with `until`) and fires `event` triggers whose fil
 ## Metrics
 
 `GET /metrics` speaks the Prometheus text format. Authenticate with `Authorization: Bearer
-$OMNIFLOW_METRICS_TOKEN`, or with any API key that may read the audit log (`operator` or `admin`). Series include
-`omniflow_runs_total{workflow,status}`, `omniflow_run_duration_seconds`, `omniflow_steps_total{outcome}`,
-`omniflow_step_retries_total`, `omniflow_idempotent_replays_total`, `omniflow_policy_denials_total`,
-`omniflow_queue_depth`, `omniflow_active_runs`, `omniflow_approvals_pending`, `omniflow_circuit_open{capability}`,
-`omniflow_event_log_events` and `omniflow_uptime_seconds`.
+$CONSTANS_METRICS_TOKEN`, or with any API key that may read the audit log (`operator` or `admin`). Series include
+`constans_runs_total{workflow,status}`, `constans_run_duration_seconds`, `constans_steps_total{outcome}`,
+`constans_step_retries_total`, `constans_idempotent_replays_total`, `constans_policy_denials_total`,
+`constans_queue_depth`, `constans_active_runs`, `constans_approvals_pending`, `constans_circuit_open{capability}`,
+`constans_event_log_events` and `constans_uptime_seconds`.

@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 /**
  * Webhook authentication (threat T6: replay or forgery of a trigger).
  *
- * A delivery carries `X-OmniFlow-Timestamp` (unix seconds) and `X-OmniFlow-Signature: v1=<hex>`,
+ * A delivery carries `X-Constans-Timestamp` (unix seconds) and `X-Constans-Signature: v1=<hex>`,
  * where the signature is HMAC-SHA256 over `"<timestamp>.<raw body>"` with the trigger's secret.
  * The timestamp bounds replay to a short window; a nonce store closes it completely.
  */

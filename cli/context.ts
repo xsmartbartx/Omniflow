@@ -25,15 +25,15 @@ export function emit(ctx: CliContext, data: unknown, human: () => string): void 
 
 export const DEFAULT_URL = 'http://127.0.0.1:8080';
 
-/** An API client configured from `--url`/`--key` or `OMNIFLOW_URL`/`OMNIFLOW_API_KEY`. */
+/** An API client configured from `--url`/`--key` or `CONSTANS_URL`/`CONSTANS_API_KEY`. */
 export function client(ctx: CliContext, opts: { needKey?: boolean } = {}): ApiClient {
-  const key = flag(ctx.args, 'key') ?? ctx.env.OMNIFLOW_API_KEY;
+  const key = flag(ctx.args, 'key') ?? ctx.env.CONSTANS_API_KEY;
   if (opts.needKey !== false && !key) {
     throw new UsageError(
-      'No API key. Set OMNIFLOW_API_KEY (or pass --key). Create one with: omniflow admin create-api-key --name cli --role operator',
+      'No API key. Set CONSTANS_API_KEY (or pass --key). Create one with: constans admin create-api-key --name cli --role operator',
     );
   }
-  return new ApiClient({ baseUrl: flag(ctx.args, 'url') ?? ctx.env.OMNIFLOW_URL ?? DEFAULT_URL, apiKey: key });
+  return new ApiClient({ baseUrl: flag(ctx.args, 'url') ?? ctx.env.CONSTANS_URL ?? DEFAULT_URL, apiKey: key });
 }
 
 export function need(ctx: CliContext, index: number, what: string): string {

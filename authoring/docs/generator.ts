@@ -161,7 +161,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
       .map(([k, v]) => `${v} ${k}`)
       .join(', ')}`,
     `- Scopes required: ${a.scopes.length ? a.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`,
-    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside OmniFlow'}`,
+    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside Constans'}`,
     `- Data sensitivity: ${a.maxSensitivity}`,
     `- Approval gates: ${a.hasApproval ? 'yes' : 'no'} · compensation: ${a.hasCompensation ? 'yes' : 'no'}`,
   );

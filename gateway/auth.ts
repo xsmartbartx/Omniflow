@@ -61,19 +61,19 @@ export function checkPasswordPolicy(password: string, email?: string): void {
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
-/** `omf_<12 hex>_<43 base64url>` — the prefix is public and indexed; the secret is stored only as a hash. */
+/** `cns_<12 hex>_<43 base64url>` — the prefix is public and indexed; the secret is stored only as a hash. */
 export function newApiKey(): { full: string; prefix: string; hash: string } {
   const prefix = randomBytes(6).toString('hex');
   const secret = randomToken(32);
-  return { full: `omf_${prefix}_${secret}`, prefix, hash: sha256(secret) };
+  return { full: `cns_${prefix}_${secret}`, prefix, hash: sha256(secret) };
 }
 
 export function parseApiKey(token: string): { prefix: string; secret: string } | undefined {
-  const m = /^omf_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/.exec(token);
+  const m = /^cns_([0-9a-f]{12})_([A-Za-z0-9_-]{43})$/.exec(token);
   return m ? { prefix: m[1]!, secret: m[2]! } : undefined;
 }
 
-export const SESSION_COOKIE = 'omf_session';
+export const SESSION_COOKIE = 'cns_session';
 
 export interface LoginResult {
   token: string;

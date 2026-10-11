@@ -76,7 +76,7 @@ export class CapabilityRegistry {
 
   register(
     adapter: CapabilityAdapter,
-    registration: CapabilityRegistration = { owner: 'omniflow', source: 'builtin' },
+    registration: CapabilityRegistration = { owner: 'constans', source: 'builtin' },
   ): RegisteredCapability {
     const declaration = adapter.declaration;
     const issues = validateDeclaration(declaration);

@@ -2,11 +2,11 @@
 
 A **capability** is the only way a workflow touches the outside world: an HTTP call, a database query, a
 file, a message, a model. Everything a workflow can *do* is a capability; everything else in a manifest is
-control flow. That single choke point is what lets OmniFlow reason about workflows before they run.
+control flow. That single choke point is what lets Constans reason about workflows before they run.
 
 Each capability is a **declaration** (data) plus an **adapter** (code). The declaration states, up front:
 
-| Field | What it lets OmniFlow do |
+| Field | What it lets Constans do |
 |---|---|
 | `inputSchema` / `outputSchema` | Check every `with:` block and every downstream reference at compile time; validate outputs at run time. |
 | `effect` — `pure` · `idempotent` · `effectful` | Require idempotency keys for effectful steps; retry safely; simulate in dry runs; compute risk. |
@@ -25,13 +25,13 @@ flip a per-capability **kill switch**.
 |---|---|---|
 | Helpers | `util-echo`, `util-noop`, `util-assert`, `util-fail` | always |
 | HTTP | `http-get`, `http-request` | always (SSRF-safe; hosts must be named per step) |
-| Files | `file-read`, `file-list`, `file-write`, `file-delete` | always (confined to `OMNIFLOW_STORAGE_DIR`) |
+| Files | `file-read`, `file-list`, `file-write`, `file-delete` | always (confined to `CONSTANS_STORAGE_DIR`) |
 | Notifications | `notify-webhook` | always |
-| | `notify-channel` | `OMNIFLOW_CHANNELS` is set |
-| | `notify-email` | `OMNIFLOW_SMTP_URL` is set |
-| Databases | `database-query`, `database-command` | `OMNIFLOW_DATASOURCES` is set |
-| Shell | `shell-exec` | `OMNIFLOW_SHELL_ALLOWED_COMMANDS` is set |
-| AI | `llm-inference` | `OMNIFLOW_LLM_API_KEY` is set |
+| | `notify-channel` | `CONSTANS_CHANNELS` is set |
+| | `notify-email` | `CONSTANS_SMTP_URL` is set |
+| Databases | `database-query`, `database-command` | `CONSTANS_DATASOURCES` is set |
+| Shell | `shell-exec` | `CONSTANS_SHELL_ALLOWED_COMMANDS` is set |
+| AI | `llm-inference` | `CONSTANS_LLM_API_KEY` is set |
 
 A capability that is not configured simply does not exist: a workflow that uses it fails validation with
 "not registered", instead of failing at 3 a.m.
@@ -40,10 +40,10 @@ A capability that is not configured simply does not exist: a workflow that uses 
 
 - **`http-*`** — the destination host must be in the step's `egress` list. Private, loopback and link-local
   addresses are refused *after DNS resolution* (defeating rebinding) unless the operator sets
-  `OMNIFLOW_ALLOW_PRIVATE_EGRESS`. Redirects are not followed; responses are size-capped.
+  `CONSTANS_ALLOW_PRIVATE_EGRESS`. Redirects are not followed; responses are size-capped.
 - **`shell-exec`** — an argument *vector* (never a shell string), an executable on the operator's absolute-path
   allow-list, a scrubbed environment, a throw-away working directory, a size-capped output, and the whole
-  process group killed on timeout or cancel. Every shell step **must carry a `sunset` date**. OmniFlow does
+  process group killed on timeout or cancel. Every shell step **must carry a `sunset` date**. Constans does
   not sandbox the process beyond that: run it in a container with no access to anything you would not hand the
   script, ideally a dedicated network-restricted runner.
 - **`database-*`** — parameterised statements only. `database-command` records its idempotency key *in the
@@ -54,7 +54,7 @@ A capability that is not configured simply does not exist: a workflow that uses 
 
 ## Adding your own
 
-You do not fork OmniFlow to add a capability: you build a small distribution that registers it next to the
+You do not fork Constans to add a capability: you build a small distribution that registers it next to the
 built-ins. [`examples/custom-capability/server.ts`](../examples/custom-capability/server.ts) is a complete,
 tested example:
 
@@ -87,7 +87,7 @@ export const lookupCustomer = defineCapability<{ customerId: string }, { name: s
 
 const registry = createDefaultRegistry(config.adapters);
 registry.register(lookupCustomer, { owner: 'crm-platform-team', source: 'plugin' });
-// then: createOmniflow(config, { capabilities: registry })
+// then: createConstans(config, { capabilities: registry })
 ```
 
 ### The rules an adapter must follow
@@ -98,7 +98,7 @@ registry.register(lookupCustomer, { owner: 'crm-platform-team', source: 'plugin'
    might work, *business* if it will not. Misclassification is how retry storms start (the Analysis Agent
    looks for exactly that).
 4. **Effectful means idempotent-on-the-wire.** Pass `ctx.idempotencyKey` to the downstream system where it
-   supports one, and make a repeated call with the same key a no-op. OmniFlow guarantees it will not repeat
+   supports one, and make a repeated call with the same key a no-op. Constans guarantees it will not repeat
    the *call*; only the downstream system can guarantee it does not repeat the *effect*.
 5. **Never log a secret.** Read them from `ctx.lease` (scoped to this step, revoked when it ends); logs and
    events are also redacted, but do not rely on it.
@@ -108,6 +108,6 @@ registry.register(lookupCustomer, { owner: 'crm-platform-team', source: 'plugin'
    with a hand-written `simulate()`; otherwise the output is derived from `outputSchema`).
 
 An adapter can be unit-tested on its own — it is just an object with an `execute` function — and then in a
-workflow with `omniflow dev`. The example ships both kinds of test.
+workflow with `constans dev`. The example ships both kinds of test.
 
 A registered capability needs a **named owner**: someone is accountable for every way workflows reach out.

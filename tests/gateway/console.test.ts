@@ -72,7 +72,7 @@ describe('the web console is served by the gateway', () => {
       '/js/%2e%2e/%2e%2e/server/config.ts',
     ]) {
       const res = await api.anon.get(path);
-      expect(res.text, path).not.toContain('"name": "omniflow"');
+      expect(res.text, path).not.toContain('"name": "constans"');
       expect(res.text, path).not.toContain('loadConfig');
     }
   });

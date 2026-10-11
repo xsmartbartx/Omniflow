@@ -28,7 +28,7 @@ export interface ApiKeyRecord {
   id: string;
   tenant: string;
   name: string;
-  /** Public, indexed part of the key (`omf_<prefix>_<secret>`). */
+  /** Public, indexed part of the key (`cns_<prefix>_<secret>`). */
   prefix: string;
   keyHash: string;
   roles: Role[];

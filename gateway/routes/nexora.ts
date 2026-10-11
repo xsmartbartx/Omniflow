@@ -14,7 +14,7 @@ export function nexoraRoutes(): RouteDef[] {
     {
       method: 'GET',
       url: '/app',
-      summary: 'Sign in with a NEXORA identity (sets an OmniFlow session, redirects to the console)',
+      summary: 'Sign in with a NEXORA identity (sets an Constans session, redirects to the console)',
       tag: 'NEXORA',
       public: true,
       raw: true,

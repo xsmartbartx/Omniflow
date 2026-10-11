@@ -25,7 +25,7 @@ const P = (roles: Role[], over: Partial<Principal> = {}): Principal => ({
 const compilePlan = (steps: unknown[], extra: Record<string, unknown> = {}): Plan => {
   const r = compile(
     {
-      apiVersion: 'omniflow.dev/v1',
+      apiVersion: 'constans/v1',
       kind: 'Workflow',
       metadata: { name: 'wf', version: '1.0.0', owner: 'a@b.c', description: 'd', criticality: 'low' },
       triggers: [{ type: 'manual' }],
@@ -266,7 +266,7 @@ describe('cumulative scope analysis over the whole plan (T5)', () => {
 
 describe('operator-defined policy documents', () => {
   const doc = `
-apiVersion: omniflow.dev/v1
+apiVersion: constans/v1
 kind: Policy
 metadata: { name: house-rules }
 rules:
@@ -339,7 +339,7 @@ rules:
   it('fails closed when a deny rule cannot be evaluated', () => {
     const engine = new PolicyEngine();
     const broken = parsePolicyDocument({
-      apiVersion: 'omniflow.dev/v1',
+      apiVersion: 'constans/v1',
       kind: 'Policy',
       metadata: { name: 'broken' },
       rules: [{ id: 'r', effect: 'deny', when: 'plan.analysis.stepCount + "x" > 1', reason: 'x' }],

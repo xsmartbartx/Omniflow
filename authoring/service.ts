@@ -3,7 +3,7 @@ import {
   type Clock,
   ConflictError,
   NotFoundError,
-  OmniflowError,
+  ConstansError,
   systemClock,
   ValidationError,
 } from '../core/index.ts';
@@ -172,9 +172,9 @@ export class AuthoringService {
   // -------------------------------------------------------------- AI drafting
   private requirePlanner(): Planner {
     if (!this.planner) {
-      throw new OmniflowError(
+      throw new ConstansError(
         'AI_NOT_CONFIGURED',
-        'AI authoring is not configured. Set OMNIFLOW_LLM_API_KEY (or ANTHROPIC_API_KEY) and restart. Everything else works without it.',
+        'AI authoring is not configured. Set CONSTANS_LLM_API_KEY (or ANTHROPIC_API_KEY) and restart. Everything else works without it.',
         { errorClass: 'systemic', retryable: false },
       );
     }
@@ -281,7 +281,7 @@ export class AuthoringService {
     return this.plan(
       principal,
       {
-        intent: `Convert the legacy script below into an OmniFlow workflow.${input.name ? ` Name it "${input.name}".` : ''}${input.description ? ` What it is for: ${input.description}` : ''}\nReplace each recognisable operation with a typed capability from the catalogue (HTTP calls, database queries, notifications…). Anything that has no capability equivalent should be listed in <questions>. Do not use shell-exec unless nothing else fits, and then it needs a sunset date. Give every step a sensible timeout and retry policy, and add compensation where an action can be undone.`,
+        intent: `Convert the legacy script below into an Constans workflow.${input.name ? ` Name it "${input.name}".` : ''}${input.description ? ` What it is for: ${input.description}` : ''}\nReplace each recognisable operation with a typed capability from the catalogue (HTTP calls, database queries, notifications…). Anything that has no capability equivalent should be listed in <questions>. Do not use shell-exec unless nothing else fits, and then it needs a sunset date. Give every step a sensible timeout and retry policy, and add compensation where an action can be undone.`,
         untrusted: [{ label: 'legacy script', content: input.script }],
       },
       signal,

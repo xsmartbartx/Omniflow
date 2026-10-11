@@ -32,7 +32,7 @@ describe('meta endpoints', () => {
     expect((await api.anon.get('/healthz')).body).toEqual({ status: 'ok' });
     expect((await api.anon.get('/readyz')).body.status).toBe('ready');
     const info = (await api.anon.get('/v1/info')).body;
-    expect(info).toMatchObject({ name: 'OmniFlow', environment: 'production', setupRequired: false });
+    expect(info).toMatchObject({ name: 'Constans', environment: 'production', setupRequired: false });
     expect(info.capabilities).toBeGreaterThan(5);
   });
 
@@ -51,9 +51,9 @@ describe('meta endpoints', () => {
     const res = await api.anon.get('/metrics', { authorization: 'Bearer metrics-token-123' });
     expect(res.status).toBe(200);
     expect(String(res.headers['content-type'])).toContain('text/plain');
-    expect(res.text).toContain('omniflow_active_runs');
-    expect(res.text).toContain('omniflow_build_info{');
-    expect(res.text).toMatch(/# TYPE omniflow_runs_total counter/);
+    expect(res.text).toContain('constans_active_runs');
+    expect(res.text).toContain('constans_build_info{');
+    expect(res.text).toMatch(/# TYPE constans_runs_total counter/);
   });
 
   it('sends security headers, echoes request ids, and never leaks stack traces', async () => {
@@ -74,7 +74,7 @@ describe('authentication', () => {
     const res = await api.anon.post('/v1/auth/login', ADMIN);
     expect(res.status).toBe(200);
     const cookie = String(res.headers['set-cookie']);
-    expect(cookie).toMatch(/omf_session=/);
+    expect(cookie).toMatch(/cns_session=/);
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Strict');
     const me = (await admin.get('/v1/auth/me')).body;
@@ -170,13 +170,13 @@ describe('authentication', () => {
     const viewer = await api.key(['viewer']);
     expect((await viewer.get('/v1/workflows')).status).toBe(200);
     expect(
-      (await api.anon.get('/v1/workflows', { authorization: 'Bearer omf_deadbeef0000_' + 'A'.repeat(43) })).status,
+      (await api.anon.get('/v1/workflows', { authorization: 'Bearer cns_deadbeef0000_' + 'A'.repeat(43) })).status,
     ).toBe(401);
     expect((await api.anon.get('/v1/workflows', { authorization: 'Bearer nonsense' })).status).toBe(401);
 
     const created = await admin.post('/v1/api-keys', { name: 'ci', roles: ['operator'] });
     expect(created.status).toBe(201);
-    expect(created.body.key).toMatch(/^omf_[0-9a-f]{12}_/);
+    expect(created.body.key).toMatch(/^cns_[0-9a-f]{12}_/);
     expect(created.body.keyHash).toBeUndefined();
     const listed = (await admin.get('/v1/api-keys')).body.items;
     expect(JSON.stringify(listed)).not.toContain(created.body.key);
@@ -624,9 +624,9 @@ describe('triggers over HTTP', () => {
       api.anon.request('POST', '/v1/hooks/default/hooked-wf/incoming', {
         raw: payload,
         headers: {
-          'x-omniflow-timestamp': String(ts),
-          'x-omniflow-signature': signWebhook(rot.body.secret, ts, payload),
-          'x-omniflow-delivery': `d-${Math.random()}`,
+          'x-constans-timestamp': String(ts),
+          'x-constans-signature': signWebhook(rot.body.secret, ts, payload),
+          'x-constans-delivery': `d-${Math.random()}`,
           ...over,
         },
       });
@@ -635,13 +635,13 @@ describe('triggers over HTTP', () => {
     expect(ok.body).toMatchObject({ status: 'queued' });
     expect((await finished(admin, ok.body.runId)).run.inputs).toEqual({ order: 'o-77' });
 
-    expect((await send({ 'x-omniflow-signature': 'v1=00' })).status).toBe(401);
-    expect((await send({ 'x-omniflow-delivery': 'fixed' })).status).toBe(202);
-    expect((await send({ 'x-omniflow-delivery': 'fixed' })).status).toBe(401); // replay
+    expect((await send({ 'x-constans-signature': 'v1=00' })).status).toBe(401);
+    expect((await send({ 'x-constans-delivery': 'fixed' })).status).toBe(202);
+    expect((await send({ 'x-constans-delivery': 'fixed' })).status).toBe(401); // replay
     expect(
       (
         await send(
-          { 'x-omniflow-signature': signWebhook(rot.body.secret, ts, body) },
+          { 'x-constans-signature': signWebhook(rot.body.secret, ts, body) },
           JSON.stringify({ id: 'tampered' }),
         )
       ).status,

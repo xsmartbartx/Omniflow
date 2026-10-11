@@ -1,4 +1,4 @@
-/** A small typed client for the OmniFlow HTTP API, used by the CLI's remote commands. */
+/** A small typed client for the Constans HTTP API, used by the CLI's remote commands. */
 
 export class ApiError extends Error {
   readonly status: number;
@@ -52,7 +52,7 @@ export class ApiClient {
       });
     } catch (e) {
       throw new ConnectionError(
-        `Could not reach ${this.base} (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).message}). Is the server running, and is OMNIFLOW_URL correct?`,
+        `Could not reach ${this.base} (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).message}). Is the server running, and is CONSTANS_URL correct?`,
       );
     }
     const text = await res.text();

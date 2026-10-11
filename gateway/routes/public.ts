@@ -14,7 +14,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       public: true,
       handler: ({ app }) =>
         app.config.mode === 'nexora'
-          ? { status: 'ok', product: 'omniflow', version: app.config.version, mode: 'nexora' }
+          ? { status: 'ok', product: 'constans', version: app.config.version, mode: 'nexora' }
           : { status: 'ok' },
     },
     {
@@ -35,7 +35,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       tag: 'Meta',
       public: true,
       handler: ({ app }) => ({
-        name: 'OmniFlow',
+        name: 'Constans',
         version: app.config.version,
         environment: app.config.environment,
         mode: app.config.mode,
@@ -59,7 +59,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       public: true,
       raw: true,
       handler: ({ req, reply, app }) => {
-        // Scrapers use a static token (OMNIFLOW_METRICS_TOKEN) or any API key that may read the audit log.
+        // Scrapers use a static token (CONSTANS_METRICS_TOKEN) or any API key that may read the audit log.
         const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
         let allowed = false;
         if (app.config.metricsToken && token === app.config.metricsToken) allowed = true;
@@ -173,9 +173,9 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
           trigger: params.trigger,
           rawBody: raw,
           headers: {
-            timestamp: header(req.headers['x-omniflow-timestamp']),
-            signature: header(req.headers['x-omniflow-signature']),
-            delivery: header(req.headers['x-omniflow-delivery']),
+            timestamp: header(req.headers['x-constans-timestamp']),
+            signature: header(req.headers['x-constans-signature']),
+            delivery: header(req.headers['x-constans-delivery']),
           },
         });
         return result.status === 'skipped'

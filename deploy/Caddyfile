@@ -1,17 +1,17 @@
-# Automatic HTTPS in front of OmniFlow. Used by `docker compose --profile tls up -d`.
-{$OMNIFLOW_DOMAIN} {
+# Automatic HTTPS in front of Constans. Used by `docker compose --profile tls up -d`.
+{$CONSTANS_DOMAIN} {
 	encode zstd gzip
 
 	# Live run streams (server-sent events) must not be buffered or cut off.
 	@stream path_regexp stream ^/v1/runs/[^/]+/stream$
-	reverse_proxy @stream omniflow:8080 {
+	reverse_proxy @stream constans:8080 {
 		flush_interval -1
 		transport http {
 			read_timeout 1h
 		}
 	}
 
-	reverse_proxy omniflow:8080 {
+	reverse_proxy constans:8080 {
 		header_up X-Forwarded-Proto {scheme}
 	}
 

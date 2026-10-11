@@ -8,7 +8,7 @@ import {
   evaluate,
   type Logger,
   nullLogger,
-  OmniflowError,
+  ConstansError,
   parseExpressionField,
   redact,
   resolveValue,
@@ -543,7 +543,7 @@ export class StepRuntime implements StepExecutor {
         class: 'transient',
         retryable: true,
       };
-    } else if (e instanceof OmniflowError) {
+    } else if (e instanceof ConstansError) {
       info = e.toInfo();
     } else {
       const code = (e as { code?: unknown } | undefined)?.code;
@@ -565,7 +565,7 @@ export class StepRuntime implements StepExecutor {
 }
 
 function toInfo(e: unknown): ErrorInfo {
-  if (e instanceof OmniflowError) return e.toInfo();
+  if (e instanceof ConstansError) return e.toInfo();
   return { code: 'INTERNAL', message: e instanceof Error ? e.message : String(e), class: 'systemic', retryable: true };
 }
 

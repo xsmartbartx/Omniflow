@@ -5,7 +5,7 @@ import {
   ForbiddenError,
   type Issue,
   NotFoundError,
-  OmniflowError,
+  ConstansError,
   PolicyDeniedError,
   RateLimitedError,
   redact,
@@ -13,7 +13,7 @@ import {
 } from '../core/index.ts';
 import type { Action, Principal } from '../schemas/index.ts';
 import { SESSION_COOKIE } from './auth.ts';
-import type { Omniflow } from './context.ts';
+import type { Constans } from './context.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
 declare module 'fastify' {
@@ -27,7 +27,7 @@ declare module 'fastify' {
 export interface Ctx<B = any, Q = any, P = any> {
   req: FastifyRequest;
   reply: FastifyReply;
-  app: Omniflow;
+  app: Constans;
   principal: Principal;
   body: B;
   query: Q;
@@ -65,12 +65,12 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_EXCEEDED') return 429;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_DENIED') return 403;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
-  if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
-  if (e instanceof OmniflowError && e.code.startsWith('LLM_')) return 502;
-  if (e instanceof OmniflowError)
+  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_EXCEEDED') return 429;
+  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_DENIED') return 403;
+  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
+  if (e instanceof ConstansError && e.code === 'AI_NOT_CONFIGURED') return 503;
+  if (e instanceof ConstansError && e.code.startsWith('LLM_')) return 502;
+  if (e instanceof ConstansError)
     return e.errorClass === 'contract'
       ? 400
       : e.errorClass === 'authorisation'
@@ -96,7 +96,7 @@ export function problem(
   requestId: string,
 ): { status: number; body: ProblemBody; headers?: Record<string, string> } {
   const status = statusFor(e);
-  if (e instanceof OmniflowError && (status < 500 || USER_FACING_5XX.has(e.code))) {
+  if (e instanceof ConstansError && (status < 500 || USER_FACING_5XX.has(e.code))) {
     const info = e.toInfo();
     return {
       status,
@@ -163,7 +163,7 @@ export const clearSessionCookie = (secure: boolean) =>
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function authenticate(app: Omniflow, req: FastifyRequest): Principal {
+export function authenticate(app: Constans, req: FastifyRequest): Principal {
   const header = req.headers.authorization;
   if (header?.startsWith('Bearer ')) {
     const principal = app.auth.authenticateApiKey(header.slice(7).trim());
@@ -175,7 +175,7 @@ export function authenticate(app: Omniflow, req: FastifyRequest): Principal {
     const res = app.auth.authenticateSession(token);
     if (!res) throw new AuthenticationError('Your session has expired; sign in again');
     // Cookie-authenticated writes must carry a header a cross-site form cannot set (CSRF).
-    if (MUTATING.has(req.method) && req.headers['x-requested-with'] !== 'omniflow') {
+    if (MUTATING.has(req.method) && req.headers['x-requested-with'] !== 'constans') {
       throw new ForbiddenError('Missing X-Requested-With header', { code: 'CSRF' });
     }
     req.sessionToken = token;
@@ -192,7 +192,7 @@ export interface Registered {
 
 export function registerRoutes(
   fastify: FastifyInstance,
-  app: Omniflow,
+  app: Constans,
   defs: RouteDef[],
   limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter; sso: RateLimiter },
 ): void {
@@ -314,7 +314,7 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
   return {
     openapi: '3.1.0',
     info: {
-      title: 'OmniFlow API',
+      title: 'Constans API',
       version: info.version,
       description:
         'Declarative workflow substrate: publish validated workflows, run them deterministically, audit everything.',
@@ -327,13 +327,13 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
         bearerApiKey: {
           type: 'http',
           scheme: 'bearer',
-          description: 'API key: `Authorization: Bearer omf_<prefix>_<secret>`',
+          description: 'API key: `Authorization: Bearer cns_<prefix>_<secret>`',
         },
         sessionCookie: {
           type: 'apiKey',
           in: 'cookie',
           name: SESSION_COOKIE,
-          description: 'Console session. Mutating requests also need `X-Requested-With: omniflow`.',
+          description: 'Console session. Mutating requests also need `X-Requested-With: constans`.',
         },
       },
       schemas: {

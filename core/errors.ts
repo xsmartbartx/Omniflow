@@ -50,7 +50,7 @@ export interface ErrorOptions {
   cause?: unknown;
 }
 
-export class OmniflowError extends Error {
+export class ConstansError extends Error {
   readonly code: string;
   readonly errorClass: ErrorClass;
   readonly retryable: boolean;
@@ -78,7 +78,7 @@ export class OmniflowError extends Error {
 }
 
 /** Input, manifest or output failed schema/semantic validation. Never retryable. */
-export class ValidationError extends OmniflowError {
+export class ValidationError extends ConstansError {
   readonly issues: Issue[];
   constructor(message: string, issues: Issue[], options: ErrorOptions = {}) {
     super('VALIDATION_FAILED', message, { errorClass: 'contract', retryable: false, ...options });
@@ -89,7 +89,7 @@ export class ValidationError extends OmniflowError {
   }
 }
 
-export class NotFoundError extends OmniflowError {
+export class NotFoundError extends ConstansError {
   constructor(what: string, id?: string) {
     super('NOT_FOUND', id === undefined ? `${what} not found` : `${what} '${id}' not found`, {
       errorClass: 'business',
@@ -98,7 +98,7 @@ export class NotFoundError extends OmniflowError {
   }
 }
 
-export class ConflictError extends OmniflowError {
+export class ConflictError extends ConstansError {
   constructor(message: string, details?: Record<string, unknown>) {
     super('CONFLICT', message, {
       errorClass: 'business',
@@ -108,13 +108,13 @@ export class ConflictError extends OmniflowError {
   }
 }
 
-export class AuthenticationError extends OmniflowError {
+export class AuthenticationError extends ConstansError {
   constructor(message = 'Authentication required') {
     super('UNAUTHENTICATED', message, { errorClass: 'authorisation', retryable: false });
   }
 }
 
-export class ForbiddenError extends OmniflowError {
+export class ForbiddenError extends ConstansError {
   constructor(message = 'Forbidden', details?: Record<string, unknown>) {
     super('FORBIDDEN', message, {
       errorClass: 'authorisation',
@@ -125,7 +125,7 @@ export class ForbiddenError extends OmniflowError {
 }
 
 /** A Policy Engine `deny` decision surfaced as an error. */
-export class PolicyDeniedError extends OmniflowError {
+export class PolicyDeniedError extends ConstansError {
   constructor(reasonCode: string, message: string, details?: Record<string, unknown>) {
     super(reasonCode, message, {
       errorClass: 'authorisation',
@@ -135,7 +135,7 @@ export class PolicyDeniedError extends OmniflowError {
   }
 }
 
-export class RateLimitedError extends OmniflowError {
+export class RateLimitedError extends ConstansError {
   constructor(retryAfterSeconds: number) {
     super('RATE_LIMITED', 'Too many requests', {
       errorClass: 'transient',
@@ -150,7 +150,7 @@ export class RateLimitedError extends OmniflowError {
  * `ENTITLEMENT_DENIED` (org suspended/disabled) are the caller's to resolve; `ENTITLEMENT_UNAVAILABLE`
  * means the answer could not be established (Core unreachable and no usable cached answer).
  */
-export class EntitlementError extends OmniflowError {
+export class EntitlementError extends ConstansError {
   constructor(
     code: 'ENTITLEMENT_EXCEEDED' | 'ENTITLEMENT_DENIED' | 'ENTITLEMENT_UNAVAILABLE',
     message: string,
@@ -166,7 +166,7 @@ export class EntitlementError extends OmniflowError {
 
 /** Normalise anything thrown into an `ErrorInfo` without leaking stack traces. */
 export function toErrorInfo(error: unknown): ErrorInfo {
-  if (error instanceof OmniflowError) return error.toInfo();
+  if (error instanceof ConstansError) return error.toInfo();
   if (error instanceof Error) {
     const code = (error as { code?: unknown }).code;
     return {

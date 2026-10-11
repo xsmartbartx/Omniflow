@@ -1,6 +1,6 @@
 # Brand: the workflow product inside NEXORA
 
-Decisions made by the owner: **find a NEXORA-family name**; **licence: proprietary** (done, see the end).
+Decisions made by the owner: **find a NEXORA-family name**; **licence: proprietary** (done, see the end). **Name chosen 2026-10-11: Constans** (rename done in the code and docs; the GitHub repository name is unchanged).
 Nothing here renames the repo yet. A rename touches the `omniflow` CLI, `OMNIFLOW_*` variables, the `omf_` key prefix, the
 package name, the image name and every doc, so it waits for your pick.
 

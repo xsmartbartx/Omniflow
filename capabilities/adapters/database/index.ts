@@ -49,7 +49,7 @@ const defaultPgFactory: PgFactory = (connectionString) =>
   }) as unknown as PgLike;
 
 const IDEMPOTENCY_DDL =
-  'CREATE TABLE IF NOT EXISTS omniflow_idempotency (key TEXT PRIMARY KEY, created_at TEXT NOT NULL)';
+  'CREATE TABLE IF NOT EXISTS constans_idempotency (key TEXT PRIMARY KEY, created_at TEXT NOT NULL)';
 
 function clean(row: Row): Row {
   const out: Row = {};
@@ -88,7 +88,7 @@ function sqliteDriver(path: string): DbDriver {
           if (idempotencyKey) {
             db.exec(IDEMPOTENCY_DDL);
             const res = db
-              .prepare('INSERT OR IGNORE INTO omniflow_idempotency (key, created_at) VALUES (?, ?)')
+              .prepare('INSERT OR IGNORE INTO constans_idempotency (key, created_at) VALUES (?, ?)')
               .run(idempotencyKey, new Date().toISOString());
             if (Number(res.changes) === 0) {
               db.exec('ROLLBACK');
@@ -158,7 +158,7 @@ function postgresDriver(url: string, factory: PgFactory): DbDriver {
         if (idempotencyKey) {
           await client.query(IDEMPOTENCY_DDL);
           const ins = await client.query(
-            'INSERT INTO omniflow_idempotency (key, created_at) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
+            'INSERT INTO constans_idempotency (key, created_at) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
             [idempotencyKey, new Date().toISOString()],
           );
           if ((ins.rowCount ?? 0) === 0) {

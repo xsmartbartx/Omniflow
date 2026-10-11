@@ -37,7 +37,7 @@ const SECRET_PATTERNS: RegExp[] = [
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
   /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp):\/\/[^\s:@/]+:[^\s@/]+@\S+/gi,
-  /\bomf_[A-Za-z0-9]{6,}_[A-Za-z0-9_-]{20,}\b/g,
+  /\bcns_[A-Za-z0-9]{6,}_[A-Za-z0-9_-]{20,}\b/g,
 ];
 
 export interface RedactOptions {

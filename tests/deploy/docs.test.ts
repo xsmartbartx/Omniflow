@@ -36,7 +36,7 @@ describe('documentation stays true to the code', () => {
     for (const file of userDocs) {
       for (const m of read(file).matchAll(/```yaml\n([\s\S]*?)```/g)) {
         const block = m[1]!;
-        if (!/^apiVersion: omniflow\.dev\/v1\nkind: Workflow/.test(block)) continue;
+        if (!/^apiVersion: constans\/v1\nkind: Workflow/.test(block)) continue;
         const r = compile(block, { environment: 'production', capabilities: caps, today: '2026-06-01' });
         expect(r.errors, `${file}: ${block.split('\n').find((l) => l.includes('name:'))}`).toEqual([]);
         checked++;
@@ -86,13 +86,13 @@ describe('documentation stays true to the code', () => {
 
   it('the configuration reference covers every variable the code reads and .env.example documents', () => {
     const doc = read('docs/configuration.md');
-    const vars = new Set(read('.env.example').match(/\b(?:OMNIFLOW|ANTHROPIC)_[A-Z_]+\b/g));
+    const vars = new Set(read('.env.example').match(/\b(?:CONSTANS|ANTHROPIC)_[A-Z_]+\b/g));
     const sources = ['server', 'gateway', 'capabilities', 'insight', 'authoring', 'cli']
       .flatMap((d) => walk(d))
       .filter((f) => f.endsWith('.ts'));
-    const internal = new Set(['OMNIFLOW_COLOR_FORCE']); // set by the CLI entry point itself, not by users
+    const internal = new Set(['CONSTANS_COLOR_FORCE']); // set by the CLI entry point itself, not by users
     for (const f of sources)
-      for (const m of read(f).matchAll(/\b(OMNIFLOW_[A-Z_]+)\b/g)) if (!internal.has(m[1]!)) vars.add(m[1]!);
+      for (const m of read(f).matchAll(/\b(CONSTANS_[A-Z_]+)\b/g)) if (!internal.has(m[1]!)) vars.add(m[1]!);
     const missing = [...vars].filter((v) => !doc.includes(v)).sort();
     expect(missing).toEqual([]);
   });
@@ -109,10 +109,10 @@ describe('documentation stays true to the code', () => {
   it('the shipped policy example and file list referenced by the docs exist', () => {
     for (const f of [
       'policies/examples/house-rules.yaml',
-      'deploy/k8s/omniflow.yaml',
+      'deploy/k8s/constans.yaml',
       'deploy/Caddyfile',
       'deploy/nginx.conf',
-      'deploy/systemd/omniflow.service',
+      'deploy/systemd/constans.service',
       'deploy/backup.sh',
       'deploy/smoke-test.sh',
       'schemas/manifest.schema.json',

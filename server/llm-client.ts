@@ -1,6 +1,6 @@
 import type { LlmClient } from '../authoring/llm.ts';
 import { type AdapterConfig, safeRequest } from '../capabilities/index.ts';
-import { OmniflowError } from '../core/index.ts';
+import { ConstansError } from '../core/index.ts';
 
 /**
  * The Anthropic Messages API behind the authoring agents' `LlmClient` port. It goes through the same
@@ -42,13 +42,13 @@ export function createAnthropicClient(config: AdapterConfig): LlmClient | undefi
         followRedirects: false,
       });
       if (res.status === 401 || res.status === 403) {
-        throw new OmniflowError('LLM_AUTH', 'The AI provider rejected the API key. Check OMNIFLOW_LLM_API_KEY.', {
+        throw new ConstansError('LLM_AUTH', 'The AI provider rejected the API key. Check CONSTANS_LLM_API_KEY.', {
           errorClass: 'authorisation',
           retryable: false,
         });
       }
       if (res.status === 429 || res.status === 529 || res.status >= 500) {
-        throw new OmniflowError(
+        throw new ConstansError(
           'LLM_UNAVAILABLE',
           `The AI provider is unavailable or rate limiting (HTTP ${res.status}). Try again shortly.`,
           { errorClass: 'transient', retryable: true },
@@ -62,7 +62,7 @@ export function createAnthropicClient(config: AdapterConfig): LlmClient | undefi
         } catch {
           /* not JSON */
         }
-        throw new OmniflowError(
+        throw new ConstansError(
           'LLM_REJECTED',
           `The AI provider rejected the request (HTTP ${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
           { errorClass: 'business', retryable: false },
@@ -77,7 +77,7 @@ export function createAnthropicClient(config: AdapterConfig): LlmClient | undefi
       try {
         body = JSON.parse(text);
       } catch {
-        throw new OmniflowError('LLM_BAD_RESPONSE', 'The AI provider returned something that is not JSON', {
+        throw new ConstansError('LLM_BAD_RESPONSE', 'The AI provider returned something that is not JSON', {
           errorClass: 'systemic',
           retryable: true,
         });

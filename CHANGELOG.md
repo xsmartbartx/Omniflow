@@ -1,10 +1,21 @@
 # Changelog
 
-All notable changes to OmniFlow are recorded here. The format follows
+All notable changes to Constans are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/). Upgrading? Read [Operations → Upgrades](docs/operations.md#upgrades).
 
 ## [Unreleased]
+
+### Changed (breaking)
+
+- **The product is now called Constans** (formerly OmniFlow). Nothing was published under the old name, so there is no
+  migration path; a fresh install is the only supported route. What changed:
+  - the CLI is `constans` (was `omniflow`); the npm package is `constans`;
+  - every environment variable starts with `CONSTANS_` (was `OMNIFLOW_`);
+  - API keys start with `cns_` (was `omf_`) and the session cookie is `cns_session`;
+  - workflow manifests use `apiVersion: constans/v1` (was `omniflow.dev/v1`);
+  - the database file is `constans.db`, metrics start with `constans_`, webhook headers are `X-Constans-*`;
+  - plan hashes, the audit chain and stored secrets from an install under the old name do not carry over.
 
 ## [1.0.0] - 2026-09-19
 

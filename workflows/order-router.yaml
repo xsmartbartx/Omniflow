@@ -1,5 +1,5 @@
 # Control flow in one place: a branch, a fan-out over a list (map), and a join.
-apiVersion: omniflow.dev/v1
+apiVersion: constans/v1
 kind: Workflow
 metadata:
   name: order-router

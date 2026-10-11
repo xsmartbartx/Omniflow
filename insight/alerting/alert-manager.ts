@@ -260,7 +260,7 @@ export class AlertManager {
         key: 'queue-backlog',
         severity: 'warning',
         title: 'Runs are backing up',
-        message: `${q.depth} run${q.depth === 1 ? ' is' : 's are'} queued; the oldest has waited ${humanMs(age)}. Capacity may be exhausted (OMNIFLOW_MAX_CONCURRENT_RUNS).`,
+        message: `${q.depth} run${q.depth === 1 ? ' is' : 's are'} queued; the oldest has waited ${humanMs(age)}. Capacity may be exhausted (CONSTANS_MAX_CONCURRENT_RUNS).`,
       });
     }
 
@@ -317,5 +317,5 @@ export function formatAlert(alert: Alert, event: AlertEvent): string {
       : event === 'reminder'
         ? `STILL ${alert.severity.toUpperCase()}`
         : alert.severity.toUpperCase();
-  return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(OmniFlow, tenant ${alert.tenant})`;
+  return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(Constans, tenant ${alert.tenant})`;
 }

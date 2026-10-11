@@ -17,7 +17,7 @@ import {
   maxSensitivity,
   NotFoundError,
   newId,
-  OmniflowError,
+  ConstansError,
   PolicyDeniedError,
   parseDuration,
   RateLimitedError,
@@ -152,10 +152,10 @@ describe('json helpers', () => {
 
 describe('error taxonomy', () => {
   it('assigns default retryability by class', () => {
-    expect(new OmniflowError('X', 'm', { errorClass: 'transient' }).retryable).toBe(true);
-    expect(new OmniflowError('X', 'm', { errorClass: 'contract' }).retryable).toBe(false);
-    expect(new OmniflowError('X', 'm', { errorClass: 'systemic' }).retryable).toBe(true);
-    expect(new OmniflowError('X', 'm', { errorClass: 'transient', retryable: false }).retryable).toBe(false);
+    expect(new ConstansError('X', 'm', { errorClass: 'transient' }).retryable).toBe(true);
+    expect(new ConstansError('X', 'm', { errorClass: 'contract' }).retryable).toBe(false);
+    expect(new ConstansError('X', 'm', { errorClass: 'systemic' }).retryable).toBe(true);
+    expect(new ConstansError('X', 'm', { errorClass: 'transient', retryable: false }).retryable).toBe(false);
   });
 
   it('serialises to plain data without stack traces', () => {
