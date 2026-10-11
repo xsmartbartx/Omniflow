@@ -17,7 +17,7 @@ export type Node =
   | { type: 'unary'; op: '!' | '-'; arg: Node; pos: number }
   | { type: 'binary'; op: BinaryOp; left: Node; right: Node; pos: number }
   | { type: 'logical'; op: '&&' | '||' | '??'; left: Node; right: Node; pos: number }
-  | { type: 'cond'; test: Node; then: Node; else: Node; pos: number }
+  | { type: 'cond'; test: Node; consequent: Node; alternate: Node; pos: number }
   | { type: 'array'; items: Node[]; pos: number };
 
 export class ExpressionError extends Error {
@@ -62,8 +62,8 @@ export function visit(node: Node, cb: (n: Node) => void): void {
       break;
     case 'cond':
       visit(node.test, cb);
-      visit(node.then, cb);
-      visit(node.else, cb);
+      visit(node.consequent, cb);
+      visit(node.alternate, cb);
       break;
     case 'array':
       for (const i of node.items) visit(i, cb);
@@ -144,8 +144,8 @@ export function collectReferences(node: Node): Reference[] {
         break;
       case 'cond':
         walk(n.test);
-        walk(n.then);
-        walk(n.else);
+        walk(n.consequent);
+        walk(n.alternate);
         break;
       case 'array':
         for (const i of n.items) walk(i);

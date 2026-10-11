@@ -44,7 +44,7 @@ export default async function runs(ctx) {
               type: 'button',
               onClick: () => {
                 limit += 50;
-                load();
+                void load();
               },
             },
             'Show more',

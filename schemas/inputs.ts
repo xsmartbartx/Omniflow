@@ -1,4 +1,5 @@
 import type { JsonObject } from '../core/index.ts';
+import { compareStrings } from '../core/index.ts';
 import type { InputSpec } from './manifest.ts';
 
 /** Default upper bound applied to string inputs that declare none, so no input is unbounded. */
@@ -24,7 +25,7 @@ export function inputsToJsonSchema(inputs: Record<string, InputSpec>): JsonObjec
     type: 'object',
     properties,
     // Sorted: the plan hash must not depend on the order keys were written in.
-    ...(required.length ? { required: required.sort() } : {}),
+    ...(required.length ? { required: required.sort(compareStrings) } : {}),
     additionalProperties: false,
   };
 }

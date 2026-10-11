@@ -2,13 +2,14 @@ import type { RegisteredCapability } from '../../capabilities/contract/types.ts'
 import { type CapabilityRegistry, exampleFromSchema } from '../../capabilities/index.ts';
 import {
   type Clock,
+  ConstansError,
   collectReferences,
+  compareStrings,
   createRng,
   type ErrorInfo,
   evaluate,
   type Logger,
   nullLogger,
-  ConstansError,
   parseExpressionField,
   redact,
   resolveValue,
@@ -73,7 +74,7 @@ function secretNamesIn(value: unknown): string[] {
       }
     }
   }
-  return [...names].sort();
+  return [...names].sort(compareStrings);
 }
 
 /**

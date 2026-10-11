@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { type Clock, newId, ConstansError, systemClock, ValidationError } from '../../core/index.ts';
+import { type Clock, ConstansError, compareStrings, newId, systemClock, ValidationError } from '../../core/index.ts';
 import type { Lease } from '../../schemas/capability.ts';
 
 /**
@@ -170,7 +170,7 @@ class LeaseImpl implements ActiveLease {
   ) {
     this.id = id;
     this.secrets = secrets;
-    this.names = [...secrets.keys()].sort();
+    this.names = [...secrets.keys()].sort(compareStrings);
     this.expiresAt = expiresAt;
     this.expiresMs = Date.parse(expiresAt);
     this.clock = clock;
@@ -296,7 +296,7 @@ export class SecretBroker {
       tenant: req.tenant,
       ...(req.runId ? { runId: req.runId } : {}),
       ...(req.stepId ? { stepId: req.stepId } : {}),
-      names: [...secrets.keys()].sort(),
+      names: [...secrets.keys()].sort(compareStrings),
       ttlMs: req.ttlMs,
     });
     return new LeaseImpl(rec.id, secrets, rec.expiresAt, this.clock, (id) => this.store.revokeLease(id));

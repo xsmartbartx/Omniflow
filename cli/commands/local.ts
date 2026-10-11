@@ -26,7 +26,7 @@ function offlineCapabilities() {
     shell: { ...base.shell, allowedCommands: ['/bin/true'] },
     datasources: { offline: 'sqlite:///:memory:' },
     channels: { offline: 'https://example.invalid/hook' },
-    email: { smtpUrl: 'smtp://offline.invalid', from: 'constans@offline.invalid' },
+    email: { smtpUrl: 'smtps://offline.invalid', from: 'constans@offline.invalid' },
     llm: { ...base.llm, apiKey: 'offline-validation-only' },
   });
 }

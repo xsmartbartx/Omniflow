@@ -3,6 +3,8 @@
  * so the compiler is a pure function of the manifest (ADR-0002 D2).
  */
 
+import { compareStrings } from './compare.ts';
+
 export interface TopoResult {
   /** Topologically sorted ids (dependencies first). Incomplete when a cycle exists. */
   order: string[];
@@ -30,7 +32,7 @@ export function topologicalOrder(ids: readonly string[], deps: ReadonlyMap<strin
     }
   }
 
-  const ready = ids.filter((id) => indegree.get(id) === 0).sort();
+  const ready = ids.filter((id) => indegree.get(id) === 0).sort(compareStrings);
   const order: string[] = [];
   while (ready.length > 0) {
     const id = ready.shift()!;
@@ -40,7 +42,7 @@ export function topologicalOrder(ids: readonly string[], deps: ReadonlyMap<strin
       indegree.set(next, n);
       if (n === 0) {
         ready.push(next);
-        ready.sort();
+        ready.sort(compareStrings);
       }
     }
   }
@@ -56,7 +58,7 @@ function findCycle(nodes: ReadonlySet<string>, deps: ReadonlyMap<string, readonl
   const visit = (id: string): string[] | undefined => {
     state.set(id, 'visiting');
     stack.push(id);
-    for (const d of [...(deps.get(id) ?? [])].sort()) {
+    for (const d of [...(deps.get(id) ?? [])].sort(compareStrings)) {
       if (!nodes.has(d)) continue;
       if (state.get(d) === 'visiting') return [...stack.slice(stack.indexOf(d)), d];
       if (!state.has(d)) {
@@ -68,7 +70,7 @@ function findCycle(nodes: ReadonlySet<string>, deps: ReadonlyMap<string, readonl
     state.set(id, 'done');
     return undefined;
   };
-  for (const id of [...nodes].sort()) {
+  for (const id of [...nodes].sort(compareStrings)) {
     if (!state.has(id)) {
       const found = visit(id);
       if (found) return found.reverse();

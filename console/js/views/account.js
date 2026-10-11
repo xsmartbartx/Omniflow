@@ -5,6 +5,7 @@ import { button, card, errorBox, field, input, kv, notice, pageHeader, toast } f
 
 export default async function account() {
   const me = session.me;
+  if (!me) throw new Error('Sign in first');
   const current = input({ type: 'password', autocomplete: 'current-password' });
   const next = input({ type: 'password', autocomplete: 'new-password' });
   const again = input({ type: 'password', autocomplete: 'new-password' });

@@ -145,6 +145,7 @@ function buildShell() {
     );
   }
   const me = session.me;
+  if (!me) throw new Error('The shell needs a loaded session');
   const side = h(
     'aside',
     { class: 'side', id: 'side' },
@@ -181,7 +182,7 @@ async function signOut(ev) {
   } catch {
     /* already gone */
   }
-  showLogin();
+  void showLogin();
 }
 
 let shellParts;
@@ -227,7 +228,7 @@ function boot() {
   const { shell, main, side } = buildShell();
   shellParts = { main, side };
   clear(root).append(shell);
-  refreshBadges();
+  void refreshBadges();
   clearInterval(badgeTimer);
   badgeTimer = setInterval(() => !document.hidden && refreshBadges(), 30000);
 }
@@ -258,14 +259,14 @@ async function start() {
   }
   boot();
   if (location.hash.startsWith('#/login') || !location.hash) location.hash = '#/dashboard';
-  renderRoute();
+  void renderRoute();
 }
 
 api.onUnauthenticated(() => {
   if (session.me) {
     toast('Your session ended. Sign in again to pick up where you were.', 'warn');
-    showLogin();
+    void showLogin();
   }
 });
 window.addEventListener('hashchange', renderRoute);
-start();
+void start();

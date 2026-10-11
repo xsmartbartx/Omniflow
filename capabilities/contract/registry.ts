@@ -1,5 +1,12 @@
 import semver from 'semver';
-import { contentHash, ERROR_CLASSES, type Issue, isSensitivity, ValidationError } from '../../core/index.ts';
+import {
+  compareStrings,
+  contentHash,
+  ERROR_CLASSES,
+  type Issue,
+  isSensitivity,
+  ValidationError,
+} from '../../core/index.ts';
 import type { CapabilityDeclaration } from '../../schemas/index.ts';
 import { checkSchemaDefinition, isValidEgressHost, parseCapabilityRef } from '../../security/validator/index.ts';
 import type { CapabilityAdapter, CapabilityRegistration, RegisteredCapability } from './types.ts';
@@ -133,7 +140,7 @@ export class CapabilityRegistry {
   }
 
   names(): string[] {
-    return [...this.byName.keys()].sort();
+    return [...this.byName.keys()].sort(compareStrings);
   }
 
   has(name: string): boolean {

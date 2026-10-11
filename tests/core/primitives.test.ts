@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AuthenticationError,
   ConflictError,
+  ConstansError,
   canonicalize,
+  compareStrings,
   contentHash,
   createLogger,
   createRng,
@@ -17,7 +19,6 @@ import {
   maxSensitivity,
   NotFoundError,
   newId,
-  ConstansError,
   PolicyDeniedError,
   parseDuration,
   RateLimitedError,
@@ -278,5 +279,14 @@ describe('logger', () => {
       n: 1,
     });
     expect(JSON.stringify(records[1])).not.toContain('abcdefghijklmnop');
+  });
+});
+
+describe('compareStrings', () => {
+  it('orders exactly like the default sort (UTF-16 code units), independent of locale', () => {
+    const words = ['b', 'B', 'a', 'A', 'é', 'e', 'Z', 'z', '10', '9', '', 'ab', 'a b', '😀', 'ｚ'];
+    expect([...words].sort(compareStrings)).toEqual([...words].sort());
+    expect(compareStrings('B', 'a')).toBeLessThan(0); // uppercase before lowercase, unlike localeCompare
+    expect(compareStrings('a', 'a')).toBe(0);
   });
 });

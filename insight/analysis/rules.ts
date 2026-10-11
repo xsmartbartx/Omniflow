@@ -1,3 +1,4 @@
+import { compareStrings } from '../../core/index.ts';
 import type { PlanStep } from '../../schemas/index.ts';
 import { humanMs, parseMs, pct, percentile, ratio } from '../util.ts';
 import type { AnalysisInput, Finding, Rule, Thresholds, WorkflowFacts } from './types.ts';
@@ -140,7 +141,7 @@ export const retryStorms: Rule = (input, t) => {
 const fingerprint = (s: PlanStep): string =>
   s.capability
     ? `${s.capability.name}|${Object.keys(s.with ?? {})
-        .sort()
+        .sort(compareStrings)
         .join(',')}`
     : s.type;
 
@@ -166,7 +167,7 @@ function differingParameters(a: Map<string, PlanStep>, b: Map<string, PlanStep>)
     for (const k of Object.keys(s.with))
       if (JSON.stringify(s.with[k]) !== JSON.stringify(other.with[k])) out.add(`${s.capability?.name ?? s.type}.${k}`);
   }
-  return [...out].sort();
+  return [...out].sort(compareStrings);
 }
 
 /** Two workflows that are the same workflow with different parameters. */
@@ -182,7 +183,7 @@ export const duplicateWorkflows: Rule = (input, t) => {
       const union = a.steps.size + b.steps.size - shared;
       const similarity = shared / union;
       if (similarity < t.duplicateSimilarity) continue;
-      const [x, y] = [a.wf.name, b.wf.name].sort();
+      const [x, y] = [a.wf.name, b.wf.name].sort(compareStrings);
       const params = differingParameters(a.steps, b.steps);
       out.push({
         rule: 'duplicate-workflows',
@@ -359,7 +360,7 @@ export const timing: Rule = (input, t) => {
     if (started !== undefined && scheduled !== undefined)
       lagByWorkflow.set(r.workflow, [...(lagByWorkflow.get(r.workflow) ?? []), Math.max(0, started - scheduled)]);
   }
-  for (const [workflow, lags] of [...lagByWorkflow].sort()) {
+  for (const [workflow, lags] of [...lagByWorkflow].sort(([x], [y]) => compareStrings(x, y))) {
     const p95 = percentile(lags, 95)!;
     if (lags.length < 5 || p95 < t.scheduleDriftP95Ms) continue;
     out.push({

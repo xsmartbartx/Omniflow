@@ -89,7 +89,7 @@ export function evaluate(node: Node, scope: Record<string, unknown>, options: Ev
         return left === null || left === undefined ? ev(n.right) : left;
       }
       case 'cond':
-        return isTruthy(ev(n.test)) ? ev(n.then) : ev(n.else);
+        return isTruthy(ev(n.test)) ? ev(n.consequent) : ev(n.alternate);
       case 'array':
         return n.items.map(ev);
       case 'binary':

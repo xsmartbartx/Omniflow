@@ -287,7 +287,7 @@ export function tabs(items, activeId, onChange) {
       ),
     );
   const root = h('div', { class: 'tabset' }, bar, panel);
-  show(current);
+  void show(current);
   return root;
 }
 
