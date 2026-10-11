@@ -44,7 +44,7 @@ Not built yet (said plainly): retention and archival of old runs, signed outboun
 
 ## Plans
 
-Per organisation, no per-seat pricing, no overage charges: at the limit new runs wait for the next period or an upgrade; dry runs always work. **Prices pending** (proposal in `pricing.md`).
+Per organisation, no per-seat pricing, no overage charges: at the limit new runs are refused until the next period or an upgrade; dry runs always work. **Prices pending** (proposal in `pricing.md`).
 
 | plan | runs / month |
 | --- | --- |
