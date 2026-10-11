@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { h } from '../dom.js';
-import { ago, number, shortHash, timestamp } from '../format.js';
+import { ago, number, plural, shortHash, timestamp } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { renderMarkdown } from '../markdown.js';
 import { can, isAdmin } from '../session.js';
@@ -97,7 +97,7 @@ export default async function workflow(ctx) {
   const pending = changeCount
     ? notice(
         'warn',
-        h('strong', {}, `${changeCount} change request${changeCount === 1 ? '' : 's'} waiting. `),
+        h('strong', {}, `${changeCount} change ${plural(changeCount, 'request')} waiting. `),
         h('a', { href: '#/changes' }, 'Review'),
       )
     : null;

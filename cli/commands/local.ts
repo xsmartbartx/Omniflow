@@ -144,7 +144,8 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
     }
   }
   const warnings = results.reduce((n, r) => n + r.warnings.length, 0);
-  const warningNote = warnings ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : '';
+  const noun = warnings === 1 ? 'warning' : 'warnings';
+  const warningNote = warnings ? `, ${warnings} ${noun}` : '';
   ctx.out(`\n${results.length - failed.length}/${results.length} valid${warningNote}\n`);
   return failed.length > 0 ? 1 : 0;
 }

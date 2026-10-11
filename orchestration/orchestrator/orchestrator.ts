@@ -88,8 +88,10 @@ const SYSTEM = { type: 'system', id: 'orchestrator', name: 'Orchestrator' } as c
  * `StepExecutor` port. Everything it decides is recomputed from durable state, so a crash at any
  * point is recovered by simply re-driving the run.
  */
-const deniedMessage = (a: { decidedBy?: string; comment?: string }) =>
-  `Approval denied by ${a.decidedBy ?? 'an approver'}${a.comment ? `: ${a.comment}` : ''}`;
+const deniedMessage = (a: { decidedBy?: string; comment?: string }) => {
+  const why = a.comment ? `: ${a.comment}` : '';
+  return `Approval denied by ${a.decidedBy ?? 'an approver'}${why}`;
+};
 
 export class Orchestrator {
   private readonly st: State;

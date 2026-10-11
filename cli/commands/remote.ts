@@ -344,10 +344,8 @@ async function tail(ctx: CliContext, runId: string): Promise<number> {
     ctx.out(ctx.json ? `${JSON.stringify(data)}\n` : `${line(data)}\n`);
   });
   const { run } = await api.get(`/v1/runs/${encodeURIComponent(runId)}`);
-  if (!ctx.json)
-    ctx.out(
-      `\n${finishMark(s, run.status)} ${statusColour(s, run.status)}${run.error ? `  ${run.error.message}` : ''}\n`,
-    );
+  const runError = run.error ? `  ${run.error.message}` : '';
+  if (!ctx.json) ctx.out(`\n${finishMark(s, run.status)} ${statusColour(s, run.status)}${runError}\n`);
   return run.status === 'succeeded' ? 0 : 1;
 }
 

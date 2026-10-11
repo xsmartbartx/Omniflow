@@ -96,7 +96,8 @@ const describeInput = (k: string, v: { type: string; required?: boolean; default
   let flag = ', optional';
   if (v.required) flag = ', required';
   else if (v.default !== undefined) flag = `, default ${JSON.stringify(v.default)}`;
-  return `\`${k}\` (${v.type}${flag})${v.description ? ` — ${v.description}` : ''}`;
+  const detail = v.description ? ` — ${v.description}` : '';
+  return `\`${k}\` (${v.type}${flag})${detail}`;
 };
 
 const startedBy = (run: { triggerType: string; requestedBy: { name: string } }) => {
@@ -355,11 +356,13 @@ export function explainRun(input: {
       case 'skipped':
         narrative.push(`“${n}” was skipped${s.skippedReason ? ` (${s.skippedReason})` : ''}.`);
         break;
-      case 'failed':
+      case 'failed': {
+        const attempts = s.attempt > 1 ? ` after ${s.attempt} attempts` : '';
         narrative.push(
-          `“${n}” failed${s.attempt > 1 ? ` after ${s.attempt} attempts` : ''}: ${s.error?.message ?? 'no detail recorded'}${handledNote(s.handled)}`,
+          `“${n}” failed${attempts}: ${s.error?.message ?? 'no detail recorded'}${handledNote(s.handled)}`,
         );
         break;
+      }
       case 'waiting-approval':
         narrative.push(`“${n}” is waiting for a person to approve it.`);
         break;

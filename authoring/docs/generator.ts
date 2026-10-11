@@ -42,8 +42,10 @@ const triggerLine = (t: Trigger): string => {
       return `- **schedule** — ${describeCron(t.cron, t.timezone)} (\`${t.cron}\`)`;
     case 'webhook':
       return `- **webhook** \`${t.name}\``;
-    case 'event':
-      return `- **event** \`${t.event}\`${t.filter ? ` where \`${t.filter}\`` : ''}`;
+    case 'event': {
+      const filter = t.filter ? ` where \`${t.filter}\`` : '';
+      return `- **event** \`${t.event}\`${filter}`;
+    }
     case 'workflow-completion':
       return `- **after** \`${t.workflow}\` (${t.status ?? 'succeeded'})`;
     default:
@@ -214,12 +216,17 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
         properties?: Record<string, { type?: string; description?: string }>;
         required?: string[];
       }) ?? {};
-    out.push(`## ${c.name}@${c.version}`, '', c.description, '');
-    out.push(`- **Effect:** ${c.effect} · **Family:** ${c.family} · **Dry run:** ${c.dryRun}`);
-    out.push(`- **Scopes:** ${c.scopes.length ? c.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`);
-    out.push(`- **Network:** ${networkNote(c.egress)}`);
+    const scopes = c.scopes.length ? c.scopes.map((s) => `\`${s}\``).join(', ') : 'none';
+    const undo = c.compensation ? ` · **Undo with:** \`${c.compensation}\`` : '';
     out.push(
-      `- **Data classification:** ${c.dataClassification}${c.compensation ? ` · **Undo with:** \`${c.compensation}\`` : ''}`,
+      `## ${c.name}@${c.version}`,
+      '',
+      c.description,
+      '',
+      `- **Effect:** ${c.effect} · **Family:** ${c.family} · **Dry run:** ${c.dryRun}`,
+      `- **Scopes:** ${scopes}`,
+      `- **Network:** ${networkNote(c.egress)}`,
+      `- **Data classification:** ${c.dataClassification}${undo}`,
       '',
     );
     const inputs = Object.entries(props.properties ?? {});
