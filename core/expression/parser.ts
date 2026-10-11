@@ -171,10 +171,10 @@ class Parser {
     let result = test;
     if (this.isPunct('?')) {
       this.next();
-      const then = this.parseTernary();
+      const consequent = this.parseTernary();
       this.expectPunct(':');
-      const otherwise = this.parseTernary();
-      result = { type: 'cond', test, then, else: otherwise, pos };
+      const alternate = this.parseTernary();
+      result = { type: 'cond', test, consequent, alternate, pos };
     }
     this.leave();
     return result;

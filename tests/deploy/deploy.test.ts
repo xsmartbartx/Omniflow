@@ -125,6 +125,14 @@ describe('Kubernetes manifests', () => {
     expect(byKind('PersistentVolumeClaim')[0].spec.accessModes).toEqual(['ReadWriteOnce']);
   });
 
+  it('do not mount a service-account token and bound the container ephemeral storage', () => {
+    const pod = byKind('Deployment')[0].spec.template.spec;
+    expect(pod.automountServiceAccountToken).toBe(false);
+    const c = pod.containers[0];
+    expect(c.resources.limits['ephemeral-storage']).toBeDefined();
+    expect(c.resources.requests['ephemeral-storage']).toBeDefined();
+  });
+
   it('are hardened: non-root, read-only root, no capabilities, probes on real endpoints', async () => {
     const pod = byKind('Deployment')[0].spec.template.spec;
     expect(pod.securityContext).toMatchObject({ runAsNonRoot: true, runAsUser: 10001 });
@@ -257,5 +265,24 @@ describe('the image build sees every source layer', () => {
       expect(include, `tsconfig.build.json is missing ${dir}`).toContain(dir);
       expect(dockerfile, `Dockerfile has no COPY for ${dir}`).toMatch(new RegExp(`^COPY ${dir} \\./${dir}$`, 'm'));
     }
+  });
+});
+
+describe('CI workflows are supply-chain hardened', () => {
+  const files = ['.github/workflows/ci.yml', '.github/workflows/release.yml'];
+
+  it('pin every third-party action to a full commit SHA', () => {
+    for (const f of files) {
+      for (const m of read(f).matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)) {
+        const ref = m[1]!;
+        if (ref.startsWith('./') || ref.startsWith('actions/')) continue; // GitHub's own actions may float on a major tag
+        expect(ref, `${f}: ${ref}`).toMatch(/@[0-9a-f]{40}$/);
+      }
+    }
+  });
+
+  it('never run dependency lifecycle scripts during npm ci', () => {
+    for (const f of files)
+      for (const m of read(f).matchAll(/run:\s*(npm ci.*)$/gm)) expect(m[1], f).toContain('--ignore-scripts');
   });
 });

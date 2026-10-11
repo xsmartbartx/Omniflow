@@ -118,7 +118,7 @@ export default async function editor(ctx) {
     }
     if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') {
       ev.preventDefault();
-      saveDraft();
+      void saveDraft();
     }
   });
   ctx.cleanup(() => clearTimeout(timer));
@@ -402,7 +402,7 @@ export default async function editor(ctx) {
     ctx.query.tab ?? 'checks',
   );
 
-  validate();
+  void validate();
   return h(
     'div',
     {},

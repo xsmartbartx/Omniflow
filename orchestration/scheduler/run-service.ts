@@ -4,6 +4,7 @@ import {
   ForbiddenError,
   NotFoundError,
   PolicyDeniedError,
+  randomToken,
   resolveValue,
   systemClock,
   ValidationError,
@@ -84,7 +85,7 @@ export class RunService {
     if (!settings) throw new NotFoundError('Workflow', req.workflow);
 
     // ---- resolve the version (canary selection is stable per (workflow, run key))
-    const key = `${this.clock.now().getTime()}:${Math.random()}`;
+    const key = `${this.clock.now().getTime()}:${randomToken(8)}`;
     const resolved = req.version
       ? { ...this.reg.getVersionPlan(tenant, req.workflow, req.version), canary: false }
       : this.reg.resolveActive(tenant, req.workflow, key);

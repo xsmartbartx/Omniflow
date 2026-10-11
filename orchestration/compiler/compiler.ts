@@ -1,5 +1,6 @@
 import {
   collectReferences,
+  compareStrings,
   contentHash,
   type ErrorClass,
   type Issue,
@@ -151,7 +152,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
 
   // ------------------------------------------------------------ ordering
   const stepIndex = new Map(manifest.steps.map((s, i) => [s.id, i]));
-  const deps = new Map(manifest.steps.map((s) => [s.id, [...new Set(s.dependsOn ?? [])].sort()]));
+  const deps = new Map(manifest.steps.map((s) => [s.id, [...new Set(s.dependsOn ?? [])].sort(compareStrings)]));
   const topo = topologicalOrder(
     manifest.steps.map((s) => s.id),
     deps,
@@ -330,7 +331,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
       initialDelayMs,
       maxDelayMs,
       jitter: r.jitter ?? 0,
-      retryOn: [...new Set(r.retryOn ?? DEFAULT_RETRY_ON)].sort(),
+      retryOn: [...new Set(r.retryOn ?? DEFAULT_RETRY_ON)].sort(compareStrings),
     };
   };
 
@@ -436,7 +437,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
                 `'${cap.name}' reaches the network: step '${id}' must declare 'egress' hosts (default is deny)`,
               );
             }
-            base.egress = [...new Set(step.egress ?? [])].sort();
+            base.egress = [...new Set(step.egress ?? [])].sort(compareStrings);
           } else if (e.mode === 'static') {
             if (step.egress?.length)
               warn(
@@ -444,7 +445,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
                 'EGRESS_IGNORED',
                 `'${cap.name}' has a fixed egress list; the step's 'egress' is ignored`,
               );
-            base.egress = [...e.hosts].sort();
+            base.egress = [...e.hosts].sort(compareStrings);
           } else if (step.egress?.length) {
             error(
               [...p, 'egress'],
@@ -543,7 +544,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
               with: (s.compensate.with ?? {}) as JsonObject,
               ...(s.compensate.idempotencyKey ? { idempotencyKey: s.compensate.idempotencyKey } : {}),
               timeoutMs: s.compensate.timeout !== undefined ? parseDuration(s.compensate.timeout) : policyTimeout,
-              egress: cd.egress.mode === 'static' ? [...cd.egress.hosts].sort() : [],
+              egress: cd.egress.mode === 'static' ? [...cd.egress.hosts].sort(compareStrings) : [],
             };
             if (cd.egress.mode === 'step') {
               error(
@@ -579,8 +580,8 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
       case 'approval': {
         base.message = s.message;
         base.approvers = {
-          roles: [...new Set(s.approvers?.roles ?? (s.approvers?.users ? [] : ['approver']))].sort(),
-          users: [...new Set(s.approvers?.users ?? [])].sort(),
+          roles: [...new Set(s.approvers?.roles ?? (s.approvers?.users ? [] : ['approver']))].sort(compareStrings),
+          users: [...new Set(s.approvers?.users ?? [])].sort(compareStrings),
         };
         base.onTimeout = s.onTimeout;
         if (s.justification) base.justification = s.justification;
@@ -751,16 +752,16 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
     stepCount: planSteps.length,
     depth: longestPath(orderedIds, deps),
     effects,
-    scopes: [...scopes].sort(),
-    egress: [...egress].sort(),
+    scopes: [...scopes].sort(compareStrings),
+    egress: [...egress].sort(compareStrings),
     capabilities: Object.values(caps)
       .map((c) => `${c.name}@${c.version}`)
-      .sort(),
+      .sort(compareStrings),
     maxFanOut: maxFan,
     maxInvocations,
     subworkflowDepth: subDepth,
-    subworkflowChain: [...subChain].sort(),
-    families: [...families].sort(),
+    subworkflowChain: [...subChain].sort(compareStrings),
+    families: [...families].sort(compareStrings),
     hasApproval: planSteps.some((x) => x.type === 'approval'),
     hasCompensation: planSteps.some((x) => x.compensate !== undefined),
     maxSensitivity: sensMax,
@@ -794,7 +795,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
       concurrency: policy.concurrency ?? 10,
       concurrencyPolicy: policy.concurrencyPolicy ?? 'queue',
       maxParallelSteps: policy.maxParallelSteps ?? 8,
-      dataResidency: [...(policy.dataResidency ?? [])].sort(),
+      dataResidency: [...(policy.dataResidency ?? [])].sort(compareStrings),
       ...(policy.maxRunCost !== undefined ? { maxRunCost: policy.maxRunCost } : {}),
       ...(policy.maxDailyCost !== undefined ? { maxDailyCost: policy.maxDailyCost } : {}),
       ...(policy.dedupWindow !== undefined ? { dedupWindowMs: parseDuration(policy.dedupWindow) } : {}),

@@ -362,7 +362,7 @@ export class TriggerManager {
       }
       try {
         const inputs = this.mapInputs(t, facts.event, tenant);
-        const key = correlation ?? `${Date.now()}:${Math.random()}`;
+        const key = correlation ?? `${Date.now()}:${randomToken(8)}`;
         if (!this.st.triggers.recordFire(t.id, `${type}:${key}`)) continue;
         const r = this.fire(t, inputs, { type: 'event', name: t.name, payload }, `${type}:${key}`);
         if (r && (r.status === 'queued' || r.status === 'deduplicated')) runs.push(r.run.id);

@@ -23,7 +23,7 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Typecheck, lint, architecture layers, tests
         run: npm run verify
       - name: Formatting
@@ -61,7 +61,7 @@ jobs:
       - name: Build image for scanning
         run: docker build -t constans:scan .
       - name: Scan the image
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: constans:scan
           severity: CRITICAL,HIGH

@@ -1,4 +1,5 @@
 import { canonicalize, sha256Hex } from '../canonical.ts';
+import { compareStrings } from '../compare.ts';
 import { deterministicUuid } from '../ids.ts';
 import { parseDuration } from '../time.ts';
 import { ExpressionError } from './ast.ts';
@@ -112,14 +113,14 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
       throw new ExpressionError('EXPR_TYPE', 'slice() expects a string or array');
     },
   },
-  keys: { min: 1, max: 1, fn: ([v]) => (isObj(v) ? Object.keys(v).sort() : []) },
+  keys: { min: 1, max: 1, fn: ([v]) => (isObj(v) ? Object.keys(v).sort(compareStrings) : []) },
   values: {
     min: 1,
     max: 1,
     fn: ([v]) =>
       isObj(v)
         ? Object.keys(v)
-            .sort()
+            .sort(compareStrings)
             .map((k) => v[k])
         : [],
   },
@@ -155,7 +156,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     fn: ([v]) => {
       const arr = [...need('sort', v, isArr, 'an array')];
       if (arr.every(isNum)) return (arr as number[]).sort((a, b) => a - b);
-      if (arr.every(isStr)) return (arr as string[]).sort();
+      if (arr.every(isStr)) return (arr as string[]).sort(compareStrings);
       throw new ExpressionError('EXPR_TYPE', 'sort() expects an array of numbers or of strings');
     },
   },
