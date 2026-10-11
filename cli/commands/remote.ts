@@ -10,6 +10,29 @@ import { expandFiles } from './local.ts';
 
 const TERMINAL = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled']);
 
+type Painter = CliContext['style'];
+
+/** Workflow state as a coloured word. */
+const stateWord = (s: Painter, w: { killed?: boolean; enabled?: boolean }, killed = 'killed') => {
+  if (w.killed) return s.red(killed);
+  return w.enabled ? s.green('enabled') : s.yellow('disabled');
+};
+
+const stepNote = (s: Painter, st: { error?: { message: unknown }; skippedReason?: string }) => {
+  if (st.error) return s.dim(String(st.error.message).slice(0, 60));
+  return st.skippedReason ? s.dim(st.skippedReason) : '';
+};
+
+const finishMark = (s: Painter, status: string) => {
+  if (status === 'succeeded') return s.green('✓');
+  return TERMINAL.has(status) ? s.red('✗') : s.yellow('…');
+};
+
+const capabilityState = (s: Painter, c: { killed?: boolean; circuit?: string }) => {
+  if (c.killed) return s.red('killed');
+  return c.circuit === 'open' ? s.yellow('circuit open') : 'ok';
+};
+
 export async function statusCommand(ctx: CliContext): Promise<number> {
   const api = client(ctx, { needKey: false });
   const info = await api.get('/v1/info');
@@ -41,7 +64,7 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
         items.map((w: any) => [
           w.name,
           w.stableVersion ?? '—',
-          w.killed ? s.red('killed') : w.enabled ? s.green('enabled') : s.yellow('disabled'),
+          stateWord(s, w),
           w.criticality ?? '—',
           `${w.recent.succeeded}/${w.recent.total} ok`,
           w.lastRun ? `${statusColour(s, w.lastRun.status)} ${s.dim(ago(w.lastRun.createdAt))}` : '—',
@@ -58,7 +81,7 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
     const w = await api.get(`/v1/workflows/${encodeURIComponent(name)}`);
     emit(ctx, w, () =>
       [
-        `${s.bold(w.name)}  ${w.settings.killed ? s.red('KILLED') : w.settings.enabled ? s.green('enabled') : s.yellow('disabled')}  autonomy ${w.settings.autonomyTier}`,
+        `${s.bold(w.name)}  ${stateWord(s, w.settings, 'KILLED')}  autonomy ${w.settings.autonomyTier}`,
         w.plan?.workflow.description ? w.plan.workflow.description : '',
         `stable ${w.settings.stableVersion ?? '—'}${w.settings.canaryVersion ? `  canary ${w.settings.canaryVersion} (${w.settings.canaryPercent}%)` : ''}`,
         '',
@@ -254,7 +277,7 @@ export async function runsCommand(ctx: CliContext): Promise<number> {
             statusColour(s, st.status),
             st.attempt > 1 ? `${st.attempt}/${st.maxAttempts}` : '',
             humanDuration(st.durationMs),
-            st.error ? s.dim(String(st.error.message).slice(0, 60)) : st.skippedReason ? s.dim(st.skippedReason) : '',
+            stepNote(s, st),
           ]),
           ['STEP', 'CAPABILITY', 'STATUS', 'TRY', 'TOOK', 'NOTE'],
           s,
@@ -300,13 +323,9 @@ export async function runsCommand(ctx: CliContext): Promise<number> {
   }
   if (sub === 'retry') {
     const r = await api.post(`/v1/runs/${encodeURIComponent(id)}/retry`);
-    ctx.out(
-      ctx.json
-        ? `${JSON.stringify(r)}\n`
-        : r.status === 'skipped'
-          ? `${s.yellow('skipped')}: ${r.reason}\n`
-          : `${s.green('✓')} new run ${s.bold(r.run.id)}\n`,
-    );
+    if (ctx.json) ctx.out(`${JSON.stringify(r)}\n`);
+    else if (r.status === 'skipped') ctx.out(`${s.yellow('skipped')}: ${r.reason}\n`);
+    else ctx.out(`${s.green('✓')} new run ${s.bold(r.run.id)}\n`);
     return 0;
   }
   throw new UsageError(`Unknown runs subcommand '${sub}'. Try: list, show, tail, events, output, cancel, retry`);
@@ -327,7 +346,7 @@ async function tail(ctx: CliContext, runId: string): Promise<number> {
   const { run } = await api.get(`/v1/runs/${encodeURIComponent(runId)}`);
   if (!ctx.json)
     ctx.out(
-      `\n${run.status === 'succeeded' ? s.green('✓') : TERMINAL.has(run.status) ? s.red('✗') : s.yellow('…')} ${statusColour(s, run.status)}${run.error ? `  ${run.error.message}` : ''}\n`,
+      `\n${finishMark(s, run.status)} ${statusColour(s, run.status)}${run.error ? `  ${run.error.message}` : ''}\n`,
     );
   return run.status === 'succeeded' ? 0 : 1;
 }
@@ -420,11 +439,8 @@ export async function changesCommand(ctx: CliContext): Promise<number> {
       `/v1/changes/${encodeURIComponent(id)}/${sub}`,
       flag(ctx.args, 'comment') ? { comment: flag(ctx.args, 'comment') } : {},
     );
-    ctx.out(
-      ctx.json
-        ? `${JSON.stringify(r)}\n`
-        : `${s.green('✓')} ${sub}d ${id}${r.published ? ` — published ${r.published.name}@${r.published.version}` : ''}\n`,
-    );
+    const published = r.published ? ` — published ${r.published.name}@${r.published.version}` : '';
+    ctx.out(ctx.json ? `${JSON.stringify(r)}\n` : `${s.green('✓')} ${sub}d ${id}${published}\n`);
     return 0;
   }
   if (sub === 'withdraw') {
@@ -442,12 +458,7 @@ export async function capabilitiesCommand(ctx: CliContext): Promise<number> {
   const { items } = await api.get('/v1/capabilities');
   emit(ctx, items, () =>
     table(
-      items.map((c: any) => [
-        `${c.name}@${c.version}`,
-        c.effect,
-        c.killed ? ctx.style.red('killed') : c.circuit === 'open' ? ctx.style.yellow('circuit open') : 'ok',
-        c.description ?? '',
-      ]),
+      items.map((c: any) => [`${c.name}@${c.version}`, c.effect, capabilityState(ctx.style, c), c.description ?? '']),
       ['CAPABILITY', 'EFFECT', 'STATE', 'DESCRIPTION'],
       ctx.style,
     ),

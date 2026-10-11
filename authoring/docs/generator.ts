@@ -1,6 +1,66 @@
 import type { CapabilityDeclaration, Plan, PlanStep } from '../../schemas/index.ts';
 import { describeCron } from '../agents/explainer.ts';
 
+type Trigger = Plan['triggers'][number];
+
+/** The second line of a diagram node: what the step is. */
+const stepKind = (s: PlanStep): string => {
+  if (s.type === 'capability' && s.capability) return `${s.capability.name}`;
+  switch (s.type) {
+    case 'approval':
+      return 'approval';
+    case 'map':
+      return `for each · ${s.capability?.name ?? ''}`;
+    case 'wait':
+      return s.until ? `wait · ${s.until.event}` : 'wait';
+    case 'subworkflow':
+      return `runs ${s.workflow}`;
+    default:
+      return s.type;
+  }
+};
+
+/** Mermaid node syntax for a step: the shape tells you what kind of step it is. */
+const nodeLine = (type: string, id: string, l: string): string => {
+  switch (type) {
+    case 'branch':
+      return `  ${id}{"${l}"}`;
+    case 'approval':
+      return `  ${id}[["${l}"]]`;
+    case 'parallel':
+      return `  ${id}(("${l}"))`;
+    case 'terminate':
+      return `  ${id}(["${l}"])`;
+    default:
+      return `  ${id}["${l}"]`;
+  }
+};
+
+const triggerLine = (t: Trigger): string => {
+  switch (t.type) {
+    case 'schedule':
+      return `- **schedule** — ${describeCron(t.cron, t.timezone)} (\`${t.cron}\`)`;
+    case 'webhook':
+      return `- **webhook** \`${t.name}\``;
+    case 'event':
+      return `- **event** \`${t.event}\`${t.filter ? ` where \`${t.filter}\`` : ''}`;
+    case 'workflow-completion':
+      return `- **after** \`${t.workflow}\` (${t.status ?? 'succeeded'})`;
+    default:
+      return '- **manual**';
+  }
+};
+
+const stateWord = (settings: { killed: boolean; enabled: boolean }) => {
+  if (settings.killed) return 'killed';
+  return settings.enabled ? 'enabled' : 'disabled';
+};
+
+const networkNote = (egress: { mode: string; hosts?: string[] }) => {
+  if (egress.mode === 'none') return 'none';
+  return egress.mode === 'static' ? egress.hosts?.join(', ') : egress.mode;
+};
+
 /**
  * Living documentation, generated from the same compiled plans the engine runs (architecture §5.1 #8):
  * it cannot describe a workflow that does not exist, and it cannot drift from what actually executes.
@@ -20,20 +80,7 @@ export function workflowMermaid(plan: Plan): string {
 
   const label = (s: PlanStep): string => {
     const head = esc(s.name ?? s.id);
-    const sub =
-      s.type === 'capability' && s.capability
-        ? `${s.capability.name}`
-        : s.type === 'approval'
-          ? 'approval'
-          : s.type === 'map'
-            ? `for each · ${s.capability?.name ?? ''}`
-            : s.type === 'wait'
-              ? s.until
-                ? `wait · ${s.until.event}`
-                : 'wait'
-              : s.type === 'subworkflow'
-                ? `runs ${s.workflow}`
-                : s.type;
+    const sub = stepKind(s);
     return `${head}<br/><small>${esc(sub)}${s.compensate ? ' · compensable' : ''}${s.sunset ? ` · sunset ${s.sunset}` : ''}</small>`;
   };
 
@@ -41,17 +88,7 @@ export function workflowMermaid(plan: Plan): string {
   for (const s of ordered) {
     const id = node.get(s.id)!;
     const l = label(s);
-    lines.push(
-      s.type === 'branch'
-        ? `  ${id}{"${l}"}`
-        : s.type === 'approval'
-          ? `  ${id}[["${l}"]]`
-          : s.type === 'parallel'
-            ? `  ${id}(("${l}"))`
-            : s.type === 'terminate'
-              ? `  ${id}(["${l}"])`
-              : `  ${id}["${l}"]`,
-    );
+    lines.push(nodeLine(s.type, id, l));
   }
   for (const s of ordered) {
     const id = node.get(s.id)!;
@@ -59,11 +96,8 @@ export function workflowMermaid(plan: Plan): string {
     for (const d of s.dependsOn) {
       const from = node.get(d);
       if (!from) continue;
-      lines.push(
-        s.when
-          ? `  ${from} -.->|"${esc(s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when)}"| ${id}`
-          : `  ${from} --> ${id}`,
-      );
+      const when = s.when && s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when;
+      lines.push(when ? `  ${from} -.->|"${esc(when)}"| ${id}` : `  ${from} --> ${id}`);
     }
     if (typeof s.onError === 'object' && s.onError && node.has(s.onError.routeTo))
       lines.push(`  ${id} -. "on error" .-> ${node.get(s.onError.routeTo)}`);
@@ -101,11 +135,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     `| Version | ${w.version} |`,
     `| Owner | ${cell(w.owner)}${w.team ? ` (${cell(w.team)})` : ''} |`,
     `| Criticality | ${w.criticality} |`,
-    ...(ctx.settings
-      ? [
-          `| State | ${ctx.settings.killed ? 'killed' : ctx.settings.enabled ? 'enabled' : 'disabled'} · autonomy ${ctx.settings.autonomyTier} |`,
-        ]
-      : []),
+    ...(ctx.settings ? [`| State | ${stateWord(ctx.settings)} · autonomy ${ctx.settings.autonomyTier} |`] : []),
     `| Size | ${plan.analysis.stepCount} steps · depth ${plan.analysis.depth} · worst-case cost ${plan.analysis.maxCost} |`,
     '',
     '## Flow',
@@ -118,17 +148,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     '',
   );
   for (const t of plan.triggers) {
-    out.push(
-      t.type === 'schedule'
-        ? `- **schedule** — ${describeCron(t.cron, t.timezone)} (\`${t.cron}\`)`
-        : t.type === 'webhook'
-          ? `- **webhook** \`${t.name}\``
-          : t.type === 'event'
-            ? `- **event** \`${t.event}\`${t.filter ? ` where \`${t.filter}\`` : ''}`
-            : t.type === 'workflow-completion'
-              ? `- **after** \`${t.workflow}\` (${t.status ?? 'succeeded'})`
-              : '- **manual**',
-    );
+    out.push(triggerLine(t));
   }
   const inputs = Object.entries(plan.inputs);
   out.push('', '## Inputs', '');
@@ -197,9 +217,7 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
     out.push(`## ${c.name}@${c.version}`, '', c.description, '');
     out.push(`- **Effect:** ${c.effect} · **Family:** ${c.family} · **Dry run:** ${c.dryRun}`);
     out.push(`- **Scopes:** ${c.scopes.length ? c.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`);
-    out.push(
-      `- **Network:** ${c.egress.mode === 'none' ? 'none' : c.egress.mode === 'static' ? c.egress.hosts?.join(', ') : c.egress.mode}`,
-    );
+    out.push(`- **Network:** ${networkNote(c.egress)}`);
     out.push(
       `- **Data classification:** ${c.dataClassification}${c.compensation ? ` · **Undo with:** \`${c.compensation}\`` : ''}`,
       '',

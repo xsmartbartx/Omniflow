@@ -137,9 +137,10 @@ export class AlertManager {
   active(tenant: string): Alert[] {
     return [...this.open.values()]
       .filter((a) => a.tenant === tenant)
-      .sort((a, b) =>
-        a.severity === b.severity ? a.raisedAt.localeCompare(b.raisedAt) : a.severity === 'critical' ? -1 : 1,
-      )
+      .sort((a, b) => {
+        if (a.severity === b.severity) return a.raisedAt.localeCompare(b.raisedAt);
+        return a.severity === 'critical' ? -1 : 1;
+      })
       .map((a) => ({ ...a }));
   }
 
@@ -311,11 +312,8 @@ export class AlertManager {
 
 /** Plain-text rendering shared by every channel. */
 export function formatAlert(alert: Alert, event: AlertEvent): string {
-  const tag =
-    event === 'resolved'
-      ? 'RESOLVED'
-      : event === 'reminder'
-        ? `STILL ${alert.severity.toUpperCase()}`
-        : alert.severity.toUpperCase();
+  let tag = alert.severity.toUpperCase();
+  if (event === 'resolved') tag = 'RESOLVED';
+  else if (event === 'reminder') tag = `STILL ${tag}`;
   return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(Constans, tenant ${alert.tenant})`;
 }

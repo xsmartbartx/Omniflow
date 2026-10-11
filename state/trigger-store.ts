@@ -1,5 +1,5 @@
 import { type Clock, newId, systemClock } from '../core/index.ts';
-import { type Db, fromJson } from './database.ts';
+import { type Db, fromJson, toBit } from './database.ts';
 
 export interface TriggerRecord {
   id: string;
@@ -157,13 +157,7 @@ export class TriggerStore {
     this.db.run(
       `UPDATE triggers SET enabled = COALESCE(?, enabled), last_fired_at = COALESCE(?, last_fired_at),
          next_fire_at = CASE WHEN ? = 1 THEN ? ELSE next_fire_at END WHERE id = ?`,
-      [
-        p.enabled === undefined ? null : p.enabled ? 1 : 0,
-        p.lastFiredAt ?? null,
-        p.nextFireAt === undefined ? 0 : 1,
-        p.nextFireAt ?? null,
-        id,
-      ],
+      [toBit(p.enabled), p.lastFiredAt ?? null, p.nextFireAt === undefined ? 0 : 1, p.nextFireAt ?? null, id],
     );
   }
 

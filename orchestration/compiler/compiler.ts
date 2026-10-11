@@ -353,12 +353,8 @@ export function compile(source: unknown, options: CompileOptions): CompileResult
       if (timeoutMs > limits.maxApprovalTimeoutMs)
         error([...p, 'timeout'], 'TIMEOUT_TOO_LARGE', 'Approval timeout exceeds the platform maximum');
     } else if (s.type === 'wait') {
-      timeoutMs =
-        s.until && s.timeout !== undefined
-          ? parseDuration(s.timeout)
-          : s.duration !== undefined
-            ? parseDuration(s.duration)
-            : timeoutMs;
+      if (s.until && s.timeout !== undefined) timeoutMs = parseDuration(s.timeout);
+      else if (s.duration !== undefined) timeoutMs = parseDuration(s.duration);
     } else if (timeoutMs > limits.maxStepTimeoutMs) {
       error(
         [...p, 'timeout'],

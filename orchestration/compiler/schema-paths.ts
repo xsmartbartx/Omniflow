@@ -10,7 +10,7 @@ export function schemaHasPath(schema: unknown, path: readonly string[]): PathVer
   const s = schema as JsonObject;
   if (s.oneOf || s.anyOf || s.allOf || s.$ref || s.if) return 'unknown';
 
-  const type = Array.isArray(s.type) ? s.type : s.type === undefined ? [] : [s.type];
+  const type = Array.isArray(s.type) ? s.type : [s.type].filter((t) => t !== undefined);
   const [seg, ...rest] = path as [string, ...string[]];
 
   if (type.includes('array') && !type.includes('object')) {

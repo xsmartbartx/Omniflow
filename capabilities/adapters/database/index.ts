@@ -54,18 +54,16 @@ const IDEMPOTENCY_DDL =
 function clean(row: Row): Row {
   const out: Row = {};
   for (const [k, v] of Object.entries(row)) {
-    out[k] =
-      typeof v === 'bigint'
-        ? Number.isSafeInteger(Number(v))
-          ? Number(v)
-          : v.toString()
-        : v instanceof Date
-          ? v.toISOString()
-          : v instanceof Uint8Array
-            ? Buffer.from(v).toString('base64')
-            : v;
+    out[k] = cleanValue(v);
   }
   return out;
+}
+
+function cleanValue(v: Row[string]): Row[string] {
+  if (typeof v === 'bigint') return Number.isSafeInteger(Number(v)) ? Number(v) : v.toString();
+  if (v instanceof Date) return v.toISOString();
+  if (v instanceof Uint8Array) return Buffer.from(v).toString('base64');
+  return v;
 }
 
 function sqliteDriver(path: string): DbDriver {
@@ -122,7 +120,7 @@ function sqliteDriver(path: string): DbDriver {
   };
 }
 
-const toSqlite = (p: SqlParam) => (typeof p === 'boolean' ? (p ? 1 : 0) : p);
+const toSqlite = (p: SqlParam) => (typeof p === 'boolean' ? Number(p) : p);
 
 function postgresDriver(url: string, factory: PgFactory): DbDriver {
   const pool = factory(url);

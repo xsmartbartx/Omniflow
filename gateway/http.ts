@@ -70,16 +70,12 @@ export function statusFor(e: unknown): number {
   if (e instanceof ConstansError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
   if (e instanceof ConstansError && e.code === 'AI_NOT_CONFIGURED') return 503;
   if (e instanceof ConstansError && e.code.startsWith('LLM_')) return 502;
-  if (e instanceof ConstansError)
-    return e.errorClass === 'contract'
-      ? 400
-      : e.errorClass === 'authorisation'
-        ? 403
-        : e.errorClass === 'business'
-          ? 409
-          : 500;
+  if (e instanceof ConstansError) return CLASS_STATUS[e.errorClass] ?? 500;
   return 500;
 }
+
+/** HTTP status for a failure with no more specific mapping, by error class (architecture §12.2). */
+const CLASS_STATUS: Record<string, number> = { contract: 400, authorisation: 403, business: 409 };
 
 /** Server-side conditions whose messages are written for the caller (configuration and upstream-provider problems). */
 const USER_FACING_5XX = new Set([
@@ -128,6 +124,12 @@ export function problem(
   };
 }
 
+function validationMessage(v: { message?: string; keyword?: string; params?: Record<string, unknown> }): string {
+  if (v.keyword === 'required') return `Missing required property '${String(v.params?.missingProperty)}'`;
+  if (v.keyword === 'additionalProperties') return `Unknown property '${String(v.params?.additionalProperty)}'`;
+  return v.message ?? 'Invalid value';
+}
+
 export function fromFastifyValidation(
   validation: Array<{ instancePath?: string; message?: string; keyword?: string; params?: Record<string, unknown> }>,
   where: string,
@@ -135,12 +137,7 @@ export function fromFastifyValidation(
   const issues: Issue[] = validation.map((v) => ({
     path: `${where}${(v.instancePath ?? '').replaceAll('/', '.')}`.replace(/\.$/, ''),
     code: `SCHEMA_${(v.keyword ?? 'invalid').toUpperCase()}`,
-    message:
-      v.keyword === 'required'
-        ? `Missing required property '${String(v.params?.missingProperty)}'`
-        : v.keyword === 'additionalProperties'
-          ? `Unknown property '${String(v.params?.additionalProperty)}'`
-          : (v.message ?? 'Invalid value'),
+    message: validationMessage(v),
   }));
   return new ValidationError('The request is invalid', issues);
 }
@@ -199,14 +196,7 @@ export function registerRoutes(
   for (const def of defs) {
     const handler: RouteHandlerMethod = async (req, reply) => {
       const ip = req.ip;
-      const bucket =
-        def.limit === 'login'
-          ? limiters.login
-          : def.limit === 'webhook'
-            ? limiters.webhook
-            : def.limit === 'sso'
-              ? limiters.sso
-              : undefined;
+      const bucket = def.limit ? limiters[def.limit] : undefined;
       if (bucket) {
         const wait = bucket.take(`${def.limit}:${ip}`);
         if (wait > 0) throw new RateLimitedError(wait);

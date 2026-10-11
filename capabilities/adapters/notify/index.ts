@@ -77,6 +77,9 @@ export async function sendToChannel(
   if (err) throw err;
 }
 
+/** Chat prefix by severity; anything else is sent unmarked. */
+const SEVERITY_PREFIX: Record<string, string> = { error: '🔴 ', warning: '🟠 ' };
+
 const failureModes = [
   { code: 'NOTIFY_UNAVAILABLE', class: 'transient' as const, retryable: true },
   { code: 'NOTIFY_REJECTED', class: 'authorisation' as const, retryable: false },
@@ -185,7 +188,7 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
     } as CapabilityDeclaration,
     simulate: () => ({ sent: true }),
     async execute(ctx, input: { channel: string; text: string; severity?: string }) {
-      const prefix = input.severity === 'error' ? '🔴 ' : input.severity === 'warning' ? '🟠 ' : '';
+      const prefix = SEVERITY_PREFIX[input.severity ?? ''] ?? '';
       await sendToChannel(config, input.channel, `${prefix}${input.text}`, ctx.signal);
       return { sent: true };
     },

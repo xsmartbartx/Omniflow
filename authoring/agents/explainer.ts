@@ -72,12 +72,52 @@ export interface PlanExplanation {
   markdown: string;
 }
 
-const humanMs = (ms: number) =>
-  ms >= 3_600_000
-    ? `${+(ms / 3_600_000).toFixed(1)} h`
-    : ms >= 60_000
-      ? `${+(ms / 60_000).toFixed(1)} min`
-      : `${+(ms / 1000).toFixed(1)} s`;
+const humanMs = (ms: number) => {
+  if (ms >= 3_600_000) return `${+(ms / 3_600_000).toFixed(1)} h`;
+  if (ms >= 60_000) return `${+(ms / 60_000).toFixed(1)} min`;
+  return `${+(ms / 1000).toFixed(1)} s`;
+};
+
+const COMPLETION_VERB: Record<string, string> = { failed: 'fails', any: 'finishes' };
+
+const effectNote = (effect: string | undefined) => {
+  if (effect === 'effectful') return ' (this changes something in the outside world)';
+  if (effect === 'idempotent') return ' (safe to repeat)';
+  return ' (read-only)';
+};
+
+const timeoutNote = (onTimeout: string | undefined) => {
+  if (onTimeout === 'deny') return 'If nobody answers in time it is denied';
+  if (onTimeout === 'escalate') return 'If nobody answers in time it escalates';
+  return 'If nobody answers in time it is approved automatically';
+};
+
+const describeInput = (k: string, v: { type: string; required?: boolean; default?: unknown; description?: string }) => {
+  let flag = ', optional';
+  if (v.required) flag = ', required';
+  else if (v.default !== undefined) flag = `, default ${JSON.stringify(v.default)}`;
+  return `\`${k}\` (${v.type}${flag})${v.description ? ` — ${v.description}` : ''}`;
+};
+
+const startedBy = (run: { triggerType: string; requestedBy: { name: string } }) => {
+  if (run.triggerType === 'schedule') return 'its schedule';
+  if (run.triggerType === 'manual') return `${run.requestedBy.name} by hand`;
+  return `a ${run.triggerType} trigger`;
+};
+
+const handledNote = (handled: string | undefined) => {
+  if (handled === 'continue') return '. The workflow carried on anyway.';
+  if (handled === 'route') return '. The workflow took its error route.';
+  return '.';
+};
+
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+const whatHappenedNext = (compFailed: number, compensated: number) => {
+  if (compFailed) return `Rollback started, but ${compFailed} compensation${plural(compFailed, '', 's')} failed.`;
+  if (compensated) return `${compensated} earlier step${plural(compensated, ' was', 's were')} undone.`;
+  return 'Nothing needed to be undone.';
+};
 
 function describeTrigger(t: Plan['triggers'][number]): string {
   switch (t.type) {
@@ -90,7 +130,7 @@ function describeTrigger(t: Plan['triggers'][number]): string {
     case 'event':
       return `when a “${t.event}” event is published${t.filter ? ` and \`${t.filter}\` holds` : ''}`;
     case 'workflow-completion':
-      return `after the workflow “${t.workflow}” ${t.status === 'failed' ? 'fails' : t.status === 'any' ? 'finishes' : 'succeeds'}`;
+      return `after the workflow “${t.workflow}” ${COMPLETION_VERB[t.status ?? ''] ?? 'succeeds'}`;
   }
 }
 
@@ -101,9 +141,7 @@ function describeStep(s: PlanStep, plan: Plan): string {
   const title = s.name ?? s.id;
   switch (s.type) {
     case 'capability':
-      parts.push(
-        `**${title}** — uses the \`${s.capability?.name}\` capability${s.effect === 'effectful' ? ' (this changes something in the outside world)' : s.effect === 'idempotent' ? ' (safe to repeat)' : ' (read-only)'}.`,
-      );
+      parts.push(`**${title}** — uses the \`${s.capability?.name}\` capability${effectNote(s.effect)}.`);
       break;
     case 'branch':
       parts.push(
@@ -120,7 +158,7 @@ function describeStep(s: PlanStep, plan: Plan): string {
       break;
     case 'approval':
       parts.push(
-        `**${title}** — pauses for a person to approve: “${s.message}”. ${s.onTimeout === 'deny' ? 'If nobody answers in time it is denied' : s.onTimeout === 'escalate' ? 'If nobody answers in time it escalates' : 'If nobody answers in time it is approved automatically'} after ${humanMs(s.timeoutMs)}.`,
+        `**${title}** — pauses for a person to approve: “${s.message}”. ${timeoutNote(s.onTimeout)} after ${humanMs(s.timeoutMs)}.`,
       );
       break;
     case 'wait':
@@ -151,10 +189,7 @@ function describeStep(s: PlanStep, plan: Plan): string {
 export function explainPlan(plan: Plan): PlanExplanation {
   const w = plan.workflow;
   const triggers = plan.triggers.map(describeTrigger);
-  const inputs = Object.entries(plan.inputs).map(
-    ([k, v]) =>
-      `\`${k}\` (${v.type}${v.required ? ', required' : v.default !== undefined ? `, default ${JSON.stringify(v.default)}` : ', optional'})${v.description ? ` — ${v.description}` : ''}`,
-  );
+  const inputs = Object.entries(plan.inputs).map(([k, v]) => describeInput(k, v));
   const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
   const steps = ordered.map((s) => ({ id: s.id, text: describeStep(s, plan) }));
 
@@ -306,7 +341,7 @@ export function explainRun(input: {
   const narrative: string[] = [];
   const took = dur(run.startedAt, run.finishedAt);
   narrative.push(
-    `${run.dryRun ? 'Dry run of' : 'Run of'} ${run.workflowName} ${run.workflowVersion}, started by ${run.triggerType === 'schedule' ? 'its schedule' : run.triggerType === 'manual' ? `${run.requestedBy.name} by hand` : `a ${run.triggerType} trigger`}${run.canary ? ' (canary version)' : ''}.`,
+    `${run.dryRun ? 'Dry run of' : 'Run of'} ${run.workflowName} ${run.workflowVersion}, started by ${startedBy(run)}${run.canary ? ' (canary version)' : ''}.`,
   );
 
   for (const s of ordered) {
@@ -322,7 +357,7 @@ export function explainRun(input: {
         break;
       case 'failed':
         narrative.push(
-          `“${n}” failed${s.attempt > 1 ? ` after ${s.attempt} attempts` : ''}: ${s.error?.message ?? 'no detail recorded'}${s.handled === 'continue' ? '. The workflow carried on anyway.' : s.handled === 'route' ? '. The workflow took its error route.' : '.'}`,
+          `“${n}” failed${s.attempt > 1 ? ` after ${s.attempt} attempts` : ''}: ${s.error?.message ?? 'no detail recorded'}${handledNote(s.handled)}`,
         );
         break;
       case 'waiting-approval':
@@ -381,10 +416,9 @@ export function explainRun(input: {
     case 'waiting-event': {
       const waiting = steps.find((s) => s.status.startsWith('waiting'));
       waitingOn = waiting ? name(waiting.stepId) : undefined;
+      const at = waitingOn ? ` at “${waitingOn}”` : '';
       headline =
-        run.status === 'waiting-approval'
-          ? `Paused, waiting for approval${waitingOn ? ` at “${waitingOn}”` : ''}.`
-          : `Paused, waiting for an event${waitingOn ? ` at “${waitingOn}”` : ''}.`;
+        run.status === 'waiting-approval' ? `Paused, waiting for approval${at}.` : `Paused, waiting for an event${at}.`;
       break;
     }
     default: {
@@ -394,22 +428,17 @@ export function explainRun(input: {
       const advice = ADVICE[err?.class ?? 'systemic']!;
       const compensated = ordered.filter((s) => s.compensationStatus === 'done').length;
       const compFailed = ordered.filter((s) => s.compensationStatus === 'failed').length;
-      headline =
-        run.status === 'rolled-back'
-          ? `Failed at “${bad ? name(bad.stepId) : 'a step'}” and was rolled back.`
-          : run.status === 'compensation-failed'
-            ? `Failed at “${bad ? name(bad.stepId) : 'a step'}” and the rollback did not complete — needs attention.`
-            : `Failed at “${bad ? name(bad.stepId) : 'a step'}”.`;
+      const failedAt = `Failed at “${bad ? name(bad.stepId) : 'a step'}”`;
+      if (run.status === 'rolled-back') headline = `${failedAt} and was rolled back.`;
+      else if (run.status === 'compensation-failed')
+        headline = `${failedAt} and the rollback did not complete — needs attention.`;
+      else headline = `${failedAt}.`;
       failure = {
         stepId: bad?.stepId ?? '',
         code: err?.code ?? 'UNKNOWN',
         errorClass: err?.class ?? 'unknown',
         cause: `${err?.message ?? 'No error detail was recorded.'} ${advice.cause}`,
-        whatHappenedNext: compFailed
-          ? `Rollback started, but ${compFailed} compensation${compFailed === 1 ? '' : 's'} failed.`
-          : compensated
-            ? `${compensated} earlier step${compensated === 1 ? ' was' : 's were'} undone.`
-            : 'Nothing needed to be undone.',
+        whatHappenedNext: whatHappenedNext(compFailed, compensated),
         suggestion: advice.suggestion,
       };
     }

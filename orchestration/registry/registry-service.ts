@@ -175,18 +175,16 @@ export class RegistryService {
     if (decision.effect === 'deny')
       throw new PolicyDeniedError(decision.reasonCode, decision.reason, { workflow: name, version });
 
-    const gate =
-      decision.effect === 'require-approval'
-        ? decision
-        : opts.forceApproval
-          ? {
-              ...decision,
-              effect: 'require-approval' as const,
-              reasonCode: opts.forceApproval.code,
-              reason: opts.forceApproval.reason,
-              requiredApprovals: 1,
-            }
-          : undefined;
+    let gate: typeof decision | undefined;
+    if (decision.effect === 'require-approval') gate = decision;
+    else if (opts.forceApproval)
+      gate = {
+        ...decision,
+        effect: 'require-approval' as const,
+        reasonCode: opts.forceApproval.code,
+        reason: opts.forceApproval.reason,
+        requiredApprovals: 1,
+      };
     if (gate) {
       const change = this.st.authoring.createChange({
         tenant,
