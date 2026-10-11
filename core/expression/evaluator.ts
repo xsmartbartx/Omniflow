@@ -86,7 +86,7 @@ export function evaluate(node: Node, scope: Record<string, unknown>, options: Ev
         const left = ev(n.left);
         if (n.op === '&&') return isTruthy(left) ? ev(n.right) : left;
         if (n.op === '||') return isTruthy(left) ? left : ev(n.right);
-        return left === null || left === undefined ? ev(n.right) : left;
+        return left ?? ev(n.right);
       }
       case 'cond':
         return isTruthy(ev(n.test)) ? ev(n.consequent) : ev(n.alternate);

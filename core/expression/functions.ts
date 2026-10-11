@@ -133,7 +133,7 @@ export const FUNCTIONS: Record<string, FunctionSpec> = {
     },
   },
   first: { min: 1, max: 1, fn: ([v]) => (isArr(v) && v.length > 0 ? v[0] : null) },
-  last: { min: 1, max: 1, fn: ([v]) => (isArr(v) && v.length > 0 ? v[v.length - 1] : null) },
+  last: { min: 1, max: 1, fn: ([v]) => (isArr(v) && v.length > 0 ? v.at(-1) : null) },
   unique: {
     min: 1,
     max: 1,

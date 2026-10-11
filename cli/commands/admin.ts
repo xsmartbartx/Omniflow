@@ -234,7 +234,6 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
     throw e;
   } finally {
     state.close();
-    void has;
   }
 }
 

@@ -118,7 +118,7 @@ export class RegistryService {
   }
 
   /** Validate, compile and review a manifest without persisting anything. */
-  inspect(tenant: string, text: string | unknown, origin: 'human' | 'agent' = 'human'): InspectResult {
+  inspect(tenant: string, text: unknown, origin: 'human' | 'agent' = 'human'): InspectResult {
     const compiled = compile(text, {
       environment: this.policy.environment,
       capabilities: this.caps,

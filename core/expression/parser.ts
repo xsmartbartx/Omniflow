@@ -26,24 +26,24 @@ function tokenize(src: string): Token[] {
       continue;
     }
     const start = i;
-    const prev = tokens[tokens.length - 1];
+    const prev = tokens.at(-1);
     const afterDot = prev?.type === 'punct' && prev.value === '.';
 
-    if (/[0-9]/.test(ch) && !afterDot) {
+    if (/\d/.test(ch) && !afterDot) {
       const m = /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(src.slice(i))!;
       i += m[0].length;
       tokens.push({ type: 'num', value: Number(m[0]), pos: start, end: i });
       continue;
     }
     // After a dot, a property name may contain hyphens (kebab-case step ids) and digits.
-    if (afterDot && /[A-Za-z0-9_]/.test(ch)) {
-      const m = /^[A-Za-z0-9_](?:[A-Za-z0-9_]|-(?=[A-Za-z0-9_]))*/.exec(src.slice(i))!;
+    if (afterDot && /\w/.test(ch)) {
+      const m = /^\w(?:\w|-(?=\w))*/.exec(src.slice(i))!;
       i += m[0].length;
       tokens.push({ type: 'ident', value: m[0], pos: start, end: i });
       continue;
     }
     if (/[A-Za-z_]/.test(ch)) {
-      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i))!;
+      const m = /^[A-Za-z_]\w*/.exec(src.slice(i))!;
       i += m[0].length;
       tokens.push({ type: 'ident', value: m[0], pos: start, end: i });
       continue;
@@ -74,9 +74,9 @@ function tokenize(src: string): Token[] {
           if (e === 'u') {
             const hex = src.slice(i + 2, i + 6);
             if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-              throw new ExpressionSyntaxError('Invalid \\u escape in string', i);
+              throw new ExpressionSyntaxError(String.raw`Invalid \u escape in string`, i);
             }
-            out += String.fromCharCode(Number.parseInt(hex, 16));
+            out += String.fromCodePoint(Number.parseInt(hex, 16));
             i += 6;
             continue;
           }

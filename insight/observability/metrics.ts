@@ -5,7 +5,8 @@
 
 type Labels = Record<string, string>;
 
-const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"');
+const esc = (v: string) =>
+  v.replaceAll('\\', String.raw`\\`).replaceAll('\n', String.raw`\n`).replaceAll('"', String.raw`\"`);
 const key = (labels: Labels) =>
   Object.entries(labels)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -77,17 +78,26 @@ export class MetricsRegistry {
 
   counter(name: string, help: string): Counter {
     let c = this.counters.get(name);
-    if (!c) this.counters.set(name, (c = new Counter(name, help)));
+    if (!c) {
+      c = new Counter(name, help);
+      this.counters.set(name, c);
+    }
     return c;
   }
   gauge(name: string, help: string): Gauge {
     let g = this.gauges.get(name);
-    if (!g) this.gauges.set(name, (g = new Gauge(name, help)));
+    if (!g) {
+      g = new Gauge(name, help);
+      this.gauges.set(name, g);
+    }
     return g;
   }
   histogram(name: string, help: string, buckets = DURATION_BUCKETS): Histogram {
     let h = this.histograms.get(name);
-    if (!h) this.histograms.set(name, (h = new Histogram(name, help, buckets)));
+    if (!h) {
+      h = new Histogram(name, help, buckets);
+      this.histograms.set(name, h);
+    }
     return h;
   }
 

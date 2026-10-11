@@ -122,7 +122,7 @@ interface ResolvedCap extends PlanCapabilityRef {
  * byte-identical plan and hash. All determinism rules of architecture §6.5 are enforced here
  * rather than left to authors.
  */
-export function compile(source: string | unknown, options: CompileOptions): CompileResult {
+export function compile(source: unknown, options: CompileOptions): CompileResult {
   const validation = validateManifest(source);
   if (!validation.ok || !validation.manifest) {
     return {
@@ -786,7 +786,7 @@ export function compile(source: string | unknown, options: CompileOptions): Comp
     triggers: normaliseTriggers(manifest.triggers),
     inputs: manifest.inputs,
     inputSchema: inputsToJsonSchema(manifest.inputs),
-    context: { ...(manifest.context ?? {}), ...(options.context ?? {}), environment: options.environment },
+    context: { ...manifest.context, ...options.context, environment: options.environment },
     steps: planSteps,
     guards: { pre: manifest.guards?.pre ?? [], invariants: manifest.guards?.invariants ?? [] },
     outputs: manifest.outputs ?? {},

@@ -131,7 +131,7 @@ export function matcher(term) {
   const re = new RegExp(
     t
       .split('*')
-      .map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .map((p) => p.replace(/[.+?^${}()|[\]\\]/g, String.raw`\$&`))
       .join('.*'),
   );
   return (text) => re.test(text);

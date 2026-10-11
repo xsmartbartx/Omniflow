@@ -134,7 +134,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     if (line === '' || line.startsWith('#')) continue;
     const skip = (reason: string) => result.skipped.push({ line: i + 1, source: line, reason });
 
-    const env = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    const env = /^([A-Za-z_]\w*)\s*=\s*(.*)$/.exec(line);
     if (env) {
       result.environment[env[1]!] = env[2]!.replace(/^["']|["']$/g, '');
       continue;
@@ -184,7 +184,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
       `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !needsShell(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`
         .replace(/-{2,}/g, '-')
         .replace(/-+$/, '');
-    for (let n = 2; used.has(name); n++) name = `${name.replace(/-\d+$/, '')}-${n}`;
+    for (let n = 2; used.has(name); ) name = `${name.replace(/-\d+$/, '')}-${n++}`;
     used.add(name);
 
     let argv: string[];

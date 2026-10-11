@@ -22,7 +22,7 @@ interface ShellOutput {
   durationMs: number;
 }
 
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const ENV_NAME = /^[A-Za-z_]\w{0,63}$/;
 const MAX_ARG = 8192;
 const MAX_ARGV_TOTAL = 128 * 1024;
 
@@ -185,9 +185,8 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
               truncated = true;
               const room = Math.max(0, max - cur.length);
               if (room > 0)
-                which === 'out'
-                  ? (out += chunk.subarray(0, room).toString('utf8'))
-                  : (err += chunk.subarray(0, room).toString('utf8'));
+                if (which === 'out') out += chunk.subarray(0, room).toString('utf8');
+                else err += chunk.subarray(0, room).toString('utf8');
               return;
             }
             if (which === 'out') out += chunk.toString('utf8');

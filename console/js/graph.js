@@ -34,7 +34,11 @@ export function layoutGraph(nodes, edges) {
   for (const id of ids) depth(id);
 
   const layers = [];
-  for (const id of ids) (layers[layer.get(id)] ??= []).push(id);
+  for (const id of ids) {
+    const l = layer.get(id);
+    layers[l] ??= [];
+    layers[l].push(id);
+  }
   for (let i = 0; i < layers.length; i++) layers[i] ??= [];
 
   // order within layers: a few barycentre sweeps to reduce crossings, ties broken by input order (stable)

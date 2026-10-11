@@ -11,7 +11,7 @@ type Schema = Record<string, unknown>;
 
 const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 const IDENT = '^[A-Za-z][A-Za-z0-9_]*$';
-const SEMVER = '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
+const SEMVER = String.raw`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$`;
 
 const str = (extra: Schema = {}): Schema => ({ type: 'string', maxLength: 4096, ...extra });
 const kebab = (): Schema => ({ type: 'string', pattern: KEBAB, maxLength: 64 });

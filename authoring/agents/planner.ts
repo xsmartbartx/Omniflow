@@ -168,7 +168,8 @@ function repairMessage(v: ValidationOutcome, blocking: NonNullable<ValidationOut
 
 /** Pull the sections out of a model reply. Tolerant of missing tags and of prose around the fenced block. */
 export function parseReply(text: string): { rationale: string; openQuestions: string[]; manifest?: string } {
-  const tag = (name: string) => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'i').exec(text)?.[1]?.trim() ?? '';
+  const tag = (name: string) =>
+    new RegExp(String.raw`<${name}>([\s\S]*?)</${name}>`, 'i').exec(text)?.[1]?.trim() ?? '';
   const fences = [...text.matchAll(/```([\w-]*)[ \t]*\n([\s\S]*?)```/g)]
     .filter((m) => /^(ya?ml)?$/i.test(m[1]!))
     .map((m) => m[2]!.trim());

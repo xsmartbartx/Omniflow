@@ -2,11 +2,9 @@ import { Cron } from 'croner';
 import {
   collectReferences,
   ExpressionSyntaxError,
-  hasTemplate,
   type Issue,
   isDuration,
   parseExpressionField,
-  parseTemplate,
   type Reference,
   scanTemplates,
   topologicalOrder,
@@ -57,7 +55,7 @@ const roots = (...r: string[]) => new Set(r);
 const BASE = ['inputs', 'context', 'run'] as const;
 
 /** Validate a manifest given as YAML/JSON text (with source positions) or an already-parsed object. */
-export function validateManifest(source: string | unknown, options: { maxBytes?: number } = {}): ManifestValidation {
+export function validateManifest(source: unknown, options: { maxBytes?: number } = {}): ManifestValidation {
   let value: unknown;
   let locate: Locator | undefined;
   const issues: Issue[] = [];
@@ -404,7 +402,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         if (s.default !== undefined && names.has(s.default)) {
           error([...p, 'default'], 'DEFAULT_COLLIDES_WITH_CASE', `default name '${s.default}' is also a case name`);
         }
-        const last = s.cases[s.cases.length - 1];
+        const last = s.cases.at(-1);
         const alwaysTrue = last !== undefined && /^\s*(\$\{\{\s*)?true(\s*\}\})?\s*$/.test(last.when);
         if (s.default === undefined && !alwaysTrue) {
           error(
@@ -583,7 +581,6 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
 
   /** Check every `${{ }}` inside a JSON-like value (or a plain string). */
   function checkValue(value: unknown, path: PathSegment[], scope: ExprScope) {
-    const base = formatPath(path);
     for (const found of scanTemplates(value, '')) {
       const rel = found.path;
       const full: PathSegment[] = [...path, ...relativeSegments(rel)];
@@ -595,8 +592,6 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         if (part.kind === 'expr') checkRefs(collectReferences(part.ast), full, scope);
       }
     }
-    // A bare string value is scanned under an empty base path; nothing more to do.
-    void base;
   }
 
   function relativeSegments(rel: string): PathSegment[] {
@@ -688,6 +683,3 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     }
   }
 }
-
-/** Re-exported for the compiler and tests. */
-export { hasTemplate, parseTemplate };

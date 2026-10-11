@@ -402,8 +402,8 @@ export class Orchestrator {
           error: { ...toErrorInfo(e), code: 'ORCHESTRATOR_ERROR', class: 'catastrophic', retryable: false },
         });
       }
-    } catch (inner) {
-      this.log.error('could not fail run after internal error', { runId, error: inner });
+    } catch (error_) {
+      this.log.error('could not fail run after internal error', { runId, error: error_ });
     }
   }
 
@@ -1383,9 +1383,7 @@ export class Orchestrator {
     const cur = this.st.runs.getRun(run.id)!;
     if (isTerminalRun(cur.status) || cur.status === 'compensating' || cur.status === 'queued') return;
     const all = [...recs.values()];
-    const active = all.some(
-      (s) => s.status === 'running' || s.status === 'retry-wait' || (s.status === 'pending' && false),
-    );
+    const active = all.some((s) => s.status === 'running' || s.status === 'retry-wait');
     let want: RunStatus = 'running';
     if (!active) {
       if (all.some((s) => s.status === 'waiting-approval')) want = 'waiting-approval';

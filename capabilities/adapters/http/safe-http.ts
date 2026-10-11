@@ -61,7 +61,7 @@ function agentFor(allowPrivate: boolean): Agent {
           dnsLookup(hostname, { ...options, all: true }, (err, addresses) => {
             if (err) return callback(err);
             const list = addresses as unknown as Array<{ address: string; family: number }>;
-            const bad = list.find((a) => !isAddressAllowed(a.address, allowPrivate));
+            const bad = list.some((a) => !isAddressAllowed(a.address, allowPrivate));
             if (bad || list.length === 0) {
               return callback(
                 Object.assign(new Error(`Refusing to connect to ${hostname}: blocked address`), {

@@ -161,7 +161,7 @@ export class WebhookDispatcher {
           if (ok) made++;
         }
       }
-      const advanced = events.length ? events[events.length - 1]!.seq : undefined;
+      const advanced = events.at(-1)?.seq;
       if (advanced !== undefined) this.st.kv.set(GLOBAL_TENANT, CURSOR_KEY, advanced);
     });
     return made;

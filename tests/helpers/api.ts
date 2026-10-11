@@ -63,7 +63,7 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
 
   const client = (auth: { cookie?: string; apiKey?: string }): Client => {
     const request: Client['request'] = async (method, url, o = {}) => {
-      const headers: Record<string, string> = { ...(o.headers ?? {}) };
+      const headers: Record<string, string> = { ...o.headers };
       if (auth.cookie) {
         headers.cookie = auth.cookie;
         if (method !== 'GET' && !o.noCsrf) headers['x-requested-with'] = 'constans';

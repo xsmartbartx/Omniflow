@@ -49,7 +49,7 @@ const splitRow = (line) =>
     .trim()
     .replace(/^\||\|$/g, '')
     .split(/(?<!\\)\|/)
-    .map((c) => c.trim().replace(/\\\|/g, '|'));
+    .map((c) => c.trim().replaceAll(String.raw`\|`, '|'));
 
 export function markdownToAst(src) {
   const lines = String(src ?? '')

@@ -6,11 +6,11 @@ import { describeCron } from '../agents/explainer.ts';
  * it cannot describe a workflow that does not exist, and it cannot drift from what actually executes.
  */
 
-const esc = (s: string) => s.replace(/"/g, '#quot;').replace(/[<>]/g, (c) => (c === '<' ? '#lt;' : '#gt;'));
+const esc = (s: string) => s.replaceAll('"', '#quot;').replaceAll(/[<>]/g, (c) => (c === '<' ? '#lt;' : '#gt;'));
 const cell = (s: unknown) =>
   String(s ?? '')
-    .replace(/\|/g, '\\|')
-    .replace(/\n/g, ' ');
+    .replaceAll('|', String.raw`\|`)
+    .replaceAll('\n', ' ');
 
 /** The plan as a Mermaid flowchart: shape = step kind, colour = effect, dotted = conditional, red = error route. */
 export function workflowMermaid(plan: Plan): string {

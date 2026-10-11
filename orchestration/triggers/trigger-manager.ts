@@ -259,7 +259,7 @@ export class TriggerManager {
 
   // ================================================================= webhooks
   private secretName(workflow: string, trigger: string): string {
-    return `WEBHOOK_${workflow}_${trigger}`.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 64);
+    return `WEBHOOK_${workflow}_${trigger}`.replaceAll(/\W/g, '_').slice(0, 64);
   }
 
   /** Create or replace a webhook's signing secret. The plaintext is returned once and never retrievable again. */

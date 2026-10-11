@@ -50,7 +50,7 @@ export interface RouteDef {
   raw?: boolean;
   /** Stricter per-IP rate limit bucket name. */
   limit?: 'login' | 'webhook' | 'sso';
-  handler: (ctx: Ctx) => unknown | Promise<unknown>;
+  handler: (ctx: Ctx) => unknown; // may return a promise; the route plumbing awaits it
 }
 
 // ------------------------------------------------------------------ errors
@@ -133,7 +133,7 @@ export function fromFastifyValidation(
   where: string,
 ): ValidationError {
   const issues: Issue[] = validation.map((v) => ({
-    path: `${where}${(v.instancePath ?? '').replace(/\//g, '.')}`.replace(/\.$/, ''),
+    path: `${where}${(v.instancePath ?? '').replaceAll('/', '.')}`.replace(/\.$/, ''),
     code: `SCHEMA_${(v.keyword ?? 'invalid').toUpperCase()}`,
     message:
       v.keyword === 'required'
@@ -263,7 +263,7 @@ export function registerRoutes(
         ? {
             // A body whose fields are all optional may be omitted entirely.
             preValidation: async (req: FastifyRequest) => {
-              if (req.body === undefined || req.body === null) req.body = {};
+              req.body ??= {};
             },
           }
         : {}),
@@ -277,15 +277,17 @@ export function registerRoutes(
 export function buildOpenApi(defs: RouteDef[], info: { version: string }): object {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const d of defs) {
-    const url = d.url.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+    const url = d.url.replaceAll(/:(\w+)/g, '{$1}');
     const params: unknown[] = [];
-    for (const name of [...d.url.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]!)) {
+    for (const name of [...d.url.matchAll(/:(\w+)/g)].map((m) => m[1]!)) {
       params.push({ name, in: 'path', required: true, schema: { type: 'string' } });
     }
     const q = d.schema?.querystring as { properties?: Record<string, unknown>; required?: string[] } | undefined;
     for (const [name, schema] of Object.entries(q?.properties ?? {}))
       params.push({ name, in: 'query', required: q?.required?.includes(name) ?? false, schema });
-    (paths[url] ??= {})[d.method.toLowerCase()] = {
+    paths[url] ??= {};
+    const pathItem = paths[url];
+    pathItem[d.method.toLowerCase()] = {
       summary: d.summary,
       tags: [d.tag],
       operationId: `${d.method.toLowerCase()}${url.replace(/[^A-Za-z0-9]+(.)?/g, (_m, c: string | undefined) => (c ?? '').toUpperCase())}`,
