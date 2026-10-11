@@ -268,6 +268,8 @@ export const approvalGates: Rule = (input, t) => {
     const finished = decided + a.timedOut;
     const where = `${a.workflow} › ${a.stepId}`;
     if (a.denied === 0 && a.timedOut === 0 && a.approved >= t.rubberStampMinApprovals) {
+      const slow =
+        a.medianDecisionMs === null ? '' : ` and takes people about ${humanMs(a.medianDecisionMs)} to answer`;
       out.push({
         rule: 'approval-rubber-stamp',
         severity: 'low',
@@ -275,7 +277,7 @@ export const approvalGates: Rule = (input, t) => {
         stepId: a.stepId,
         key: `approval-rubber-stamp:${a.workflow}:${a.stepId}`,
         title: `Approval '${a.stepId}' was approved ${a.approved} times out of ${a.approved}`,
-        summary: `${where} has never been denied${a.medianDecisionMs !== null ? ` and takes people about ${humanMs(a.medianDecisionMs)} to answer` : ''}. It may be adding delay without adding safety.`,
+        summary: `${where} has never been denied${slow}. It may be adding delay without adding safety.`,
         recommendation: `Consider replacing the gate with a policy rule that only asks for approval in the risky cases (e.g. above a threshold), or with an autonomy tier.`,
         evidence: { approved: a.approved, medianDecisionMs: a.medianDecisionMs },
       });
@@ -406,13 +408,14 @@ export const unexercisedCompensation: Rule = (input, t) => {
       (s) => (wf.steps.get(s.id)?.compensated ?? 0) + (wf.steps.get(s.id)?.compensationFailed ?? 0) > 0,
     );
     if (exercised) continue;
+    const steps = compensable.map((s) => `'${s.id}'`).join(', ');
     out.push({
       rule: 'unexercised-compensation',
       severity: 'info',
       workflow: wf.name,
       key: `unexercised-compensation:${wf.name}`,
       title: `Compensation in '${wf.name}' has never run`,
-      summary: `${wf.name} declares compensation for ${compensable.map((s) => `'${s.id}'`).join(', ')}, but none has run in ${wf.runs.total} runs. Rollback that has never been exercised may not work when it is needed.`,
+      summary: `${wf.name} declares compensation for ${steps}, but none has run in ${wf.runs.total} runs. Rollback that has never been exercised may not work when it is needed.`,
       recommendation: `Rehearse it: run the workflow in staging with a failure injected after the compensable step and confirm the rollback does what you expect.`,
       evidence: { compensableSteps: compensable.map((s) => s.id), runs: wf.runs.total },
     });

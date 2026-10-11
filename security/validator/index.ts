@@ -9,6 +9,7 @@ export {
 export {
   checkSchemaDefinition,
   didYouMean,
+  suggestion,
   type SchemaResult,
   type ValueResult,
   validateAgainstSchema,

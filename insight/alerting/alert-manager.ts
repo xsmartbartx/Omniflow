@@ -223,11 +223,12 @@ export class AlertManager {
         status: ['failed', 'rolled-back', 'compensation-failed'],
         limit: 1,
       })[0];
+      const latest = last?.error ? ` Latest error: ${last.error.code} — ${last.error.message}` : '';
       out.push({
         key: `workflow-failing:${o.workflow}`,
         severity: ratio(o.failed, o.finished) >= 0.8 ? 'critical' : 'warning',
         title: `${o.workflow} is failing`,
-        message: `${o.failed} of ${o.finished} runs failed in the last ${humanMs(this.cfg.failureWindowMs)} (${pct(ratio(o.failed, o.finished))}).${last?.error ? ` Latest error: ${last.error.code} — ${last.error.message}` : ''}`,
+        message: `${o.failed} of ${o.finished} runs failed in the last ${humanMs(this.cfg.failureWindowMs)} (${pct(ratio(o.failed, o.finished))}).${latest}`,
       });
     }
 
@@ -315,5 +316,6 @@ export function formatAlert(alert: Alert, event: AlertEvent): string {
   let tag = alert.severity.toUpperCase();
   if (event === 'resolved') tag = 'RESOLVED';
   else if (event === 'reminder') tag = `STILL ${tag}`;
-  return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(Constans, tenant ${alert.tenant})`;
+  const body = event === 'resolved' ? '' : `\n${alert.message}`;
+  return `[${tag}] ${alert.title}${body}\n(Constans, tenant ${alert.tenant})`;
 }

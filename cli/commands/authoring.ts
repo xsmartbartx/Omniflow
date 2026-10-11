@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { flag, has, UsageError } from '../args.ts';
+import { flag, has, queryFlag, UsageError } from '../args.ts';
 import { type CliContext, client, emit, need } from '../context.ts';
 import { ago, table } from '../format.ts';
 
@@ -9,13 +9,17 @@ import { ago, table } from '../format.ts';
 function summarise(ctx: CliContext, draft: any): string[] {
   const s = ctx.style;
   const v = draft.validation ?? {};
-  const lines = [
-    `${v.ok ? s.green('✓ valid') : s.red('✗ not valid yet')}${v.risk ? `  risk ${v.risk.level} (${v.risk.score})` : ''}  ${s.dim(draft.id)}`,
-  ];
-  for (const e of (v.errors ?? []).slice(0, 8))
-    lines.push(`  ${s.red('error')}${s.dim(`[${e.code}]`)} ${e.path ? `${e.path}: ` : ''}${e.message}`);
-  for (const f of (v.risk?.findings ?? []).filter((x: any) => x.blocking))
-    lines.push(`  ${s.red('blocking')}${s.dim(`[${f.ruleId}]`)} ${f.message}`);
+  const risk = v.risk ? `  risk ${v.risk.level} (${v.risk.score})` : '';
+  const lines = [`${v.ok ? s.green('✓ valid') : s.red('✗ not valid yet')}${risk}  ${s.dim(draft.id)}`];
+  for (const e of (v.errors ?? []).slice(0, 8)) {
+    const where = e.path ? `${e.path}: ` : '';
+    const code = s.dim(`[${e.code}]`);
+    lines.push(`  ${s.red('error')}${code} ${where}${e.message}`);
+  }
+  for (const f of (v.risk?.findings ?? []).filter((x: any) => x.blocking)) {
+    const rule = s.dim(`[${f.ruleId}]`);
+    lines.push(`  ${s.red('blocking')}${rule} ${f.message}`);
+  }
   return lines;
 }
 
@@ -72,7 +76,7 @@ export async function draftsCommand(ctx: CliContext): Promise<number> {
   const api = client(ctx);
   const s = ctx.style;
   if (sub === 'list') {
-    const r = await api.get(`/v1/drafts${flag(ctx.args, 'status') ? `?status=${flag(ctx.args, 'status')}` : ''}`);
+    const r = await api.get(`/v1/drafts${queryFlag(ctx.args, 'status')}`);
     emit(ctx, r.items, () =>
       r.items.length === 0
         ? 'No drafts.'
@@ -128,11 +132,12 @@ export async function draftsCommand(ctx: CliContext): Promise<number> {
         `${path}/submit`,
         has(ctx.args, 'canary') ? { canaryPercent: Number(flag(ctx.args, 'canary')) } : {},
       );
-      emit(ctx, r, () =>
-        r.status === 'published'
-          ? `${s.green('✓')} published ${s.bold(`${r.version.name}@${r.version.version}`)}`
-          : `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`,
-      );
+      emit(ctx, r, () => {
+        if (r.status !== 'published')
+          return `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`;
+        const ref = s.bold(`${r.version.name}@${r.version.version}`);
+        return `${s.green('✓')} published ${ref}`;
+      });
       return 0;
     }
     case 'apply': {
@@ -200,10 +205,12 @@ export async function importCommand(ctx: CliContext): Promise<number> {
     }
   }
   emit(ctx, r, () => {
-    const out = r.drafts.map(
-      (d: any) =>
-        `${s.bold(d.draft.workflowName ?? '?')}  ${d.draft.validation?.ok ? s.green('valid') : s.red('invalid')}  ${s.dim(`line ${d.line}`)}  ${s.dim(d.draft.id)}\n${d.notes.map((n: string) => `    - ${n}`).join('\n')}`,
-    );
+    const out = r.drafts.map((d: any) => {
+      const validity = d.draft.validation?.ok ? s.green('valid') : s.red('invalid');
+      const notes = d.notes.map((n: string) => `    - ${n}`).join('\n');
+      const line = s.dim(`line ${d.line}`);
+      return `${s.bold(d.draft.workflowName ?? '?')}  ${validity}  ${line}  ${s.dim(d.draft.id)}\n${notes}`;
+    });
     for (const k of r.skipped) out.push(`${s.yellow('skipped')} line ${k.line}: ${k.reason}`);
     if (dir)
       out.push(
@@ -222,9 +229,7 @@ export async function explainCommand(ctx: CliContext): Promise<number> {
     throw new UsageError('Usage: constans explain workflow <name> [--version v]\n       constans explain run <run-id>');
   const api = client(ctx);
   if (kind === 'workflow') {
-    const e = await api.get(
-      `/v1/workflows/${encodeURIComponent(target)}/explain${flag(ctx.args, 'version') ? `?version=${encodeURIComponent(flag(ctx.args, 'version')!)}` : ''}`,
-    );
+    const e = await api.get(`/v1/workflows/${encodeURIComponent(target)}/explain${queryFlag(ctx.args, 'version')}`);
     emit(ctx, e, () => e.markdown);
   } else {
     const e = await api.get(`/v1/runs/${encodeURIComponent(target)}/explain`);

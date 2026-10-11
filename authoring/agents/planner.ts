@@ -159,10 +159,15 @@ export class Planner {
 
 function repairMessage(v: ValidationOutcome, blocking: NonNullable<ValidationOutcome['risk']>['findings']): string {
   const lines: string[] = [];
-  for (const e of v.errors.slice(0, 20))
-    lines.push(`- [${e.code}] ${e.path ? `${e.path}: ` : ''}${e.message}${e.line ? ` (line ${e.line})` : ''}`);
-  for (const f of blocking.slice(0, 10))
-    lines.push(`- [risk:${f.ruleId}] ${f.message}${f.stepId ? ` (step ${f.stepId})` : ''}`);
+  for (const e of v.errors.slice(0, 20)) {
+    const where = e.path ? `${e.path}: ` : '';
+    const at = e.line ? ` (line ${e.line})` : '';
+    lines.push(`- [${e.code}] ${where}${e.message}${at}`);
+  }
+  for (const f of blocking.slice(0, 10)) {
+    const step = f.stepId ? ` (step ${f.stepId})` : '';
+    lines.push(`- [risk:${f.ruleId}] ${f.message}${step}`);
+  }
   return `The validator rejected that manifest:\n${lines.join('\n')}\n\nFix these problems and reply again in the same format with the COMPLETE corrected manifest. Do not remove functionality to make errors go away, and do not invent capabilities.`;
 }
 

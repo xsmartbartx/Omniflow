@@ -134,6 +134,8 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
       const state = states[n.id];
       const title = d.name ?? d.id;
       const sub = d.capability ?? KIND_LABEL[d.type] ?? d.type;
+      const stateSuffix = state ? ` — ${state}` : '';
+      const capabilitySuffix = d.capability ? ` — ${d.capability}` : '';
       const g = svg(
         'g',
         {
@@ -147,9 +149,9 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
           transform: `translate(${n.x}, ${n.y})`,
           tabindex: onSelect ? 0 : undefined,
           role: onSelect ? 'button' : undefined,
-          'aria-label': `${title}${state ? `, ${state}` : ''}`,
+          'aria-label': state ? `${title}, ${state}` : title,
         },
-        svg('title', {}, `${d.id}${d.capability ? ` — ${d.capability}` : ''}${state ? ` — ${state}` : ''}`),
+        svg('title', {}, `${d.id}${capabilitySuffix}${stateSuffix}`),
         svg('rect', { width: n.w, height: n.h, rx: d.type === 'branch' ? 26 : 9, class: 'dag-box' }),
         svg('text', { x: n.w / 2, y: 22, class: 'dag-title', 'text-anchor': 'middle' }, clip(title, 24)),
         svg(

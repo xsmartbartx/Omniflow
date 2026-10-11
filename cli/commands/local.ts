@@ -129,15 +129,16 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
     for (const i of [...r.errors, ...r.warnings]) ctx.err(`${renderIssue(s, r.file, r.source, i)}\n\n`);
     if (r.risk) {
       for (const f of r.risk.findings.filter((x) => x.blocking || x.severity === 'high' || x.severity === 'critical')) {
-        ctx.err(
-          `${f.blocking ? s.red('blocking') : s.yellow('risk')}${s.dim(`[${f.ruleId}]`)}: ${f.message}${f.stepId ? s.dim(` (step ${f.stepId})`) : ''}\n\n`,
-        );
+        const rule = s.dim(`[${f.ruleId}]`);
+        const step = f.stepId ? s.dim(` (step ${f.stepId})`) : '';
+        ctx.err(`${f.blocking ? s.red('blocking') : s.yellow('risk')}${rule}: ${f.message}${step}\n\n`);
       }
     }
     if (r.planHash) {
       const okMark = r.ok ? s.green('✓') : s.red('✗');
+      const ref = s.bold(`${r.workflow}@${r.version}`);
       ctx.out(
-        `${okMark} ${s.bold(`${r.workflow}@${r.version}`)}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`,
+        `${okMark} ${ref}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`,
       );
     } else {
       ctx.out(`${s.red('✗')} ${r.file}  ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}\n`);
@@ -173,9 +174,11 @@ export async function compileCommand(ctx: CliContext): Promise<number> {
       st.effect ?? '—',
       st.dependsOn.join(', ') || '—',
     ]);
+    const ref = s.bold(`${plan.workflow.name}@${plan.workflow.version}`);
+    const written = outFile ? ` · written to ${outFile}` : '';
     return [
-      `${s.bold(`${plan.workflow.name}@${plan.workflow.version}`)}  ${s.dim(r.planHash!)}`,
-      `criticality ${plan.workflow.criticality} · max cost ${plan.analysis.maxCost} · ${plan.steps.length} steps${outFile ? ` · written to ${outFile}` : ''}`,
+      `${ref}  ${s.dim(r.planHash!)}`,
+      `criticality ${plan.workflow.criticality} · max cost ${plan.analysis.maxCost} · ${plan.steps.length} steps${written}`,
       '',
       table(rows, ['#', 'STEP', 'TYPE', 'CAPABILITY', 'EFFECT', 'DEPENDS ON'], s),
     ].join('\n');
@@ -227,7 +230,8 @@ export async function devCommand(ctx: CliContext): Promise<number> {
     if (published.status !== 'published')
       throw new UsageError('Publishing was held for approval, which `dev` cannot grant. Check your policy files.');
     const wf = published.version.name;
-    ctx.err(`${s.dim(`published ${wf}@${published.version.version} (ephemeral)`)}\n`);
+    const note = s.dim(`published ${wf}@${published.version.version} (ephemeral)`);
+    ctx.err(`${note}\n`);
 
     const started = Date.now();
     const trig = app.runs.trigger({
@@ -274,9 +278,8 @@ export async function devCommand(ctx: CliContext): Promise<number> {
         const key = `${step.stepId}:${step.status}`;
         if (printed.has(key) || !['succeeded', 'failed', 'skipped', 'cancelled'].includes(step.status)) continue;
         printed.add(key);
-        (ctx.json ? ctx.err : ctx.out)(
-          `  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${step.error ? s.dim(`  ${step.error.message}`) : ''}\n`,
-        );
+        const failure = step.error ? s.dim(`  ${step.error.message}`) : '';
+        (ctx.json ? ctx.err : ctx.out)(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${failure}\n`);
       }
     };
 

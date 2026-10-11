@@ -50,7 +50,6 @@ if (process.argv.includes('--check')) {
   console.log('THIRD_PARTY_NOTICES.md is up to date');
 } else {
   writeFileSync(out, text);
-  console.log(
-    `wrote THIRD_PARTY_NOTICES.md (${rows.length} packages${odd.length ? `, ${odd.length} need review` : ''})`,
-  );
+  const review = odd.length ? `, ${odd.length} need review` : '';
+  console.log(`wrote THIRD_PARTY_NOTICES.md (${rows.length} packages${review})`);
 }

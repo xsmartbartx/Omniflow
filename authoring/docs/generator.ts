@@ -3,6 +3,11 @@ import { describeCron } from '../agents/explainer.ts';
 
 type Trigger = Plan['triggers'][number];
 
+/** Inline code in Markdown. */
+const code = (s: string) => `\`${s}\``;
+
+const findingStep = (stepId: string | undefined) => (stepId ? ` (${code(stepId)})` : '');
+
 /** The second line of a diagram node: what the step is. */
 const stepKind = (s: PlanStep): string => {
   if (s.type === 'capability' && s.capability) return `${s.capability.name}`;
@@ -83,7 +88,8 @@ export function workflowMermaid(plan: Plan): string {
   const label = (s: PlanStep): string => {
     const head = esc(s.name ?? s.id);
     const sub = stepKind(s);
-    return `${head}<br/><small>${esc(sub)}${s.compensate ? ' · compensable' : ''}${s.sunset ? ` · sunset ${s.sunset}` : ''}</small>`;
+    const sunset = s.sunset ? ` · sunset ${s.sunset}` : '';
+    return `${head}<br/><small>${esc(sub)}${s.compensate ? ' · compensable' : ''}${sunset}</small>`;
   };
 
   lines.push('  start(["trigger"])');
@@ -131,11 +137,12 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
   const out: string[] = [`# ${w.name}`, ''];
   if (w.description) out.push(w.description, '');
+  const team = w.team ? ` (${cell(w.team)})` : '';
   out.push(
     '| | |',
     '|---|---|',
     `| Version | ${w.version} |`,
-    `| Owner | ${cell(w.owner)}${w.team ? ` (${cell(w.team)})` : ''} |`,
+    `| Owner | ${cell(w.owner)}${team} |`,
     `| Criticality | ${w.criticality} |`,
     ...(ctx.settings ? [`| State | ${stateWord(ctx.settings)} · autonomy ${ctx.settings.autonomyTier} |`] : []),
     `| Size | ${plan.analysis.stepCount} steps · depth ${plan.analysis.depth} · worst-case cost ${plan.analysis.maxCost} |`,
@@ -157,10 +164,10 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   if (inputs.length === 0) out.push('_None._');
   else {
     out.push('| Name | Type | Required | Default | Description |', '|---|---|---|---|---|');
-    for (const [k, v] of inputs)
-      out.push(
-        `| \`${k}\` | ${v.type} | ${v.required ? 'yes' : 'no'} | ${v.default === undefined ? '' : `\`${cell(JSON.stringify(v.default))}\``} | ${cell(v.description)} |`,
-      );
+    for (const [k, v] of inputs) {
+      const def = v.default === undefined ? '' : code(cell(JSON.stringify(v.default)));
+      out.push(`| ${code(k)} | ${v.type} | ${v.required ? 'yes' : 'no'} | ${def} | ${cell(v.description)} |`);
+    }
   }
   out.push(
     '',
@@ -170,8 +177,12 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     '|---|---|---|---|---|---|---|---|---|',
   );
   for (const s of ordered) {
+    const capability = s.capability ? `${s.capability.name}@${s.capability.version}` : '';
+    const dependsOn = s.dependsOn.map(code).join(', ');
+    const timeout = s.timeoutMs ? `${s.timeoutMs / 1000}s` : '';
+    const undo = s.compensate ? code(s.compensate.capability.name) : '';
     out.push(
-      `| ${s.order + 1} | \`${s.id}\` | ${s.type} | ${s.capability ? `${s.capability.name}@${s.capability.version}` : ''} | ${s.effect ?? ''} | ${s.dependsOn.map((d) => `\`${d}\``).join(', ')} | ${s.timeoutMs ? `${s.timeoutMs / 1000}s` : ''} | ${s.retry ? s.retry.attempts - 1 : 0} | ${s.compensate ? `\`${s.compensate.capability.name}\`` : ''} |`,
+      `| ${s.order + 1} | ${code(s.id)} | ${s.type} | ${capability} | ${s.effect ?? ''} | ${dependsOn} | ${timeout} | ${s.retry ? s.retry.attempts - 1 : 0} | ${undo} |`,
     );
   }
   const a = plan.analysis;
@@ -182,7 +193,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     `- Effects: ${Object.entries(a.effects)
       .map(([k, v]) => `${v} ${k}`)
       .join(', ')}`,
-    `- Scopes required: ${a.scopes.length ? a.scopes.map((s) => `\`${s}\``).join(', ') : 'none'}`,
+    `- Scopes required: ${a.scopes.length ? a.scopes.map(code).join(', ') : 'none'}`,
     `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside Constans'}`,
     `- Data sensitivity: ${a.maxSensitivity}`,
     `- Approval gates: ${a.hasApproval ? 'yes' : 'no'} · compensation: ${a.hasCompensation ? 'yes' : 'no'}`,
@@ -191,7 +202,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
     out.push('', `## Risk review — ${ctx.risk.level} (${ctx.risk.score}/100)`, '');
     out.push(
       ...(ctx.risk.findings.length
-        ? ctx.risk.findings.map((f) => `- **${f.severity}** ${f.message}${f.stepId ? ` (\`${f.stepId}\`)` : ''}`)
+        ? ctx.risk.findings.map((f) => `- **${f.severity}** ${f.message}${findingStep(f.stepId)}`)
         : ['_No findings._']),
     );
   }

@@ -232,7 +232,8 @@ function loadPolicies(app: Constans): void {
     .sort()) {
     const res = parsePolicyDocument(readFileSync(join(policyDir, file), 'utf8'));
     if (!res.ok || !res.document) {
-      throw new Error(`Invalid policy file ${file}: ${res.issues.map((i) => `${i.path} ${i.message}`).join('; ')}`);
+      const problems = res.issues.map((i) => `${i.path} ${i.message}`).join('; ');
+      throw new Error(`Invalid policy file ${file}: ${problems}`);
     }
     docs.push(res.document);
   }

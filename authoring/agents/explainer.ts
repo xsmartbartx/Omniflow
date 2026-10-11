@@ -52,8 +52,10 @@ export function describeCron(expr: string, timezone?: string): string {
   if (time && dom === '*' && mon === '*' && dow === '1-5') return `every weekday at ${time}${tz}`;
   if (time && num(dom) && mon === '*' && dow === '*')
     return `on the ${ordinal(Number(dom))} of every month at ${time}${tz}`;
-  if (time && num(dom) && num(mon) && dow === '*')
-    return `every ${MONTHS[Number(mon) - 1] ?? `month ${mon}`} ${ordinal(Number(dom))} at ${time}${tz}`;
+  if (time && num(dom) && num(mon) && dow === '*') {
+    const month = MONTHS[Number(mon) - 1] ?? `month ${mon}`;
+    return `every ${month} ${ordinal(Number(dom))} at ${time}${tz}`;
+  }
   return `on the cron schedule \`${expr}\`${tz}`;
 }
 
@@ -128,8 +130,10 @@ function describeTrigger(t: Plan['triggers'][number]): string {
       return describeCron(t.cron, t.timezone);
     case 'webhook':
       return `when an external system calls its webhook “${t.name}”`;
-    case 'event':
-      return `when a “${t.event}” event is published${t.filter ? ` and \`${t.filter}\` holds` : ''}`;
+    case 'event': {
+      const holds = t.filter ? ` and \`${t.filter}\` holds` : '';
+      return `when a “${t.event}” event is published${holds}`;
+    }
     case 'workflow-completion':
       return `after the workflow “${t.workflow}” ${COMPLETION_VERB[t.status ?? ''] ?? 'succeeds'}`;
   }
@@ -144,27 +148,32 @@ function describeStep(s: PlanStep, plan: Plan): string {
     case 'capability':
       parts.push(`**${title}** — uses the \`${s.capability?.name}\` capability${effectNote(s.effect)}.`);
       break;
-    case 'branch':
-      parts.push(
-        `**${title}** — chooses a path: ${s.cases?.map((c) => `“${c.name}” when \`${c.when}\``).join(', ')}${s.default ? `, otherwise “${s.default}”` : ''}.`,
-      );
+    case 'branch': {
+      const cases = s.cases?.map((c) => `“${c.name}” when \`${c.when}\``).join(', ');
+      const otherwise = s.default ? `, otherwise “${s.default}”` : '';
+      parts.push(`**${title}** — chooses a path: ${cases}${otherwise}.`);
       break;
+    }
     case 'parallel':
       parts.push(`**${title}** — waits for ${s.join === 'any' ? 'the first of' : 'all of'} its branches.`);
       break;
-    case 'map':
+    case 'map': {
+      const atATime = s.concurrency ? `, ${s.concurrency} at a time` : '';
       parts.push(
-        `**${title}** — repeats \`${s.capability?.name ?? 'a capability'}\` for each item in \`${s.items}\` (at most ${s.maxItems}${s.concurrency ? `, ${s.concurrency} at a time` : ''}).`,
+        `**${title}** — repeats \`${s.capability?.name ?? 'a capability'}\` for each item in \`${s.items}\` (at most ${s.maxItems}${atATime}).`,
       );
       break;
+    }
     case 'approval':
       parts.push(
         `**${title}** — pauses for a person to approve: “${s.message}”. ${timeoutNote(s.onTimeout)} after ${humanMs(s.timeoutMs)}.`,
       );
       break;
-    case 'wait':
-      parts.push(`**${title}** — waits ${s.until ? `for the “${s.until.event}” event` : humanMs(s.durationMs ?? 0)}.`);
+    case 'wait': {
+      const until = s.until ? `for the “${s.until.event}” event` : humanMs(s.durationMs ?? 0);
+      parts.push(`**${title}** — waits ${until}.`);
       break;
+    }
     case 'subworkflow':
       parts.push(`**${title}** — runs the workflow “${s.workflow}” version ${s.version} and waits for it.`);
       break;
@@ -202,14 +211,17 @@ export function explainPlan(plan: Plan): PlanExplanation {
     safeguards.push(
       `After every step it keeps checking: ${plan.guards.invariants.map((g) => g.message ?? g.name).join('; ')}. A violation stops the run.`,
     );
-  if (plan.policy.maxRunCost !== undefined)
+  if (plan.policy.maxRunCost !== undefined) {
+    const daily =
+      plan.policy.maxDailyCost !== undefined ? ` and the workflow at ${plan.policy.maxDailyCost} per day` : '';
+    safeguards.push(`A single run is capped at ${plan.policy.maxRunCost} cost units${daily}.`);
+  }
+  if (plan.policy.concurrency) {
+    const extras = plan.policy.concurrencyPolicy === 'skip' ? '; extra triggers are skipped' : '; extras wait in line';
     safeguards.push(
-      `A single run is capped at ${plan.policy.maxRunCost} cost units${plan.policy.maxDailyCost !== undefined ? ` and the workflow at ${plan.policy.maxDailyCost} per day` : ''}.`,
+      `At most ${plan.policy.concurrency} ${plural(plan.policy.concurrency, 'run', 'runs')} at a time${extras}.`,
     );
-  if (plan.policy.concurrency)
-    safeguards.push(
-      `At most ${plan.policy.concurrency} run${plan.policy.concurrency === 1 ? '' : 's'} at a time${plan.policy.concurrencyPolicy === 'skip' ? '; extra triggers are skipped' : '; extras wait in line'}.`,
-    );
+  }
   if (plan.policy.dedupKey) safeguards.push('Duplicate triggers within a short window are ignored.');
   if (ordered.some((s) => s.type === 'approval'))
     safeguards.push('A person must approve before it proceeds past the approval step.');
@@ -218,8 +230,9 @@ export function explainPlan(plan: Plan): PlanExplanation {
   const effectful = ordered.filter((s) => s.effect === 'effectful');
   if (effectful.length) {
     const uncompensated = effectful.filter((s) => !s.compensate);
+    const quote = (s: PlanStep) => `“${s.name ?? s.id}”`;
     risks.push(
-      `${effectful.length} step${effectful.length === 1 ? ' changes' : 's change'} things outside Constans (${effectful.map((s) => `“${s.name ?? s.id}”`).join(', ')}).`,
+      `${effectful.length} ${effectful.length === 1 ? 'step changes' : 'steps change'} things outside Constans (${effectful.map(quote).join(', ')}).`,
     );
     if (uncompensated.length === effectful.length)
       risks.push(
@@ -227,7 +240,7 @@ export function explainPlan(plan: Plan): PlanExplanation {
       );
     else if (uncompensated.length)
       risks.push(
-        `${uncompensated.map((s) => `“${s.name ?? s.id}”`).join(', ')} cannot be undone automatically, so a failure after ${uncompensated.length === 1 ? 'it' : 'them'} needs a person to clean up.`,
+        `${uncompensated.map(quote).join(', ')} cannot be undone automatically, so a failure after ${uncompensated.length === 1 ? 'it' : 'them'} needs a person to clean up.`,
       );
   }
   if (a.families.includes('shell'))
@@ -236,9 +249,10 @@ export function explainPlan(plan: Plan): PlanExplanation {
     risks.push(`It handles ${a.maxSensitivity} data.`);
   if (a.egress.length) risks.push(`It can contact: ${a.egress.join(', ')}.`);
 
+  const intro = w.description ? `${w.description.replace(/\.?$/, '.')} ` : '';
   const summary = [
-    `${w.description ? `${w.description.replace(/\.?$/, '.')} ` : ''}`,
-    `It runs ${triggers.length ? triggers.join(', or ') : 'only when started manually'} and has ${ordered.length} step${ordered.length === 1 ? '' : 's'}.`,
+    intro,
+    `It runs ${triggers.length ? triggers.join(', or ') : 'only when started manually'} and has ${ordered.length} ${plural(ordered.length, 'step', 'steps')}.`,
     effectful.length
       ? ` It changes things in ${effectful.length} of them.`
       : ' It only reads and computes; it changes nothing outside Constans.',
@@ -258,7 +272,8 @@ export function explainPlan(plan: Plan): PlanExplanation {
   md.push('', '## What it does', ...steps.map((s, i) => `${i + 1}. ${s.text}`));
   if (safeguards.length) md.push('', '## Safeguards', ...safeguards.map((x) => `- ${x}`));
   if (risks.length) md.push('', '## Things to know', ...risks.map((x) => `- ${x}`));
-  md.push('', `_Owner: ${w.owner}${w.team ? ` (${w.team})` : ''} · criticality ${w.criticality}_`);
+  const team = w.team ? ` (${w.team})` : '';
+  md.push('', `_Owner: ${w.owner}${team} · criticality ${w.criticality}_`);
 
   return {
     title: `${w.name} ${w.version}`,
@@ -341,21 +356,26 @@ export function explainRun(input: {
   );
   const narrative: string[] = [];
   const took = dur(run.startedAt, run.finishedAt);
+  const canary = run.canary ? ' (canary version)' : '';
   narrative.push(
-    `${run.dryRun ? 'Dry run of' : 'Run of'} ${run.workflowName} ${run.workflowVersion}, started by ${startedBy(run)}${run.canary ? ' (canary version)' : ''}.`,
+    `${run.dryRun ? 'Dry run of' : 'Run of'} ${run.workflowName} ${run.workflowVersion}, started by ${startedBy(run)}${canary}.`,
   );
 
   for (const s of ordered) {
     const n = name(s.stepId);
     switch (s.status) {
-      case 'succeeded':
-        narrative.push(
-          `“${n}” succeeded${s.attempt > 1 ? ` on attempt ${s.attempt}` : ''}${dur(s.startedAt, s.finishedAt) ? ` in ${dur(s.startedAt, s.finishedAt)}` : ''}.`,
-        );
+      case 'succeeded': {
+        const onAttempt = s.attempt > 1 ? ` on attempt ${s.attempt}` : '';
+        const stepTook = dur(s.startedAt, s.finishedAt);
+        const inTime = stepTook ? ` in ${stepTook}` : '';
+        narrative.push(`“${n}” succeeded${onAttempt}${inTime}.`);
         break;
-      case 'skipped':
-        narrative.push(`“${n}” was skipped${s.skippedReason ? ` (${s.skippedReason})` : ''}.`);
+      }
+      case 'skipped': {
+        const why = s.skippedReason ? ` (${s.skippedReason})` : '';
+        narrative.push(`“${n}” was skipped${why}.`);
         break;
+      }
       case 'failed': {
         const attempts = s.attempt > 1 ? ` after ${s.attempt} attempts` : '';
         narrative.push(
@@ -369,14 +389,16 @@ export function explainRun(input: {
       case 'waiting-event':
         narrative.push(`“${n}” is waiting for the “${s.waitEvent}” event.`);
         break;
-      case 'waiting-timer':
-        narrative.push(`“${n}” is waiting for a timer${s.wakeAt ? ` until ${s.wakeAt}` : ''}.`);
+      case 'waiting-timer': {
+        const until = s.wakeAt ? ` until ${s.wakeAt}` : '';
+        narrative.push(`“${n}” is waiting for a timer${until}.`);
         break;
-      case 'retry-wait':
-        narrative.push(
-          `“${n}” failed and will be retried${s.wakeAt ? ` at ${s.wakeAt}` : ''} (attempt ${s.attempt} so far).`,
-        );
+      }
+      case 'retry-wait': {
+        const at = s.wakeAt ? ` at ${s.wakeAt}` : '';
+        narrative.push(`“${n}” failed and will be retried${at} (attempt ${s.attempt} so far).`);
         break;
+      }
       case 'running':
         narrative.push(`“${n}” is running now.`);
         break;
@@ -387,16 +409,16 @@ export function explainRun(input: {
         break;
     }
     if (s.compensationStatus === 'done') narrative.push(`“${n}” was undone (compensated) after the failure.`);
-    else if (s.compensationStatus === 'failed')
-      narrative.push(
-        `Undoing “${n}” FAILED${s.compensationError ? `: ${s.compensationError.message}` : ''}. This needs a person to clean up.`,
-      );
+    else if (s.compensationStatus === 'failed') {
+      const why = s.compensationError ? `: ${s.compensationError.message}` : '';
+      narrative.push(`Undoing “${n}” FAILED${why}. This needs a person to clean up.`);
+    }
   }
   for (const a of approvals) {
-    if (a.status !== 'pending')
-      narrative.push(
-        `Approval “${a.stepId}” was ${a.status}${a.decidedBy ? ` by ${a.decidedBy}` : ''}${a.comment ? ` (“${a.comment}”)` : ''}.`,
-      );
+    if (a.status === 'pending') continue;
+    const by = a.decidedBy ? ` by ${a.decidedBy}` : '';
+    const comment = a.comment ? ` (“${a.comment}”)` : '';
+    narrative.push(`Approval “${a.stepId}” was ${a.status}${by}${comment}.`);
   }
 
   let headline: string;
@@ -404,7 +426,7 @@ export function explainRun(input: {
   let waitingOn: string | undefined;
   switch (run.status) {
     case 'succeeded':
-      headline = `Succeeded${took ? ` in ${took}` : ''}.`;
+      headline = took ? `Succeeded in ${took}.` : 'Succeeded.';
       break;
     case 'cancelled':
       headline = 'Cancelled before it finished.';

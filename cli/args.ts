@@ -49,6 +49,12 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 }
 
 export const flag = (a: ParsedArgs, name: string): string | undefined => a.flags.get(name)?.at(-1);
+
+/** `?name=value` (URL-encoded) when the flag is set, otherwise nothing. */
+export const queryFlag = (a: ParsedArgs, name: string): string => {
+  const value = flag(a, name);
+  return value ? `?${name}=${encodeURIComponent(value)}` : '';
+};
 export const flagAll = (a: ParsedArgs, name: string): string[] => a.flags.get(name) ?? [];
 export const has = (a: ParsedArgs, name: string): boolean => a.flags.has(name);
 export function intFlag(a: ParsedArgs, name: string): number | undefined {

@@ -224,7 +224,8 @@ export class EventLog {
     }
     const order = q.order === 'desc' ? 'DESC' : 'ASC';
     const limit = Math.min(Math.max(q.limit ?? 500, 1), 5000);
-    const sql = `SELECT * FROM events ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY seq ${order} LIMIT ${limit}`;
+    const filter = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const sql = `SELECT * FROM events ${filter} ORDER BY seq ${order} LIMIT ${limit}`;
     return this.db.all<Row>(sql, params).map(toRecord);
   }
 

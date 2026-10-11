@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { flag, flagAll, has, intFlag, parseInputs, UsageError } from '../args.ts';
+import { flag, flagAll, has, intFlag, parseInputs, queryFlag, UsageError } from '../args.ts';
 import { ApiError } from '../client.ts';
 import { type CliContext, client, emit, need } from '../context.ts';
 import { ago, humanDuration, renderIssue, statusColour, table } from '../format.ts';
@@ -40,9 +40,11 @@ export async function statusCommand(ctx: CliContext): Promise<number> {
   const ready = { ready: probe.status === 'ready', ...(probe.error ? { error: probe.error } : {}) };
   emit(ctx, { info, ready }, () => {
     const s = ctx.style;
+    const environment = s.dim(`(${info.environment})`);
+    const problem = ready.error ? s.dim(`  ${ready.error}`) : '';
     return [
-      `${s.bold('Constans')} ${info.version}  ${s.dim(`(${info.environment})`)}`,
-      `ready: ${ready.ready ? s.green('yes') : s.red('no')}${ready.error ? s.dim(`  ${ready.error}`) : ''}`,
+      `${s.bold('Constans')} ${info.version}  ${environment}`,
+      `ready: ${ready.ready ? s.green('yes') : s.red('no')}${problem}`,
       ...(info.capabilities !== undefined ? [`capabilities: ${info.capabilities}`] : []),
     ].join('\n');
   });
@@ -79,11 +81,14 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   const name = need(ctx, 2, 'workflow');
   if (sub === 'show') {
     const w = await api.get(`/v1/workflows/${encodeURIComponent(name)}`);
+    const canaryNote = w.settings.canaryVersion
+      ? `  canary ${w.settings.canaryVersion} (${w.settings.canaryPercent}%)`
+      : '';
     emit(ctx, w, () =>
       [
         `${s.bold(w.name)}  ${stateWord(s, w.settings, 'KILLED')}  autonomy ${w.settings.autonomyTier}`,
         w.plan?.workflow.description ? w.plan.workflow.description : '',
-        `stable ${w.settings.stableVersion ?? '—'}${w.settings.canaryVersion ? `  canary ${w.settings.canaryVersion} (${w.settings.canaryPercent}%)` : ''}`,
+        `stable ${w.settings.stableVersion ?? '—'}${canaryNote}`,
         '',
         s.bold('Versions'),
         table(
@@ -109,13 +114,14 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   }
 
   if (sub === 'graph') {
-    const g = await api.get(
-      `/v1/workflows/${encodeURIComponent(name)}/graph${flag(ctx.args, 'version') ? `?version=${encodeURIComponent(flag(ctx.args, 'version')!)}` : ''}`,
-    );
+    const g = await api.get(`/v1/workflows/${encodeURIComponent(name)}/graph${queryFlag(ctx.args, 'version')}`);
     emit(ctx, g, () =>
       [
         `flowchart TD`,
-        ...g.nodes.map((n: any) => `  ${n.id}["${n.id}${n.capability ? `<br/>${n.capability}` : ''}"]`),
+        ...g.nodes.map((n: any) => {
+          const via = n.capability ? `<br/>${n.capability}` : '';
+          return `  ${n.id}["${n.id}${via}"]`;
+        }),
         ...g.edges.map((e: any) => `  ${e.from} ${e.conditional ? '-.->' : '-->'} ${e.to}`),
         ...g.routes.map((r: any) => `  ${r.from} -. on error .-> ${r.to}`),
       ].join('\n'),
@@ -160,14 +166,13 @@ export async function publishCommand(ctx: CliContext): Promise<number> {
       const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
       results.push({ file, ...r });
       if (!ctx.json) {
-        if (r.status === 'published')
-          ctx.out(
-            `${s.green('✓')} published ${s.bold(`${r.version.name}@${r.version.version}`)}  risk ${r.risk.level} (${r.risk.score})\n`,
-          );
-        else
-          ctx.out(
-            `${s.yellow('…')} ${s.bold(`${r.change.workflowName}@${r.change.version}`)} needs approval (${r.decision.reason}) — change ${r.change.id}\n`,
-          );
+        if (r.status === 'published') {
+          const ref = s.bold(`${r.version.name}@${r.version.version}`);
+          ctx.out(`${s.green('✓')} published ${ref}  risk ${r.risk.level} (${r.risk.score})\n`);
+        } else {
+          const ref = s.bold(`${r.change.workflowName}@${r.change.version}`);
+          ctx.out(`${s.yellow('…')} ${ref} needs approval (${r.decision.reason}) — change ${r.change.id}\n`);
+        }
       }
     } catch (e) {
       if (!(e instanceof ApiError) || e.status >= 500) throw e;
@@ -253,10 +258,10 @@ export async function runsCommand(ctx: CliContext): Promise<number> {
       ['limit', 'limit'],
     ] as const)
       if (flag(ctx.args, f)) q.set(p, flag(ctx.args, f)!);
-    const r = await api.get(`/v1/runs${q.size ? `?${q}` : ''}`);
-    emit(ctx, r, () =>
-      r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${s.dim(`${r.items.length} of ${r.total}`)}`,
-    );
+    const suffix = q.size ? `?${q}` : '';
+    const r = await api.get(`/v1/runs${suffix}`);
+    const count = s.dim(`${r.items.length} of ${r.total}`);
+    emit(ctx, r, () => (r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${count}`));
     return 0;
   }
 
@@ -301,7 +306,10 @@ export async function runsCommand(ctx: CliContext): Promise<number> {
     const r = await api.get(`/v1/runs/${encodeURIComponent(id)}/events`);
     emit(ctx, r, () =>
       r.items
-        .map((e: any) => `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${e.stepId ? s.dim(`  ${e.stepId}`) : ''}`)
+        .map((e: any) => {
+          const step = e.stepId ? s.dim(`  ${e.stepId}`) : '';
+          return `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${step}`;
+        })
         .join('\n'),
     );
     return 0;
@@ -338,7 +346,8 @@ async function tail(ctx: CliContext, runId: string): Promise<number> {
   const line = (e: { type: string; ts: string; stepId?: string; data?: Record<string, unknown> }) => {
     const step = e.stepId ? s.cyan(e.stepId.padEnd(18)) : ' '.repeat(18);
     const detail = describeEvent(e);
-    return `${s.dim(e.ts.slice(11, 23))}  ${step} ${e.type}${detail ? s.dim(`  ${detail}`) : ''}`;
+    const note = detail ? s.dim(`  ${detail}`) : '';
+    return `${s.dim(e.ts.slice(11, 23))}  ${step} ${e.type}${note}`;
   };
   await api.stream(`/v1/runs/${encodeURIComponent(runId)}/stream`, ({ data }) => {
     ctx.out(ctx.json ? `${JSON.stringify(data)}\n` : `${line(data)}\n`);
@@ -424,12 +433,11 @@ export async function changesCommand(ctx: CliContext): Promise<number> {
     const c = await api.get(`/v1/changes/${encodeURIComponent(id)}`);
     if (has(ctx.args, 'manifest')) ctx.out(c.manifestText);
     else
-      emit(
-        ctx,
-        c,
-        () =>
-          `${s.bold(`${c.workflowName}@${c.version}`)}  ${c.status}\n${c.reason}\nrisk ${c.risk?.level} (${c.risk?.score})\n${(c.risk?.findings ?? []).map((f: any) => `  - [${f.severity}] ${f.message}`).join('\n')}`,
-      );
+      emit(ctx, c, () => {
+        const ref = s.bold(`${c.workflowName}@${c.version}`);
+        const findings = (c.risk?.findings ?? []).map((f: any) => `  - [${f.severity}] ${f.message}`).join('\n');
+        return `${ref}  ${c.status}\n${c.reason}\nrisk ${c.risk?.level} (${c.risk?.score})\n${findings}`;
+      });
     return 0;
   }
   if (sub === 'approve' || sub === 'reject') {

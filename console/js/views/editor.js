@@ -448,18 +448,16 @@ function agentNote(d) {
 }
 
 function renderValidation(r, goto) {
-  const issue = (i, kind) =>
-    h(
+  const issue = (i, kind) => {
+    const inPath = i.path ? ` · ${i.path}` : '';
+    const atLine = i.line ? ` · line ${i.line}` : '';
+    return h(
       'div',
       { class: ['issue', i.line ? 'clickable' : ''], onClick: i.line ? () => goto(i.line, i.column) : undefined },
       badge(kind, kind === 'error' ? 'bad' : 'warn'),
-      h(
-        'div',
-        {},
-        h('div', {}, i.message),
-        h('div', { class: 'where' }, `${i.code}${i.path ? ` · ${i.path}` : ''}${i.line ? ` · line ${i.line}` : ''}`),
-      ),
+      h('div', {}, h('div', {}, i.message), h('div', { class: 'where' }, `${i.code}${inPath}${atLine}`)),
     );
+  };
   const parts = [];
   parts.push(
     r.ok
@@ -492,7 +490,8 @@ function renderValidation(r, goto) {
         h('span', { class: 'muted' }, ` score ${r.risk.score}/100`),
       ),
     );
-    for (const f of r.risk.findings)
+    for (const f of r.risk.findings) {
+      const inStep = f.stepId ? ` · step ${f.stepId}` : '';
       parts.push(
         h(
           'div',
@@ -502,10 +501,11 @@ function renderValidation(r, goto) {
             'div',
             {},
             h('div', {}, f.message, f.blocking ? badge('blocking', 'bad') : null),
-            h('div', { class: 'where' }, `${f.ruleId}${f.stepId ? ` · step ${f.stepId}` : ''}`),
+            h('div', { class: 'where' }, `${f.ruleId}${inStep}`),
           ),
         ),
       );
+    }
   }
   return h('div', { class: 'stack' }, parts);
 }

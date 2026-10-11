@@ -142,7 +142,8 @@ function classifyNetworkError(e: unknown, req: SafeRequest): CapabilityError {
   if (code === 'EGRESS_BLOCKED_ADDRESS') {
     return egressDenied(err.message ?? 'Blocked address');
   }
-  return new CapabilityError('HTTP_NETWORK', `Network error${code ? ` (${code})` : ''}`, {
+  const detail = code ? ` (${code})` : '';
+  return new CapabilityError('HTTP_NETWORK', `Network error${detail}`, {
     errorClass: 'transient',
     details: code ? { code } : {},
   });

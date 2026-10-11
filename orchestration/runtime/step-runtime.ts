@@ -364,9 +364,10 @@ export class StepRuntime implements StepExecutor {
       // ---- Authorised: kill switch and circuit breaker
       const killed = this.d.kv.isCapabilityKilled(a.tenant, decl.name);
       if (killed.killed) {
+        const reason = killed.reason ? `: ${killed.reason}` : '';
         return this.failed('authorise', elapsed(), {
           code: 'CAPABILITY_KILLED',
-          message: `Capability '${decl.name}' is disabled by an operator${killed.reason ? `: ${killed.reason}` : ''}`,
+          message: `Capability '${decl.name}' is disabled by an operator${reason}`,
           class: 'systemic',
           retryable: false,
         });

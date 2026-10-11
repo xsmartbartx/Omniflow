@@ -76,6 +76,11 @@ export function didYouMean(input: string, candidates: readonly string[]): string
   return best !== undefined && bestScore <= Math.max(2, Math.floor(input.length / 3)) ? best : undefined;
 }
 
+/** The " — did you mean 'x'?" suffix for an error message, or nothing when there is no close match. */
+export function suggestion(hint: string | undefined): string {
+  return hint ? ` — did you mean '${hint}'?` : '';
+}
+
 function describeType(schemaType: unknown): string {
   return Array.isArray(schemaType) ? schemaType.join(' or ') : String(schemaType);
 }
@@ -95,7 +100,7 @@ function toIssue(err: ErrorObject, locate?: Locator): Issue {
       const extra = String(params.additionalProperty);
       const allowed = Object.keys((err.parentSchema as { properties?: object })?.properties ?? {});
       const hint = didYouMean(extra, allowed);
-      message = `Unknown property '${extra}'${hint ? ` — did you mean '${hint}'?` : ''}`;
+      message = `Unknown property '${extra}'${suggestion(hint)}`;
       path.push(extra);
       keyLoc = true;
       break;

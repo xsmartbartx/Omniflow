@@ -115,8 +115,10 @@ export class MetricsRegistry {
       }
     }
     const out: string[] = [];
-    const line = (name: string, labels: string, v: number) =>
-      out.push(`${name}${labels ? `{${labels}}` : ''} ${Number.isFinite(v) ? v : 0}`);
+    const line = (name: string, labels: string, v: number) => {
+      const set = labels ? `{${labels}}` : '';
+      out.push(`${name}${set} ${Number.isFinite(v) ? v : 0}`);
+    };
     for (const c of this.counters.values()) {
       out.push(`# HELP ${c.name} ${c.help}`, `# TYPE ${c.name} counter`);
       for (const [l, v] of c.values) line(c.name, l, v);

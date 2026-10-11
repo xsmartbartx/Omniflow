@@ -969,13 +969,14 @@ export class Orchestrator {
         { cost: child.cost, durationMs: 0 },
       );
     } else {
+      const childReason = child.error ? `: ${child.error.message}` : '';
       this.st.runs.patchStep(parent.id, ps.id, { status: 'running' });
       this.failStep(
         parent,
         ps,
         {
           code: 'SUBWORKFLOW_FAILED',
-          message: `Subworkflow '${child.workflowName}' ${child.status}${child.error ? `: ${child.error.message}` : ''}`,
+          message: `Subworkflow '${child.workflowName}' ${child.status}${childReason}`,
           class: child.error?.class ?? 'business',
           retryable: false,
           details: { childRunId: child.id, childStatus: child.status },

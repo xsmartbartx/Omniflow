@@ -136,9 +136,14 @@ export async function runCli(
         e.status === 401
           ? `\n${style.dim('Check CONSTANS_API_KEY. Create a key with: constans admin create-api-key --name cli')}`
           : '';
-      io.err(`${style.red('error')}${style.dim(`[${e.code}]`)}: ${e.message}${hint}\n`);
+      const apiCode = style.dim(`[${e.code}]`);
+      io.err(`${style.red('error')}${apiCode}: ${e.message}${hint}\n`);
       const issues = (e.details as { issues?: Array<{ path: string; message: string }> } | undefined)?.issues;
-      if (issues?.length) for (const i of issues) io.err(`  - ${i.path ? `${i.path}: ` : ''}${i.message}\n`);
+      if (issues?.length)
+        for (const i of issues) {
+          const where = i.path ? `${i.path}: ` : '';
+          io.err(`  - ${where}${i.message}\n`);
+        }
       return 1;
     }
     if (e instanceof ConnectionError) {
@@ -146,7 +151,8 @@ export async function runCli(
       return 1;
     }
     if (e instanceof ConstansError) {
-      io.err(`${style.red('error')}${style.dim(`[${e.code}]`)}: ${e.message}\n`);
+      const appCode = style.dim(`[${e.code}]`);
+      io.err(`${style.red('error')}${appCode}: ${e.message}\n`);
       return 1;
     }
     io.err(`${style.red('unexpected error')}: ${(e as Error).stack ?? String(e)}\n`);
