@@ -107,7 +107,12 @@ function webhookPayload(e: EventRow, run: RunRow): Record<string, unknown> {
       ...(e.correlationId ? { correlationId: e.correlationId } : {}),
     },
     ...(error
-      ? { error: { code: error.code ?? null, message: redactMessage(String(error.message ?? '')).slice(0, 300) } }
+      ? {
+          error: {
+            code: error.code ?? null,
+            message: redactMessage(typeof error.message === 'string' ? error.message : '').slice(0, 300),
+          },
+        }
       : {}),
   };
 }
