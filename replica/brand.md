@@ -89,7 +89,7 @@ Ten most-seen strings, rewritten (**proposed, not applied**; applying waits for 
 | NEXORA sign-in | OmniFlow uses your NEXORA account. Sessions last a few minutes and renew when you continue. | This product uses your NEXORA account. Your session lasts a few minutes and renews when you continue. |
 | sign-in button (NEXORA) | Continue with NEXORA | Continue with NEXORA |
 | plan card, over 80% | Running low | N runs left this month |
-| plan card, at limit | Plan limit reached. New runs are refused until the next period or an upgrade. Dry runs still work. | Plan limit reached. New runs wait for the next period or an upgrade. Dry runs still work. |
+| plan card, at limit | Plan limit reached. New runs are refused until the next period or an upgrade. Dry runs still work. | Plan limit reached. New runs are refused until the next period or an upgrade. Dry runs still work. |
 | empty run list | (existing) | No runs yet. Start one from a workflow page. |
 | run started toast | Run started | Run started |
 | run failed | (existing error text) | name the step and the reason, then what is safe |
