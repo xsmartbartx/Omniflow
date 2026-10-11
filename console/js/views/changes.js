@@ -118,6 +118,7 @@ async function open(id, ctx) {
     ctx.navigate('/changes');
     ctx.refreshBadges();
   };
+  const approvers = c.approvals.length ? ` — ${c.approvals.map((a) => a.name ?? a.by).join(', ')}` : '';
   await openDialog({
     title: `${c.workflowName} @ ${c.version}`,
     wide: true,
@@ -128,10 +129,7 @@ async function open(id, ctx) {
         ['Status', statusBadge(c.status)],
         ['Why it needs review', c.reason],
         ['Requested by', `${c.requestedByName ?? c.requestedBy}${c.origin === 'agent' ? ' (AI-authored)' : ''}`],
-        [
-          'Approvals',
-          `${c.approvals.length} of ${c.requiredApprovals}${c.approvals.length ? ` — ${c.approvals.map((a) => a.name ?? a.by).join(', ')}` : ''}`,
-        ],
+        ['Approvals', `${c.approvals.length} of ${c.requiredApprovals}${approvers}`],
         c.risk ? ['Risk', h('span', {}, statusBadge(c.risk.level), ` score ${c.risk.score}/100`)] : null,
       ]),
       findings.length

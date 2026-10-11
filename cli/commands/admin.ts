@@ -104,8 +104,13 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         emit(
           ctx,
           { id: user.id, email: user.email, roles: user.roles, ...(password === generated ? { password } : {}) },
-          () =>
-            `${s.green('✓')} created ${user.email} (${user.roles.join(', ')})${password === generated ? `\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in` : ''}`,
+          () => {
+            const temporary =
+              password === generated
+                ? `\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in`
+                : '';
+            return `${s.green('✓')} created ${user.email} (${user.roles.join(', ')})${temporary}`;
+          },
         );
         return 0;
       }
@@ -304,10 +309,11 @@ function doctor(
   const secrets = config.masterKeySource === 'ephemeral' ? [] : state.secrets.all();
   if (config.masterKeySource === 'ephemeral') {
     const n = state.secrets.all().length;
+    const stored = n ? `${n} stored secret(s) could not be checked` : 'no secrets are stored yet';
     add(
       n ? 'fail' : 'warn',
       'master key',
-      `not available to this command (no CONSTANS_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${n ? `${n} stored secret(s) could not be checked` : 'no secrets are stored yet'}`,
+      `not available to this command (no CONSTANS_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${stored}`,
     );
   }
   let unreadable = 0;

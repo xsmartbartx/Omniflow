@@ -35,7 +35,8 @@ function serialize(value: unknown, stack: Set<object>): string {
         const keys = Object.keys(record)
           .filter((k) => record[k] !== undefined && typeof record[k] !== 'function')
           .sort(compareStrings);
-        return `{${keys.map((k) => `${JSON.stringify(k)}:${serialize(record[k], stack)}`).join(',')}}`;
+        const members = keys.map((k) => JSON.stringify(k) + ':' + serialize(record[k], stack));
+        return `{${members.join(',')}}`;
       } finally {
         stack.delete(obj);
       }

@@ -295,7 +295,8 @@ describe('secrets never leak (T3, R10)', () => {
 
   const dumpEverything = (x: Engine): string => {
     const tables = x.state.db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'");
-    return tables.map((t) => `${t.name}: ${JSON.stringify(x.state.db.all(`SELECT * FROM ${t.name}`))}`).join('\n');
+    const rows = (name: string) => JSON.stringify(x.state.db.all(`SELECT * FROM ${name}`));
+    return tables.map((t) => `${t.name}: ${rows(t.name)}`).join('\n');
   };
 
   it('hands the adapter the value, but persists it nowhere in plaintext', async () => {

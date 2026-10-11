@@ -148,13 +148,14 @@ export default async function run(ctx) {
       ),
     );
 
+    const triggerName = r.trigger.name ? ` · ${r.trigger.name}` : '';
     clear(summary).append(
       card(
         'Summary',
         kv([
           ['Workflow', wfLink(r.workflow, r.version)],
           ['Status', statusBadge(r.status)],
-          ['Trigger', `${r.trigger.type}${r.trigger.name ? ` · ${r.trigger.name}` : ''}`],
+          ['Trigger', `${r.trigger.type}${triggerName}`],
           ['Requested by', r.requestedBy.name],
           ['Took', duration(r.durationMs)],
           ['Cost', number(r.cost)],

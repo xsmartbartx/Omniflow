@@ -35,6 +35,7 @@ import {
 } from '../../schemas/index.ts';
 import {
   didYouMean,
+  suggestion,
   formatPath,
   type Locator,
   type PathSegment,
@@ -171,11 +172,7 @@ export function compile(source: unknown, options: CompileOptions): CompileResult
       const versions = options.capabilities.versions(parsed.name);
       if (versions.length === 0) {
         const hint = didYouMean(parsed.name, options.capabilities.names());
-        error(
-          path,
-          'UNKNOWN_CAPABILITY',
-          `Capability '${parsed.name}' is not registered${hint ? ` — did you mean '${hint}'?` : ''}`,
-        );
+        error(path, 'UNKNOWN_CAPABILITY', `Capability '${parsed.name}' is not registered${suggestion(hint)}`);
       } else {
         error(
           path,
@@ -263,11 +260,7 @@ export function compile(source: unknown, options: CompileOptions): CompileResult
       if (!Object.hasOwn(props, key)) {
         if (schema.additionalProperties === false) {
           const hint = didYouMean(key, Object.keys(props));
-          error(
-            [...path, key],
-            'UNKNOWN_INPUT_FIELD',
-            `${what} has no input '${key}'${hint ? ` — did you mean '${hint}'?` : ''}`,
-          );
+          error([...path, key], 'UNKNOWN_INPUT_FIELD', `${what} has no input '${key}'${suggestion(hint)}`);
         }
         continue;
       }
@@ -297,10 +290,11 @@ export function compile(source: unknown, options: CompileOptions): CompileResult
             const schema = outSchemas.get(r.path[0]);
             if (schema && schemaHasPath(schema, r.path.slice(2)) === 'no') {
               const props = Object.keys((schema.properties ?? {}) as JsonObject);
+              const declared = props.length ? ` (declared: ${props.join(', ')})` : '';
               error(
                 path,
                 'UNKNOWN_OUTPUT_FIELD',
-                `steps.${r.path[0]}.output.${r.path.slice(2).join('.')} is not produced by '${r.path[0]}'${props.length ? ` (declared: ${props.join(', ')})` : ''}`,
+                `steps.${r.path[0]}.output.${r.path.slice(2).join('.')} is not produced by '${r.path[0]}'${declared}`,
               );
             }
           }

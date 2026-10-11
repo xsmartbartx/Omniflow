@@ -122,11 +122,12 @@ export class RunService {
     }
     if (!settings.enabled)
       throw new ConflictError(`Workflow '${req.workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
-    if (settings.killed)
-      throw new ConflictError(
-        `Workflow '${req.workflow}' is stopped by its kill switch${settings.killReason ? `: ${settings.killReason}` : ''}`,
-        { code: 'WORKFLOW_KILLED' },
-      );
+    if (settings.killed) {
+      const reason = settings.killReason ? `: ${settings.killReason}` : '';
+      throw new ConflictError(`Workflow '${req.workflow}' is stopped by its kill switch${reason}`, {
+        code: 'WORKFLOW_KILLED',
+      });
+    }
     if (version.status === 'frozen') throw new ConflictError(`${req.workflow}@${version.version} is frozen`);
 
     // ---- validate inputs against the plan's schema; defaults are applied here, once

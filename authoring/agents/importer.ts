@@ -180,10 +180,10 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
     // A stable, readable name from the first word(s) of the command.
     const words0 = command.split(/[\s|&;<>]+/).filter(Boolean);
     const exeWord = (words0[0] ?? 'job').split('/').pop() ?? 'job';
-    let name =
-      `cron-${slug(exeWord)}${words0[1] && !words0[1].startsWith('-') && !needsShell(words0[1]) ? `-${slug(words0[1].split('/').pop() ?? '')}` : ''}`
-        .replace(/-{2,}/g, '-')
-        .replace(/-+$/, '');
+    const second = words0[1];
+    const target =
+      second && !second.startsWith('-') && !needsShell(second) ? `-${slug(second.split('/').pop() ?? '')}` : '';
+    let name = `cron-${slug(exeWord)}${target}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
     for (let n = 2; used.has(name); ) name = `${name.replace(/-\d+$/, '')}-${n++}`;
     used.add(name);
 
@@ -234,6 +234,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
       `Schedules run in ${opts.timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`,
     );
 
+    const shortCommand = command.length > 120 ? `${command.slice(0, 117)}...` : command;
     const manifest = {
       apiVersion: 'constans/v1',
       kind: 'Workflow',
@@ -242,7 +243,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
         version: '1.0.0',
         owner: opts.owner,
         ...(opts.team ? { team: opts.team } : {}),
-        description: `Imported from crontab line ${i + 1}: ${command.length > 120 ? `${command.slice(0, 117)}...` : command}`,
+        description: `Imported from crontab line ${i + 1}: ${shortCommand}`,
         criticality: 'medium',
         labels: { 'imported-from': 'crontab', strategy: 'lift' },
       },

@@ -23,5 +23,7 @@ export class ScriptedLlm implements LlmClient {
 }
 
 /** A reply in the format the Planner asks for. */
-export const modelReply = (manifest: string, o: { rationale?: string; questions?: string[] } = {}): string =>
-  `<rationale>\n${o.rationale ?? 'A straightforward workflow.'}\n</rationale>\n<questions>\n${(o.questions ?? []).map((q) => `- ${q}`).join('\n') || 'none'}\n</questions>\n\`\`\`yaml\n${manifest}\n\`\`\``;
+export const modelReply = (manifest: string, o: { rationale?: string; questions?: string[] } = {}): string => {
+  const questions = (o.questions ?? []).map((q) => `- ${q}`).join('\n') || 'none';
+  return `<rationale>\n${o.rationale ?? 'A straightforward workflow.'}\n</rationale>\n<questions>\n${questions}\n</questions>\n\`\`\`yaml\n${manifest}\n\`\`\``;
+};

@@ -6,7 +6,8 @@ export function compile(pattern) {
     keys.push(k);
     return '/([^/]+)';
   });
-  const re = new RegExp(`^${source.replaceAll('/', String.raw`\/`)}$`);
+  const escaped = source.replaceAll('/', String.raw`\/`);
+  const re = new RegExp(`^${escaped}$`);
   return { re, keys };
 }
 

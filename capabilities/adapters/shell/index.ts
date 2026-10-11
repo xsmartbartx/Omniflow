@@ -218,10 +218,11 @@ export function createShellCapabilities(config: AdapterConfig): CapabilityAdapte
             const expected = input.expectExit ?? [0];
             if (!expected.includes(exitCode)) {
               const retryable = input.retryableExit?.includes(exitCode) ?? false;
+              const stderr = err ? `: ${err.trim().slice(0, 500)}` : '';
               return reject(
                 new CapabilityError(
                   retryable ? 'SHELL_EXIT_RETRYABLE' : 'SHELL_EXIT_NONZERO',
-                  `'${exe}' exited with status ${exitCode}${err ? `: ${err.trim().slice(0, 500)}` : ''}`,
+                  `'${exe}' exited with status ${exitCode}${stderr}`,
                   {
                     errorClass: retryable ? 'transient' : 'business',
                     retryable,

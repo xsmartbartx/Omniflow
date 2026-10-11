@@ -157,11 +157,11 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         } catch {
           /* not JSON */
         }
-        throw new CapabilityError(
-          'LLM_REJECTED',
-          `The LLM provider rejected the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-          { errorClass: 'business', retryable: false },
-        );
+        const reason = detail ? `: ${detail.slice(0, 300)}` : '';
+        throw new CapabilityError('LLM_REJECTED', `The LLM provider rejected the request (${res.status})${reason}`, {
+          errorClass: 'business',
+          retryable: false,
+        });
       }
       const body = JSON.parse(res.body.toString('utf8')) as {
         content?: Array<{ type: string; text?: string }>;

@@ -27,19 +27,26 @@ export function makeStyle(enabled: boolean): Style {
 /** Render a validation issue compiler-style, with the offending source line and a caret. */
 export function renderIssue(style: Style, file: string, source: string | undefined, issue: Issue): string {
   const warning = issue.severity === 'warning';
-  const head = `${warning ? style.yellow('warning') : style.red('error')}${style.dim(`[${issue.code}]`)}: ${issue.message}`;
-  if (!issue.line || source === undefined) return `${head}${issue.path ? style.dim(`\n  at ${issue.path}`) : ''}`;
+  const code = style.dim(`[${issue.code}]`);
+  const head = `${warning ? style.yellow('warning') : style.red('error')}${code}: ${issue.message}`;
+  if (!issue.line || source === undefined) {
+    const at = issue.path ? style.dim(`\n  at ${issue.path}`) : '';
+    return `${head}${at}`;
+  }
   const lines = source.split('\n');
   const text = lines[issue.line - 1] ?? '';
   const gutter = String(issue.line).length;
   const pad = ' '.repeat(gutter);
   const col = Math.max(1, issue.column ?? 1);
+  const inPath = issue.path ? `  (${issue.path})` : '';
+  const margin = style.dim(`${pad} |`);
+  const lineNo = style.dim(`${issue.line} |`);
   return [
     head,
-    style.dim(`${pad}--> ${file}:${issue.line}:${col}${issue.path ? `  (${issue.path})` : ''}`),
-    style.dim(`${pad} |`),
-    `${style.dim(`${issue.line} |`)} ${text}`,
-    `${style.dim(`${pad} |`)} ${' '.repeat(col - 1)}${warning ? style.yellow('^') : style.red('^')}`,
+    style.dim(`${pad}--> ${file}:${issue.line}:${col}${inPath}`),
+    margin,
+    `${lineNo} ${text}`,
+    `${margin} ${' '.repeat(col - 1)}${warning ? style.yellow('^') : style.red('^')}`,
   ].join('\n');
 }
 
