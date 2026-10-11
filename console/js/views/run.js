@@ -96,40 +96,33 @@ export default async function run(ctx) {
     if (atBottom) log.scrollTop = log.scrollHeight;
   };
 
+  const retryRun = async () => {
+    const x = await api.post(`${base}/retry`);
+    if (x.run) location.hash = `#/runs/${api.enc(x.run.id)}`;
+    else toast(`Skipped: ${x.reason}`, 'warn');
+  };
+
+  const cancelRun = async () => {
+    const v = await formDialog({
+      title: 'Cancel this run?',
+      intro: 'Steps in flight are stopped and any completed effects are compensated where possible.',
+      fields: [{ name: 'reason', label: 'Reason (optional)' }],
+      submitLabel: 'Cancel run',
+      danger: true,
+    });
+    if (!v) return;
+    await api.post(`${base}/cancel`, v.reason ? { reason: v.reason } : {});
+    toast('Cancellation requested', 'good');
+    await refresh();
+  };
+
   const draw = async () => {
     const r = data.run;
     const terminal = TERMINAL_RUN.has(r.status);
-    const rerun =
-      can('run.retry') && terminal
-        ? button('Run again', {
-            icon: 'refresh',
-            onClick: async () => {
-              const x = await api.post(`${base}/retry`);
-              if (x.run) location.hash = `#/runs/${api.enc(x.run.id)}`;
-              else toast(`Skipped: ${x.reason}`, 'warn');
-            },
-          })
-        : null;
+    const rerun = can('run.retry') && terminal ? button('Run again', { icon: 'refresh', onClick: retryRun }) : null;
     const cancel =
       can('run.cancel') && !terminal
-        ? button('Cancel run', {
-            kind: 'danger',
-            icon: 'stop',
-            onClick: async () => {
-              const v = await formDialog({
-                title: 'Cancel this run?',
-                intro: 'Steps in flight are stopped and any completed effects are compensated where possible.',
-                fields: [{ name: 'reason', label: 'Reason (optional)' }],
-                submitLabel: 'Cancel run',
-                danger: true,
-              });
-              if (v) {
-                await api.post(`${base}/cancel`, v.reason ? { reason: v.reason } : {});
-                toast('Cancellation requested', 'good');
-                await refresh();
-              }
-            },
-          })
+        ? button('Cancel run', { kind: 'danger', icon: 'stop', onClick: cancelRun })
         : null;
     clear(head).append(
       pageHeader(

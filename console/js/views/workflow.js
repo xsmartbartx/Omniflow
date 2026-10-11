@@ -44,6 +44,21 @@ export default async function workflow(ctx) {
         reload();
       },
     });
+  const killWorkflow = async () => {
+    const v = await formDialog({
+      title: `Kill ${name}?`,
+      intro: 'New runs are refused and queued runs are cancelled until you lift the switch.',
+      fields: [
+        { name: 'reason', label: 'Reason', required: true, placeholder: 'e.g. duplicate charges — investigating' },
+      ],
+      submitLabel: 'Kill',
+      danger: true,
+    });
+    if (!v) return;
+    await api.post(`${base}/kill`, { reason: v.reason });
+    toast('Workflow killed', 'good');
+    reload();
+  };
   const stateBadge = statusBadge(stateName(s));
   const toggle = s.enabled ? 'disable' : 'enable';
 
@@ -55,33 +70,7 @@ export default async function workflow(ctx) {
       ? button('New version', { icon: 'edit', onClick: () => (location.hash = `#/editor?from=${api.enc(name)}`) })
       : null,
     manage && !s.killed ? control(s.enabled ? 'Disable' : 'Enable', {}, () => api.post(`${base}/${toggle}`)) : null,
-    manage && !s.killed
-      ? button('Kill switch', {
-          kind: 'danger',
-          small: true,
-          onClick: async () => {
-            const v = await formDialog({
-              title: `Kill ${name}?`,
-              intro: 'New runs are refused and queued runs are cancelled until you lift the switch.',
-              fields: [
-                {
-                  name: 'reason',
-                  label: 'Reason',
-                  required: true,
-                  placeholder: 'e.g. duplicate charges — investigating',
-                },
-              ],
-              submitLabel: 'Kill',
-              danger: true,
-            });
-            if (v) {
-              await api.post(`${base}/kill`, { reason: v.reason });
-              toast('Workflow killed', 'good');
-              reload();
-            }
-          },
-        })
-      : null,
+    manage && !s.killed ? button('Kill switch', { kind: 'danger', small: true, onClick: killWorkflow }) : null,
     manage && s.killed ? control('Lift kill switch', { kind: 'primary' }, () => api.post(`${base}/revive`)) : null,
   ];
 
