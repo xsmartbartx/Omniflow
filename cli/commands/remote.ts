@@ -247,96 +247,116 @@ function runsTable(ctx: CliContext, items: any[]): string {
 
 export async function runsCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1] ?? 'list';
-  const api = client(ctx);
-  const s = ctx.style;
-
-  if (sub === 'list') {
-    const q = new URLSearchParams();
-    for (const [f, p] of [
-      ['workflow', 'workflow'],
-      ['status', 'status'],
-      ['limit', 'limit'],
-    ] as const)
-      if (flag(ctx.args, f)) q.set(p, flag(ctx.args, f)!);
-    const suffix = q.size ? `?${q}` : '';
-    const r = await api.get(`/v1/runs${suffix}`);
-    const count = s.dim(`${r.items.length} of ${r.total}`);
-    emit(ctx, r, () => (r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${count}`));
-    return 0;
-  }
-
+  if (sub === 'list') return runsList(ctx);
   const id = need(ctx, 2, 'run id');
-  if (sub === 'show') {
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}`);
-    emit(ctx, r, () => {
-      const run = r.run;
-      return [
-        `${s.bold(run.workflow)}@${run.version}  ${statusColour(s, run.status)}${run.dryRun ? s.dim(' (dry run)') : ''}  ${s.dim(run.id)}`,
-        `started ${ago(run.startedAt ?? run.createdAt)} · took ${humanDuration(run.durationMs)} · cost ${run.cost} · plan ${s.dim(String(run.planHash).slice(0, 19))}`,
-        ...(run.error ? [`${s.red(run.error.code)}: ${run.error.message}`] : []),
-        '',
-        table(
-          r.steps.map((st: any) => [
-            st.id,
-            st.capability ?? st.type,
-            statusColour(s, st.status),
-            st.attempt > 1 ? `${st.attempt}/${st.maxAttempts}` : '',
-            humanDuration(st.durationMs),
-            stepNote(s, st),
-          ]),
-          ['STEP', 'CAPABILITY', 'STATUS', 'TRY', 'TOOK', 'NOTE'],
-          s,
-        ),
-        ...(run.outputs && Object.keys(run.outputs).length
-          ? ['', s.bold('outputs'), JSON.stringify(run.outputs, null, 2)]
-          : []),
-        ...(r.approvals.some((a: any) => a.status === 'pending')
-          ? [
-              '',
-              s.yellow(
-                `Waiting for approval: constans approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
-              ),
-            ]
-          : []),
-      ].join('\n');
-    });
-    return 0;
+  const enc = encodeURIComponent(id);
+  switch (sub) {
+    case 'show':
+      return runShow(ctx, enc);
+    case 'events':
+      return runEvents(ctx, enc);
+    case 'output': {
+      const step = need(ctx, 3, 'step id');
+      const r = await client(ctx).get(`/v1/runs/${enc}/steps/${encodeURIComponent(step)}/output`);
+      ctx.out(`${JSON.stringify(r.output, null, 2)}\n`);
+      return 0;
+    }
+    case 'tail':
+    case 'watch':
+      return tail(ctx, id);
+    case 'cancel':
+      return runCancel(ctx, id, enc);
+    case 'retry':
+      return runRetry(ctx, enc);
+    default:
+      throw new UsageError(`Unknown runs subcommand '${sub}'. Try: list, show, tail, events, output, cancel, retry`);
   }
-  if (sub === 'events') {
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}/events`);
-    emit(ctx, r, () =>
-      r.items
-        .map((e: any) => {
-          const step = e.stepId ? s.dim(`  ${e.stepId}`) : '';
-          return `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${step}`;
-        })
-        .join('\n'),
-    );
-    return 0;
-  }
-  if (sub === 'output') {
-    const step = need(ctx, 3, 'step id');
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}/steps/${encodeURIComponent(step)}/output`);
-    ctx.out(`${JSON.stringify(r.output, null, 2)}\n`);
-    return 0;
-  }
-  if (sub === 'tail' || sub === 'watch') return tail(ctx, id);
-  if (sub === 'cancel') {
-    await api.post(
-      `/v1/runs/${encodeURIComponent(id)}/cancel`,
-      flag(ctx.args, 'reason') ? { reason: flag(ctx.args, 'reason') } : {},
-    );
-    ctx.out(`${s.green('✓')} cancellation requested for ${id}\n`);
-    return 0;
-  }
-  if (sub === 'retry') {
-    const r = await api.post(`/v1/runs/${encodeURIComponent(id)}/retry`);
-    if (ctx.json) ctx.out(`${JSON.stringify(r)}\n`);
-    else if (r.status === 'skipped') ctx.out(`${s.yellow('skipped')}: ${r.reason}\n`);
-    else ctx.out(`${s.green('✓')} new run ${s.bold(r.run.id)}\n`);
-    return 0;
-  }
-  throw new UsageError(`Unknown runs subcommand '${sub}'. Try: list, show, tail, events, output, cancel, retry`);
+}
+
+async function runsList(ctx: CliContext): Promise<number> {
+  const s = ctx.style;
+  const q = new URLSearchParams();
+  for (const [f, p] of [
+    ['workflow', 'workflow'],
+    ['status', 'status'],
+    ['limit', 'limit'],
+  ] as const)
+    if (flag(ctx.args, f)) q.set(p, flag(ctx.args, f)!);
+  const suffix = q.size ? `?${q}` : '';
+  const r = await client(ctx).get(`/v1/runs${suffix}`);
+  const count = s.dim(`${r.items.length} of ${r.total}`);
+  emit(ctx, r, () => (r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${count}`));
+  return 0;
+}
+
+async function runShow(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/runs/${enc}`);
+  emit(ctx, r, () => {
+    const run = r.run;
+    return [
+      `${s.bold(run.workflow)}@${run.version}  ${statusColour(s, run.status)}${run.dryRun ? s.dim(' (dry run)') : ''}  ${s.dim(run.id)}`,
+      `started ${ago(run.startedAt ?? run.createdAt)} · took ${humanDuration(run.durationMs)} · cost ${run.cost} · plan ${s.dim(String(run.planHash).slice(0, 19))}`,
+      ...(run.error ? [`${s.red(run.error.code)}: ${run.error.message}`] : []),
+      '',
+      table(
+        r.steps.map((st: any) => [
+          st.id,
+          st.capability ?? st.type,
+          statusColour(s, st.status),
+          st.attempt > 1 ? `${st.attempt}/${st.maxAttempts}` : '',
+          humanDuration(st.durationMs),
+          stepNote(s, st),
+        ]),
+        ['STEP', 'CAPABILITY', 'STATUS', 'TRY', 'TOOK', 'NOTE'],
+        s,
+      ),
+      ...(run.outputs && Object.keys(run.outputs).length
+        ? ['', s.bold('outputs'), JSON.stringify(run.outputs, null, 2)]
+        : []),
+      ...(r.approvals.some((a: any) => a.status === 'pending')
+        ? [
+            '',
+            s.yellow(
+              `Waiting for approval: constans approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
+            ),
+          ]
+        : []),
+    ].join('\n');
+  });
+  return 0;
+}
+
+async function runEvents(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/runs/${enc}/events`);
+  emit(ctx, r, () =>
+    r.items
+      .map((e: any) => {
+        const step = e.stepId ? s.dim(`  ${e.stepId}`) : '';
+        return `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${step}`;
+      })
+      .join('\n'),
+  );
+  return 0;
+}
+
+async function runCancel(ctx: CliContext, id: string, enc: string): Promise<number> {
+  await client(ctx).post(
+    `/v1/runs/${enc}/cancel`,
+    flag(ctx.args, 'reason') ? { reason: flag(ctx.args, 'reason') } : {},
+  );
+  ctx.out(`${ctx.style.green('✓')} cancellation requested for ${id}\n`);
+  return 0;
+}
+
+async function runRetry(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(`/v1/runs/${enc}/retry`);
+  if (ctx.json) ctx.out(`${JSON.stringify(r)}\n`);
+  else if (r.status === 'skipped') ctx.out(`${s.yellow('skipped')}: ${r.reason}\n`);
+  else ctx.out(`${s.green('✓')} new run ${s.bold(r.run.id)}\n`);
+  return 0;
 }
 
 /** Follow a run's live event stream until it finishes; exit 0 only if it succeeded. */
