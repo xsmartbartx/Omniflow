@@ -129,14 +129,23 @@ export class MetricsRegistry {
     }
     for (const h of this.histograms.values()) {
       out.push(`# HELP ${h.name} ${h.help}`, `# TYPE ${h.name} histogram`);
-      for (const [l, s] of h.series) {
-        for (let i = 0; i < h.buckets.length; i++)
-          line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${h.buckets[i]}"`, s.counts[i]!);
-        line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="+Inf"`, s.count);
-        line(`${h.name}_sum`, l, s.sum);
-        line(`${h.name}_count`, l, s.count);
-      }
+      for (const [l, s] of h.series) renderSeries(h.name, h.buckets, l, s, line);
     }
     return `${out.join('\n')}\n`;
   }
+}
+
+/** The bucket, sum and count lines for one labelled histogram series. */
+function renderSeries(
+  name: string,
+  buckets: readonly number[],
+  labels: string,
+  s: { counts: number[]; count: number; sum: number },
+  line: (name: string, labels: string, v: number) => void,
+): void {
+  const sep = labels ? ',' : '';
+  for (let i = 0; i < buckets.length; i++) line(`${name}_bucket`, `${labels}${sep}le="${buckets[i]}"`, s.counts[i]!);
+  line(`${name}_bucket`, `${labels}${sep}le="+Inf"`, s.count);
+  line(`${name}_sum`, labels, s.sum);
+  line(`${name}_count`, labels, s.count);
 }

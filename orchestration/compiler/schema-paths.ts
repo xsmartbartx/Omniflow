@@ -13,11 +13,7 @@ export function schemaHasPath(schema: unknown, path: readonly string[]): PathVer
   const type = Array.isArray(s.type) ? s.type : [s.type].filter((t) => t !== undefined);
   const [seg, ...rest] = path as [string, ...string[]];
 
-  if (type.includes('array') && !type.includes('object')) {
-    if (seg === 'length') return rest.length === 0 ? 'yes' : 'no';
-    if (/^\d+$/.test(seg)) return schemaHasPath(s.items, rest);
-    return 'no';
-  }
+  if (type.includes('array') && !type.includes('object')) return arrayHasPath(s, seg, rest);
   const props = s.properties as JsonObject | undefined;
   if (props && Object.hasOwn(props, seg)) return schemaHasPath(props[seg], rest);
   const additional = s.additionalProperties;
@@ -27,6 +23,12 @@ export function schemaHasPath(schema: unknown, path: readonly string[]): PathVer
     return seg === 'length' && type[0] === 'string' && rest.length === 0 ? 'yes' : 'no';
   }
   return 'unknown';
+}
+
+/** Arrays expose `length` and numeric indexes (which continue into `items`); nothing else. */
+function arrayHasPath(s: JsonObject, seg: string, rest: string[]): PathVerdict {
+  if (seg === 'length') return rest.length === 0 ? 'yes' : 'no';
+  return /^\d+$/.test(seg) ? schemaHasPath(s.items, rest) : 'no';
 }
 
 const OBJ = 'object';

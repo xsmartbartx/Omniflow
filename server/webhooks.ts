@@ -87,6 +87,31 @@ const hostPort = (url: string): string => {
 /** Only the origin of a hook's url is ever shown or logged: paths and queries can carry tokens. */
 export const originOf = (url: string): string => new URL(url).origin;
 
+type EventRow = ReturnType<State['events']['list']>[number];
+type RunRow = ReturnType<State['runs']['getRun']>;
+
+/** The JSON body sent for one event: the run it belongs to and, for failures, a redacted error. */
+function webhookPayload(e: EventRow, run: RunRow): Record<string, unknown> {
+  const error =
+    typeof e.data.error === 'object' && e.data.error ? (e.data.error as Record<string, unknown>) : undefined;
+  return {
+    id: e.id,
+    type: e.type,
+    occurredAt: e.ts,
+    tenant: e.tenant,
+    run: {
+      id: e.runId ?? null,
+      workflow: run?.workflowName ?? null,
+      version: run?.workflowVersion ?? null,
+      status: run?.status ?? null,
+      ...(e.correlationId ? { correlationId: e.correlationId } : {}),
+    },
+    ...(error
+      ? { error: { code: error.code ?? null, message: redactMessage(String(error.message ?? '')).slice(0, 300) } }
+      : {}),
+  };
+}
+
 /**
  * Delivers run-lifecycle events to operator-configured URLs. Durable and at-least-once: new events are
  * found by reading the event log past a persisted cursor (so a crash loses nothing), turned into delivery
@@ -128,35 +153,13 @@ export class WebhookDispatcher {
         const run = e.runId ? this.st.runs.getRun(e.runId, e.tenant) : undefined;
         for (const h of this.hooks.values()) {
           if (h.tenant !== e.tenant || !h.events.includes(e.type as WebhookEvent)) continue;
-          const error =
-            typeof e.data.error === 'object' && e.data.error ? (e.data.error as Record<string, unknown>) : undefined;
           const ok = this.st.webhooks.enqueue({
             tenant: e.tenant,
             hookId: h.id,
             eventSeq: e.seq,
             eventType: e.type,
             ...(e.runId ? { runId: e.runId } : {}),
-            payload: {
-              id: e.id,
-              type: e.type,
-              occurredAt: e.ts,
-              tenant: e.tenant,
-              run: {
-                id: e.runId ?? null,
-                workflow: run?.workflowName ?? null,
-                version: run?.workflowVersion ?? null,
-                status: run?.status ?? null,
-                ...(e.correlationId ? { correlationId: e.correlationId } : {}),
-              },
-              ...(error
-                ? {
-                    error: {
-                      code: error.code ?? null,
-                      message: redactMessage(String(error.message ?? '')).slice(0, 300),
-                    },
-                  }
-                : {}),
-            },
+            payload: webhookPayload(e, run),
           });
           if (ok) made++;
         }
