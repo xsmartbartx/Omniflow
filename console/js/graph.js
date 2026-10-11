@@ -18,8 +18,24 @@ export function layoutGraph(nodes, edges) {
     preds.get(e.to).push(e.from);
     succs.get(e.from).push(e.to);
   }
+  const layers = assignLayers(ids, preds);
+  orderLayers(layers, preds, succs);
+  const { pos, width } = placeLayers(layers);
 
-  // layer = longest path from any root (memoised DFS; cycles cannot occur in a compiled plan, but guard anyway)
+  const laidOut = nodes.map((n) => ({ ...n, ...pos.get(n.id), w: NODE_W, h: NODE_H }));
+  const laidEdges = edges
+    .filter((e) => pos.has(e.from) && pos.has(e.to) && e.from !== e.to)
+    .map((e) => routeEdge(e, pos.get(e.from), pos.get(e.to)));
+  return {
+    nodes: laidOut,
+    edges: laidEdges,
+    width,
+    height: PAD * 2 + layers.length * NODE_H + Math.max(0, layers.length - 1) * GAP_Y,
+  };
+}
+
+// layer = longest path from any root (memoised DFS; cycles cannot occur in a compiled plan, but guard anyway)
+function assignLayers(ids, preds) {
   const layer = new Map();
   const visiting = new Set();
   const depth = (id) => {
@@ -40,8 +56,11 @@ export function layoutGraph(nodes, edges) {
     layers[l].push(id);
   }
   for (let i = 0; i < layers.length; i++) layers[i] ??= [];
+  return layers;
+}
 
-  // order within layers: a few barycentre sweeps to reduce crossings, ties broken by input order (stable)
+// order within layers: a few barycentre sweeps to reduce crossings, ties broken by input order (stable)
+function orderLayers(layers, preds, succs) {
   const order = new Map();
   for (const l of layers) for (const [i, id] of l.entries()) order.set(id, i);
   const bary = (id, nb) => {
@@ -56,7 +75,10 @@ export function layoutGraph(nodes, edges) {
       for (const [i, id] of l.entries()) order.set(id, i);
     }
   }
+}
 
+/** Centre each layer in a canvas as wide as the widest one. */
+function placeLayers(layers) {
   const widest = Math.max(1, ...layers.map((l) => l.length));
   const width = PAD * 2 + widest * NODE_W + (widest - 1) * GAP_X;
   const pos = new Map();
@@ -66,26 +88,16 @@ export function layoutGraph(nodes, edges) {
     for (const [i, id] of l.entries())
       pos.set(id, { x: x0 + i * (NODE_W + GAP_X), y: PAD + li * (NODE_H + GAP_Y), layer: li });
   }
+  return { pos, width };
+}
 
-  const laidOut = nodes.map((n) => ({ ...n, ...pos.get(n.id), w: NODE_W, h: NODE_H }));
-  const laidEdges = edges
-    .filter((e) => pos.has(e.from) && pos.has(e.to) && e.from !== e.to)
-    .map((e) => {
-      const a = pos.get(e.from);
-      const b = pos.get(e.to);
-      const x1 = a.x + NODE_W / 2;
-      const y1 = a.y + NODE_H;
-      const x2 = b.x + NODE_W / 2;
-      const y2 = b.y;
-      const dy = Math.max(20, (y2 - y1) / 2);
-      return { ...e, x1, y1, x2, y2, path: `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}` };
-    });
-  return {
-    nodes: laidOut,
-    edges: laidEdges,
-    width,
-    height: PAD * 2 + layers.length * NODE_H + Math.max(0, layers.length - 1) * GAP_Y,
-  };
+function routeEdge(e, a, b) {
+  const x1 = a.x + NODE_W / 2;
+  const y1 = a.y + NODE_H;
+  const x2 = b.x + NODE_W / 2;
+  const y2 = b.y;
+  const dy = Math.max(20, (y2 - y1) / 2);
+  return { ...e, x1, y1, x2, y2, path: `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}` };
 }
 
 const KIND_LABEL = {

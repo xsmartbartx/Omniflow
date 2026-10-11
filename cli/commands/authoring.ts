@@ -73,87 +73,25 @@ export async function planCommand(ctx: CliContext): Promise<number> {
 
 export async function draftsCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1] ?? 'list';
-  const api = client(ctx);
-  const s = ctx.style;
-  if (sub === 'list') {
-    const r = await api.get(`/v1/drafts${queryFlag(ctx.args, 'status')}`);
-    emit(ctx, r.items, () =>
-      r.items.length === 0
-        ? 'No drafts.'
-        : table(
-            r.items.map((d: any) => [
-              d.id,
-              d.workflowName ?? '—',
-              d.origin,
-              d.status,
-              d.validation?.ok ? s.green('valid') : s.red('invalid'),
-              ago(d.updatedAt),
-            ]),
-            ['DRAFT', 'WORKFLOW', 'ORIGIN', 'STATUS', 'VALIDATION', 'UPDATED'],
-            s,
-          ),
-    );
-    return 0;
-  }
-  if (sub === 'create') {
-    const file = need(ctx, 2, 'manifest file');
-    const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-    const d = await api.post('/v1/drafts', { manifest });
-    emit(ctx, d, () => summarise(ctx, d).join('\n'));
-    return d.validation?.ok ? 0 : 1;
-  }
+  if (sub === 'list') return draftsList(ctx);
+  if (sub === 'create') return draftsCreate(ctx);
   const id = need(ctx, 2, 'draft id');
   const path = `/v1/drafts/${encodeURIComponent(id)}`;
   switch (sub) {
-    case 'show': {
-      const d = await api.get(path);
-      if (has(ctx.args, 'manifest') && !ctx.json) {
-        if (!outFile(ctx, d.manifestText)) ctx.out(d.manifestText);
-      } else
-        emit(ctx, d, () =>
-          [
-            `${s.bold(d.workflowName ?? '(unnamed)')}  ${d.origin} · ${d.status}`,
-            ...summarise(ctx, d),
-            ...(d.notes?.rationale ? ['', d.notes.rationale] : []),
-            ...(d.notes?.openQuestions ?? []).map((q: string) => `  ? ${q}`),
-            '',
-            d.manifestText,
-          ].join('\n'),
-        );
-      return 0;
-    }
+    case 'show':
+      return draftShow(ctx, path);
     case 'validate': {
-      const d = await api.post(`${path}/validate`);
+      const d = await client(ctx).post(`${path}/validate`);
       emit(ctx, d, () => summarise(ctx, d).join('\n'));
       return d.validation?.ok ? 0 : 1;
     }
-    case 'submit': {
-      const r = await api.post(
-        `${path}/submit`,
-        has(ctx.args, 'canary') ? { canaryPercent: Number(flag(ctx.args, 'canary')) } : {},
-      );
-      emit(ctx, r, () => {
-        if (r.status !== 'published')
-          return `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`;
-        const ref = s.bold(`${r.version.name}@${r.version.version}`);
-        return `${s.green('✓')} published ${ref}`;
-      });
-      return 0;
-    }
-    case 'apply': {
-      const r = await api.post(`${path}/apply`);
-      const outcome =
-        r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`;
-      emit(ctx, r, () =>
-        r.applied
-          ? `${s.green('✓')} tier ${r.tier}: ${outcome}\n  ${r.verdict.reason}`
-          : `${s.yellow('—')} tier ${r.tier}: nothing applied. ${r.verdict.reason}`,
-      );
-      return 0;
-    }
+    case 'submit':
+      return draftSubmit(ctx, path);
+    case 'apply':
+      return draftApply(ctx, path);
     case 'delete': {
-      await api.del(path);
-      ctx.out(`${s.green('✓')} deleted ${id}\n`);
+      await client(ctx).del(path);
+      ctx.out(`${ctx.style.green('✓')} deleted ${id}\n`);
       return 0;
     }
     default:
@@ -161,6 +99,83 @@ export async function draftsCommand(ctx: CliContext): Promise<number> {
         `Unknown drafts subcommand '${sub}'. Try: list, create, show, validate, submit, apply, delete`,
       );
   }
+}
+
+async function draftsList(ctx: CliContext): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/drafts${queryFlag(ctx.args, 'status')}`);
+  emit(ctx, r.items, () =>
+    r.items.length === 0
+      ? 'No drafts.'
+      : table(
+          r.items.map((d: any) => [
+            d.id,
+            d.workflowName ?? '—',
+            d.origin,
+            d.status,
+            d.validation?.ok ? s.green('valid') : s.red('invalid'),
+            ago(d.updatedAt),
+          ]),
+          ['DRAFT', 'WORKFLOW', 'ORIGIN', 'STATUS', 'VALIDATION', 'UPDATED'],
+          s,
+        ),
+  );
+  return 0;
+}
+
+async function draftsCreate(ctx: CliContext): Promise<number> {
+  const file = need(ctx, 2, 'manifest file');
+  const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
+  const d = await client(ctx).post('/v1/drafts', { manifest });
+  emit(ctx, d, () => summarise(ctx, d).join('\n'));
+  return d.validation?.ok ? 0 : 1;
+}
+
+async function draftShow(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const d = await client(ctx).get(path);
+  if (has(ctx.args, 'manifest') && !ctx.json) {
+    if (!outFile(ctx, d.manifestText)) ctx.out(d.manifestText);
+  } else
+    emit(ctx, d, () =>
+      [
+        `${s.bold(d.workflowName ?? '(unnamed)')}  ${d.origin} · ${d.status}`,
+        ...summarise(ctx, d),
+        ...(d.notes?.rationale ? ['', d.notes.rationale] : []),
+        ...(d.notes?.openQuestions ?? []).map((q: string) => `  ? ${q}`),
+        '',
+        d.manifestText,
+      ].join('\n'),
+    );
+  return 0;
+}
+
+async function draftSubmit(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(
+    `${path}/submit`,
+    has(ctx.args, 'canary') ? { canaryPercent: Number(flag(ctx.args, 'canary')) } : {},
+  );
+  emit(ctx, r, () => {
+    if (r.status !== 'published')
+      return `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`;
+    const ref = s.bold(`${r.version.name}@${r.version.version}`);
+    return `${s.green('✓')} published ${ref}`;
+  });
+  return 0;
+}
+
+async function draftApply(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(`${path}/apply`);
+  const outcome =
+    r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`;
+  emit(ctx, r, () =>
+    r.applied
+      ? `${s.green('✓')} tier ${r.tier}: ${outcome}\n  ${r.verdict.reason}`
+      : `${s.yellow('—')} tier ${r.tier}: nothing applied. ${r.verdict.reason}`,
+  );
+  return 0;
 }
 
 export async function importCommand(ctx: CliContext): Promise<number> {
