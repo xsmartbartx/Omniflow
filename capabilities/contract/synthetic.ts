@@ -26,18 +26,20 @@ export function exampleFromSchema(schema: unknown, depth = 0): JsonValue {
       const min = typeof s.minItems === 'number' ? s.minItems : 0;
       return Array.from({ length: min }, () => exampleFromSchema(s.items, depth + 1));
     }
-    case 'object': {
-      const out: JsonObject = {};
-      const props = (s.properties ?? {}) as JsonObject;
-      const required = new Set((s.required as string[] | undefined) ?? []);
-      for (const [k, v] of Object.entries(props)) {
-        if (required.has(k) || (v as JsonObject)?.default !== undefined) {
-          out[k] = exampleFromSchema(v, depth + 1);
-        }
-      }
-      return out;
-    }
+    case 'object':
+      return exampleObject(s, depth);
     default:
       return null;
   }
+}
+
+/** An object with only its required properties and those that declare a default. */
+function exampleObject(s: JsonObject, depth: number): JsonObject {
+  const out: JsonObject = {};
+  const props = (s.properties ?? {}) as JsonObject;
+  const required = new Set((s.required as string[] | undefined) ?? []);
+  for (const [k, v] of Object.entries(props)) {
+    if (required.has(k) || (v as JsonObject)?.default !== undefined) out[k] = exampleFromSchema(v, depth + 1);
+  }
+  return out;
 }

@@ -37,15 +37,25 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     if (a === '-h') push('help', 'true');
     else if (a === '-v') push('version', 'true');
     else if (a.startsWith('--')) {
-      const eq = a.indexOf('=');
-      const name = eq > 0 ? a.slice(2, eq) : a.slice(2);
-      if (eq > 0) push(name, a.slice(eq + 1));
-      else if (BOOLEAN.has(name)) push(name, 'true');
-      else if (i + 1 < argv.length && !argv[i + 1]!.startsWith('--')) push(name, argv[++i]!);
-      else push(name, 'true');
+      const { name, value, consumedNext } = parseLongFlag(a, argv[i + 1]);
+      push(name, value);
+      if (consumedNext) i++;
     } else positionals.push(a);
   }
   return { positionals, flags };
+}
+
+/** One `--name`, `--name=value` or `--name value` token; `next` is the following argument, if any. */
+function parseLongFlag(
+  token: string,
+  next: string | undefined,
+): { name: string; value: string; consumedNext: boolean } {
+  const eq = token.indexOf('=');
+  if (eq > 0) return { name: token.slice(2, eq), value: token.slice(eq + 1), consumedNext: false };
+  const name = token.slice(2);
+  if (BOOLEAN.has(name) || next === undefined || next.startsWith('--'))
+    return { name, value: 'true', consumedNext: false };
+  return { name, value: next, consumedNext: true };
 }
 
 export const flag = (a: ParsedArgs, name: string): string | undefined => a.flags.get(name)?.at(-1);

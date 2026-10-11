@@ -79,6 +79,22 @@ const cell = (s: unknown) =>
     .replaceAll('|', String.raw`\|`)
     .replaceAll('\n', ' ');
 
+/** Mermaid edges into one step: from `start` or its dependencies (dotted when conditional), plus its error route. */
+function edgeLines(s: PlanStep, node: ReadonlyMap<string, string>): string[] {
+  const id = node.get(s.id)!;
+  const lines: string[] = [];
+  if (s.dependsOn.length === 0) lines.push(`  start --> ${id}`);
+  for (const d of s.dependsOn) {
+    const from = node.get(d);
+    if (!from) continue;
+    const when = s.when && s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when;
+    lines.push(when ? `  ${from} -.->|"${esc(when)}"| ${id}` : `  ${from} --> ${id}`);
+  }
+  if (typeof s.onError === 'object' && s.onError && node.has(s.onError.routeTo))
+    lines.push(`  ${id} -. "on error" .-> ${node.get(s.onError.routeTo)}`);
+  return lines;
+}
+
 /** The plan as a Mermaid flowchart: shape = step kind, colour = effect, dotted = conditional, red = error route. */
 export function workflowMermaid(plan: Plan): string {
   const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
@@ -98,18 +114,7 @@ export function workflowMermaid(plan: Plan): string {
     const l = label(s);
     lines.push(nodeLine(s.type, id, l));
   }
-  for (const s of ordered) {
-    const id = node.get(s.id)!;
-    if (s.dependsOn.length === 0) lines.push(`  start --> ${id}`);
-    for (const d of s.dependsOn) {
-      const from = node.get(d);
-      if (!from) continue;
-      const when = s.when && s.when.length > 40 ? `${s.when.slice(0, 37)}...` : s.when;
-      lines.push(when ? `  ${from} -.->|"${esc(when)}"| ${id}` : `  ${from} --> ${id}`);
-    }
-    if (typeof s.onError === 'object' && s.onError && node.has(s.onError.routeTo))
-      lines.push(`  ${id} -. "on error" .-> ${node.get(s.onError.routeTo)}`);
-  }
+  for (const s of ordered) lines.push(...edgeLines(s, node));
   lines.push('  classDef effectful fill:#fdecea,stroke:#c0392b,color:#7b241c');
   lines.push('  classDef idempotent fill:#fef9e7,stroke:#b7950b,color:#7d6608');
   lines.push('  classDef pure fill:#eafaf1,stroke:#1e8449,color:#145a32');
@@ -224,7 +229,7 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
   for (const c of [...caps].sort((a, b) => a.name.localeCompare(b.name))) {
     const props =
       (c.inputSchema as {
-        properties?: Record<string, { type?: string; description?: string }>;
+        properties?: Record<string, { type?: string | string[]; description?: string }>;
         required?: string[];
       }) ?? {};
     const scopes = c.scopes.length ? c.scopes.map((s) => `\`${s}\``).join(', ') : 'none';
@@ -239,16 +244,8 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
       `- **Network:** ${networkNote(c.egress)}`,
       `- **Data classification:** ${c.dataClassification}${undo}`,
       '',
+      ...inputTable(props),
     );
-    const inputs = Object.entries(props.properties ?? {});
-    if (inputs.length) {
-      out.push('| Input | Type | Required | Notes |', '|---|---|---|---|');
-      for (const [k, v] of inputs)
-        out.push(
-          `| \`${k}\` | ${cell(Array.isArray(v?.type) ? v.type.join('/') : (v?.type ?? 'any'))} | ${props.required?.includes(k) ? 'yes' : ''} | ${cell(v?.description)} |`,
-        );
-      out.push('');
-    }
     if (c.failureModes.length) {
       out.push(
         'Failure modes: ' +
@@ -258,6 +255,20 @@ export function capabilityMarkdown(caps: CapabilityDeclaration[]): string {
     }
   }
   return `${out.join('\n')}\n`;
+}
+
+/** The input table for one capability's schema; nothing when it takes no inputs. */
+function inputTable(schema: {
+  properties?: Record<string, { type?: string | string[]; description?: string }>;
+  required?: string[];
+}): string[] {
+  const inputs = Object.entries(schema.properties ?? {});
+  if (inputs.length === 0) return [];
+  const rows = inputs.map(([k, v]) => {
+    const type = Array.isArray(v?.type) ? v.type.join('/') : (v?.type ?? 'any');
+    return `| \`${k}\` | ${cell(type)} | ${schema.required?.includes(k) ? 'yes' : ''} | ${cell(v?.description)} |`;
+  });
+  return ['| Input | Type | Required | Notes |', '|---|---|---|---|', ...rows, ''];
 }
 
 export function indexMarkdown(
