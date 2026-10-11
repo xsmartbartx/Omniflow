@@ -161,10 +161,9 @@ export class CapabilityRegistry {
   /** Latest version of every capability. */
   latest(): RegisteredCapability[] {
     const out: RegisteredCapability[] = [];
-    for (const [name, versions] of this.byName) {
+    for (const versions of this.byName.values()) {
       const best = semver.maxSatisfying([...versions.keys()], '*');
       if (best) out.push(versions.get(best)!);
-      else void name;
     }
     return out.sort((a, b) => a.declaration.name.localeCompare(b.declaration.name));
   }

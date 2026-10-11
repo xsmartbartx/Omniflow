@@ -128,7 +128,7 @@ export class Db {
   /** Consistent online backup of the whole database into `destination` (must not exist). */
   backupTo(destination: string): void {
     mkdirSync(dirname(destination), { recursive: true });
-    this.raw.exec(`VACUUM INTO '${destination.replace(/'/g, "''")}'`);
+    this.raw.exec(`VACUUM INTO '${destination.replaceAll("'", "''")}'`);
   }
 
   checkpoint(): void {

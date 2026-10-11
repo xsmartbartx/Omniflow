@@ -282,7 +282,7 @@ describe('workflow lifecycle over HTTP', () => {
     expect(bad.errors[0]).toMatchObject({ code: 'UNKNOWN_CAPABILITY' });
     expect(bad.errors[0].message).toContain("did you mean 'util-echo'");
     expect(bad.errors[0].line).toBeGreaterThan(1);
-    expect((await api.app.state.registry.getVersion('default', 'order-report', '1.0.0')) === undefined).toBe(true);
+    expect(await api.app.state.registry.getVersion('default', 'order-report', '1.0.0')).toBeUndefined();
   });
 
   it('publishes, lists, describes, graphs and runs it', async () => {
@@ -340,7 +340,7 @@ describe('workflow lifecycle over HTTP', () => {
     expect(String(res.headers['content-type'])).toContain('text/event-stream');
     expect(res.body).toContain('event: run.queued');
     expect(res.body).toContain('event: run.succeeded');
-    expect(res.body.match(/^id: \d+$/gm)!.length).toBe(events.length);
+    expect(res.body.match(/^id: \d+$/gm)!).toHaveLength(events.length);
     // resuming after the last event delivers nothing new
     const last = events.at(-1).seq;
     const resumed = await api.server.inject({

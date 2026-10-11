@@ -304,7 +304,7 @@ export class Authenticator {
 
   updateUser(actor: Principal, id: string, patch: { name?: string; roles?: Role[]; disabled?: boolean }): UserRecord {
     const user = this.st.identity.getUser(id);
-    if (!user || user.tenant !== actor.tenant) throw new AuthenticationError('User not found');
+    if (user?.tenant !== actor.tenant) throw new AuthenticationError('User not found');
     if (patch.roles) this.assertRoles(patch.roles);
     if (
       id === actor.id &&
@@ -351,7 +351,7 @@ export class Authenticator {
 
   revokeApiKey(actor: Principal, id: string): void {
     const key = this.st.identity.getApiKey(id);
-    if (!key || key.tenant !== actor.tenant) throw new AuthenticationError('API key not found');
+    if (key?.tenant !== actor.tenant) throw new AuthenticationError('API key not found');
     this.st.identity.revokeApiKey(id);
     this.st.events.append({
       tenant: actor.tenant,

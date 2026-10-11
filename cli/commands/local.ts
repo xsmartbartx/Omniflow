@@ -257,8 +257,8 @@ export async function devCommand(ctx: CliContext): Promise<number> {
           try {
             app.approvals.decide(approver, id, 'approved', 'auto-approved by constans dev');
             ctx.err(`${s.yellow('approval')} ${id} auto-approved\n`);
-          } catch (e2) {
-            ctx.err(`${s.red('could not auto-approve')}: ${(e2 as Error).message}\n`);
+          } catch (error_) {
+            ctx.err(`${s.red('could not auto-approve')}: ${(error_ as Error).message}\n`);
           }
         } else
           ctx.err(`${s.yellow('waiting for approval')} ${id} — re-run with --auto-approve to answer approval gates\n`);

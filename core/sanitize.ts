@@ -54,7 +54,7 @@ const DEFAULTS = { maxDepth: 12, maxString: 8192, maxArray: 200, maxKeys: 200 };
 // Control characters (except \t \n \r) and invisible bidirectional-override characters used for
 // log forging and "Trojan Source" attacks.
 const CONTROL_CHARS = new RegExp(
-  `[${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
+  `[${String.fromCodePoint(0)}-${String.fromCodePoint(8)}${String.fromCodePoint(11)}${String.fromCodePoint(12)}${String.fromCodePoint(14)}-${String.fromCodePoint(31)}${String.fromCodePoint(127)}]`,
   'g',
 );
 const BIDI_AND_ZERO_WIDTH = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;

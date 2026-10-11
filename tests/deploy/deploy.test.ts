@@ -176,7 +176,7 @@ describe('example workflows and policies', () => {
   });
 
   it('the optional examples need something the stock install lacks — and are valid once it is there', async () => {
-    expect(optional.length).toBe(3);
+    expect(optional).toHaveLength(3);
     for (const f of optional) {
       const text = read(`workflows/optional/${f}`);
       expect(compile(text, opts(stock)).errors.length, `${f} should not compile on a stock install`).toBeGreaterThan(0);

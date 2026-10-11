@@ -124,7 +124,7 @@ export function collectReferences(node: Node): Reference[] {
       // Still descend into computed indexes, whose expressions may reference other data.
       let cur: Node = n;
       while (cur.type === 'member' || cur.type === 'index') {
-        if (cur.type === 'index' && !(cur.index.type === 'literal')) walk(cur.index);
+        if (cur.type === 'index' && cur.index.type !== 'literal') walk(cur.index);
         cur = cur.object;
       }
       if (cur.type !== 'ident') walk(cur);

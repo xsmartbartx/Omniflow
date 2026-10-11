@@ -36,7 +36,7 @@ export interface Keyring {
   keys: Map<string, Buffer>;
 }
 
-export const SECRET_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+export const SECRET_NAME = /^[A-Za-z]\w{0,63}$/;
 const MAX_SECRET_BYTES = 64 * 1024;
 
 function decodeKey(material: string): Buffer {

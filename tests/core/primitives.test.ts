@@ -241,7 +241,7 @@ describe('sanitisation and redaction', () => {
     cyc.self = cyc;
     expect((redact(cyc) as any).self).toBe('[Circular]');
     expect(String(redact('x'.repeat(20000)))).toContain('truncated');
-    expect((redact(new Array(500).fill(1)) as unknown[]).length).toBe(201);
+    expect(redact(new Array(500).fill(1)) as unknown[]).toHaveLength(201);
     let deep: Record<string, unknown> = {};
     const root = deep;
     for (let i = 0; i < 30; i++) {

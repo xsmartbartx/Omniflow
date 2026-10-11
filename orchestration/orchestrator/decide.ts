@@ -58,8 +58,9 @@ export function classifyPending(plan: Plan, steps: ReadonlyMap<string, StepRecor
     const deps = step.dependsOn.map((d) => steps.get(d)).filter((d): d is StepRecord => d !== undefined);
 
     if (step.type === 'parallel' && step.join === 'any') {
-      if (deps.some((d) => d.status === 'succeeded')) runnable.push(step);
-      else if (deps.every((d) => isTerminalStep(d.status))) runnable.push(step); // all failed/skipped — the join itself fails
+      // First success releases the join; once every dependency is terminal without one, the join itself fails.
+      if (deps.some((d) => d.status === 'succeeded') || deps.every((d) => isTerminalStep(d.status)))
+        runnable.push(step);
       continue;
     }
     if (!deps.every((d) => isTerminalStep(d.status))) continue;

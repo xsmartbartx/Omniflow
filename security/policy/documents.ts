@@ -12,7 +12,7 @@ export interface PolicyParseResult {
 }
 
 /** Parse and validate a `kind: Policy` document (YAML/JSON text or object). */
-export function parsePolicyDocument(source: string | unknown): PolicyParseResult {
+export function parsePolicyDocument(source: unknown): PolicyParseResult {
   let value: unknown = source;
   let locate: ReturnType<typeof parseSource>['locate'] | undefined;
   const issues: Issue[] = [];

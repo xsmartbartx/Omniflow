@@ -211,7 +211,7 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
         additionalProperties: false,
         properties: {
           to: { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string', format: 'email', maxLength: 254 } },
-          subject: { type: 'string', minLength: 1, maxLength: 300, pattern: '^[^\\r\\n]*$' },
+          subject: { type: 'string', minLength: 1, maxLength: 300, pattern: String.raw`^[^\r\n]*$` },
           text: { type: 'string', maxLength: 500_000 },
           html: { type: 'string', maxLength: 500_000 },
           replyTo: { type: 'string', format: 'email', maxLength: 254 },

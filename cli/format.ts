@@ -9,8 +9,8 @@ export interface Style {
   cyan(s: string): string;
 }
 
-const ESC = String.fromCharCode(27);
-const ANSI = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
+const ESC = String.fromCodePoint(27);
+const ANSI = new RegExp(String.raw`${ESC}\[[0-9;]*m`, 'g');
 
 export function makeStyle(enabled: boolean): Style {
   const wrap = (open: number, close: number) => (s: string) => (enabled ? `${ESC}[${open}m${s}${ESC}[${close}m` : s);

@@ -6,7 +6,7 @@ export function compile(pattern) {
     keys.push(k);
     return '/([^/]+)';
   });
-  const re = new RegExp(`^${source.replace(/\//g, '\\/')}$`);
+  const re = new RegExp(`^${source.replaceAll('/', String.raw`\/`)}$`);
   return { re, keys };
 }
 

@@ -129,8 +129,8 @@ describe('sign-in', () => {
     const b = await signIn('org_ISO2', 'b_admin', 'owner');
     await publishHello(a.call, 'iso-a');
     expect((await a.call('POST', '/v1/workflows/iso-a/run', { inputs: {} })).status).toBe(202);
-    expect((await a.call('GET', '/v1/runs')).body.items.length).toBe(1);
-    expect((await b.call('GET', '/v1/runs')).body.items.length).toBe(0);
+    expect((await a.call('GET', '/v1/runs')).body.items).toHaveLength(1);
+    expect((await b.call('GET', '/v1/runs')).body.items).toHaveLength(0);
     expect((await b.call('GET', '/v1/workflows/iso-a')).status).toBe(404);
   });
 });

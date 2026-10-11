@@ -261,7 +261,7 @@ export class StepRuntime implements StepExecutor {
       });
     }
     if (failures.length > allowed) {
-      const first = failures.sort((x, y) => x.index - y.index)[0]!;
+      const first = failures.toSorted((x, y) => x.index - y.index)[0]!;
       return this.failed('execute', durationMs, {
         code: 'MAP_TOLERANCE_EXCEEDED',
         message: `${failures.length} of ${n} items failed (tolerated: ${allowed}); first failure at index ${first.index}: ${first.error.message}`,
@@ -272,7 +272,7 @@ export class StepRuntime implements StepExecutor {
     }
     return {
       kind: 'succeeded',
-      output: { results, failures: failures.sort((x, y) => x.index - y.index), count: n },
+      output: { results, failures: failures.toSorted((x, y) => x.index - y.index), count: n },
       cost,
       durationMs,
     };
@@ -395,7 +395,7 @@ export class StepRuntime implements StepExecutor {
       secretValues = lease.values();
       if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
 
-      const baseScope = { ...a.scope, ...(p.extraScope ?? {}) };
+      const baseScope = { ...a.scope, ...p.extraScope };
       let input: unknown;
       try {
         input = resolveValue(p.withTemplate, { ...baseScope, secrets: lease.scope() }, { seed: a.seed });

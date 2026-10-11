@@ -9,8 +9,12 @@ import {
 } from '../core/index.ts';
 import type { RegistryService, SubmitResult } from '../orchestration/registry/index.ts';
 import type { Principal } from '../schemas/index.ts';
-import type { PolicyEngine, RiskSummary } from '../security/policy/index.ts';
-import { type AutonomyVerdict, autonomyVerdict } from '../security/policy/index.ts';
+import {
+  type AutonomyVerdict,
+  autonomyVerdict,
+  type PolicyEngine,
+  type RiskSummary,
+} from '../security/policy/index.ts';
 import type { DraftRecord, DraftStatus, State } from '../state/index.ts';
 import { explainPlan, explainRun, type PlanExplanation, type RunExplanation } from './agents/explainer.ts';
 import { type ImportResult, importCrontab } from './agents/importer.ts';

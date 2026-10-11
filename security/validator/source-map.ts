@@ -36,7 +36,7 @@ export function parsePointer(pointer: string): PathSegment[] {
   return pointer
     .slice(1)
     .split('/')
-    .map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'))
+    .map((s) => s.replaceAll('~1', '/').replaceAll('~0', '~'))
     .map((s) => (/^\d+$/.test(s) ? Number(s) : s));
 }
 

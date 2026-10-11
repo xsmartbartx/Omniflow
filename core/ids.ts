@@ -111,7 +111,7 @@ export function createRng(seed: string): Rng {
   };
   const rng: Rng = {
     seed,
-    next: () => nextU32() / 0x1_0000_0000,
+    next: () => nextU32() / 2 ** 32,
     int: (min, max) => min + Math.floor(rng.next() * (max - min + 1)),
     fork: (label) => createRng(`${seed}/${label}`),
   };
