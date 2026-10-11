@@ -29,6 +29,6 @@ Multi-region / data residency,ops,could,yes,skip,deferred by NEXORA itself
 Partner marketplace listing for OmniFlow,marketplace,could,yes,skip,deferred by NEXORA itself
 Browser end-to-end tests for console,test,should,no,no,README admits none exist
 Retention and archival of runs and audit log,operations,should,no,no,from category research: history grows forever today (fixes.md #1)
-Outbound signed webhook on run state changes,integrations,should,no,no,check existing alert/notify paths first (fixes.md #2)
+Outbound signed webhook on run state changes,integrations,should,no,yes,"CONSTANS_RUN_WEBHOOKS: signed, durable (cursor + delivery table), retried, listed at /v1/webhooks/deliveries; per-org hooks in NEXORA mode not built"
 "Explain why a run step retried or stopped, in the run view",console,could,no,no,check what the run page shows first (fixes.md #3)
 Workflow search and filters in the console,console,could,no,yes,"search by name/description/owner, state and criticality already existed (missed in the research); added * wildcard and a last-run filter"

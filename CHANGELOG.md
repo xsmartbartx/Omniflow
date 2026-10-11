@@ -6,6 +6,13 @@ All notable changes to Constans are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Outbound run webhooks** (`CONSTANS_RUN_WEBHOOKS`): signed, durable, retried POSTs when runs finish, plus
+  `GET /v1/webhooks/deliveries`. See [API → Outbound webhooks](docs/api.md#outbound-webhooks).
+- `X-RateLimit-Limit`, `-Remaining` and `-Reset` headers on authenticated API responses.
+- Wildcard (`*`) workflow search and a last-run filter in the console.
+
 ### Changed (breaking)
 
 - **The product is now called Constans** (formerly OmniFlow). Nothing was published under the old name, so there is no

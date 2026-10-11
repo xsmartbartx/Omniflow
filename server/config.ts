@@ -6,6 +6,7 @@ import { type LogLevel, ConstansError } from '../core/index.ts';
 import type { Config } from '../gateway/context.ts';
 import type { EnvironmentName } from '../schemas/index.ts';
 import { generateMasterKey } from '../security/secret-broker/index.ts';
+import { parseRunWebhooks, type RunWebhook } from './webhooks.ts';
 
 export type { Config };
 
@@ -129,6 +130,13 @@ export function loadConfig(
   if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel))
     fail('CONSTANS_LOG_LEVEL', 'must be debug, info, warn, error or silent');
 
+  let runWebhooks: RunWebhook[] = [];
+  try {
+    runWebhooks = parseRunWebhooks(env.CONSTANS_RUN_WEBHOOKS, { production: environment === 'production' });
+  } catch (e) {
+    fail('CONSTANS_RUN_WEBHOOKS', (e as Error).message);
+  }
+
   const mode = (env.CONSTANS_MODE ?? 'standalone') as 'standalone' | 'nexora';
   if (mode !== 'standalone' && mode !== 'nexora') fail('CONSTANS_MODE', 'must be standalone or nexora');
   const nexoraCore = (env.CONSTANS_NEXORA_CORE ?? '') as string;
@@ -169,6 +177,7 @@ export function loadConfig(
     alertIntervalSeconds: int(env, 'CONSTANS_ALERT_INTERVAL_SECONDS', 60, 5, 3600),
     version: opts.version ?? '1.0.0',
     mode,
+    runWebhooks,
     nexora: {
       core: 'fake',
       sessionTtlMinutes: int(env, 'CONSTANS_NEXORA_SESSION_TTL_MINUTES', 5, 1, 60),
