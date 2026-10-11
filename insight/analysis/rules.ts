@@ -185,6 +185,7 @@ export const duplicateWorkflows: Rule = (input, t) => {
       if (similarity < t.duplicateSimilarity) continue;
       const [x, y] = [a.wf.name, b.wf.name].sort(compareStrings);
       const params = differingParameters(a.steps, b.steps);
+      const more = params.length > 5 ? '…' : '';
       out.push({
         rule: 'duplicate-workflows',
         severity: 'medium',
@@ -193,7 +194,7 @@ export const duplicateWorkflows: Rule = (input, t) => {
         title: `'${x}' and '${y}' are near-duplicates`,
         summary: `${x} and ${y} share ${pct(similarity)} of their steps (${shared} of ${union}). Two copies drift apart and have to be fixed twice.`,
         recommendation: params.length
-          ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${params.length > 5 ? '…' : ''} — make those inputs.`
+          ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${more} — make those inputs.`
           : `Merge them into one workflow; they do the same thing.`,
         evidence: {
           workflows: [x, y],

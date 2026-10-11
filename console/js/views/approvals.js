@@ -6,6 +6,21 @@ import { button, card, dataTable, pageHeader, statusBadge, tabs } from '../ui.js
 import { runLink, wfLink, when } from './common.js';
 import { decide } from './run.js';
 
+/** The action cell of a pending approval: decide buttons, or why you cannot. */
+function decisionCell(a, after) {
+  if (a.canDecide)
+    return h(
+      'span',
+      { class: 'row', style: { gap: '4px' } },
+      button('Approve', { small: true, kind: 'primary', onClick: () => decide(a, 'approved', after) }),
+      button('Deny', { small: true, kind: 'danger', onClick: () => decide(a, 'denied', after) }),
+    );
+  const why = can('approval.decide')
+    ? 'You started this run, or are not one of its approvers'
+    : 'You do not have the approver role';
+  return h('span', { class: 'muted', title: why }, 'not yours');
+}
+
 export default async function approvals(ctx) {
   const view = (status) => async () => {
     const box = h('div');
@@ -31,43 +46,17 @@ export default async function approvals(ctx) {
             {
               label: status === 'pending' ? 'Expires' : 'Decided',
               class: 'nowrap',
-              render: (a) =>
-                status === 'pending'
-                  ? h('span', { title: timestamp(a.expiresAt) }, `${until(a.expiresAt)} (${a.onTimeout})`)
-                  : h(
-                      'span',
-                      {},
-                      a.decidedBy ?? 'timeout',
-                      a.comment ? h('div', { class: 'muted' }, `“${a.comment}”`) : null,
-                    ),
+              render: (a) => {
+                if (status === 'pending')
+                  return h('span', { title: timestamp(a.expiresAt) }, `${until(a.expiresAt)} (${a.onTimeout})`);
+                const comment = a.comment ? h('div', { class: 'muted' }, `“${a.comment}”`) : null;
+                return h('span', {}, a.decidedBy ?? 'timeout', comment);
+              },
             },
             {
               label: '',
               class: 'nowrap',
-              render: (a) =>
-                status !== 'pending'
-                  ? statusBadge(a.status)
-                  : a.canDecide
-                    ? h(
-                        'span',
-                        { class: 'row', style: { gap: '4px' } },
-                        button('Approve', {
-                          small: true,
-                          kind: 'primary',
-                          onClick: () => decide(a, 'approved', after),
-                        }),
-                        button('Deny', { small: true, kind: 'danger', onClick: () => decide(a, 'denied', after) }),
-                      )
-                    : h(
-                        'span',
-                        {
-                          class: 'muted',
-                          title: can('approval.decide')
-                            ? 'You started this run, or are not one of its approvers'
-                            : 'You do not have the approver role',
-                        },
-                        'not yours',
-                      ),
+              render: (a) => (status === 'pending' ? decisionCell(a, after) : statusBadge(a.status)),
             },
           ],
         }),

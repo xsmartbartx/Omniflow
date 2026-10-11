@@ -99,7 +99,8 @@ function validateTarget(raw: string, req: SafeRequest): URL {
   if (url.username || url.password) {
     throw egressDenied('Credentials in URLs are not allowed; use a header with a secret');
   }
-  const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
+  const defaultPort = url.protocol === 'https:' ? 443 : 80;
+  const port = url.port ? Number(url.port) : defaultPort;
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (!matchesEgress({ host, port }, req.allowedHosts)) {
     throw egressDenied(`Host '${host}:${port}' is not in the declared egress allow-list`, {

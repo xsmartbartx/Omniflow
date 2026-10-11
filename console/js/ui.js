@@ -124,17 +124,12 @@ export function button(
 }
 
 export function card(title, body, { actions, class: cls, flush } = {}) {
+  const heading = title ? h('h3', {}, title) : h('span');
+  const actionBar = actions ? h('div', { class: 'card-actions' }, actions) : null;
   return h(
     'section',
     { class: ['card', cls, flush ? 'card-flush' : ''] },
-    title || actions
-      ? h(
-          'header',
-          { class: 'card-head' },
-          title ? h('h3', {}, title) : h('span'),
-          actions ? h('div', { class: 'card-actions' }, actions) : null,
-        )
-      : null,
+    title || actions ? h('header', { class: 'card-head' }, heading, actionBar) : null,
     h('div', { class: 'card-body' }, body),
   );
 }
@@ -338,38 +333,36 @@ export function confirmDialog({ title, message, confirmLabel = 'Confirm', danger
   }).then((v) => v === true);
 }
 
+/** The control for one form-dialog field. */
+function fieldControl(f) {
+  if (f.options) return select(f.options, f.value ?? f.options[0]?.[0] ?? f.options[0], { name: f.name });
+  if (f.textarea)
+    return h(
+      'textarea',
+      { class: 'input mono', name: f.name, rows: f.rows ?? 5, placeholder: f.placeholder, spellcheck: 'false' },
+      f.value ?? '',
+    );
+  if (f.type === 'checkbox') return h('input', { type: 'checkbox', name: f.name, checked: !!f.value });
+  return input({
+    name: f.name,
+    type: f.type ?? 'text',
+    placeholder: f.placeholder,
+    value: f.value ?? '',
+    ...(f.type === 'password' ? { autocomplete: 'new-password' } : {}),
+  });
+}
+
 /** Ask for a set of values. fields: [{ name, label, type, options, placeholder, required, help, value, textarea }] */
 export function formDialog({ title, intro, fields, submitLabel = 'Save', danger = false, wide }) {
   const controls = fields.map((f) => {
-    const c = f.options
-      ? select(f.options, f.value ?? f.options[0]?.[0] ?? f.options[0], { name: f.name })
-      : f.textarea
-        ? h(
-            'textarea',
-            { class: 'input mono', name: f.name, rows: f.rows ?? 5, placeholder: f.placeholder, spellcheck: 'false' },
-            f.value ?? '',
-          )
-        : f.type === 'checkbox'
-          ? h('input', { type: 'checkbox', name: f.name, checked: !!f.value })
-          : input({
-              name: f.name,
-              type: f.type ?? 'text',
-              placeholder: f.placeholder,
-              value: f.value ?? '',
-              ...(f.type === 'password' ? { autocomplete: 'new-password' } : {}),
-            });
+    const c = fieldControl(f);
+    const help = f.help ? h('span', { class: 'field-help' }, f.help) : null;
     return {
       f,
       c,
       node:
         f.type === 'checkbox'
-          ? h(
-              'label',
-              { class: 'check' },
-              c,
-              h('span', {}, f.label),
-              f.help ? h('span', { class: 'field-help' }, f.help) : null,
-            )
+          ? h('label', { class: 'check' }, c, h('span', {}, f.label), help)
           : field(f.label, c, f.help),
     };
   });

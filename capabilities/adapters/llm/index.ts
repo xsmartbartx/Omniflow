@@ -110,10 +110,8 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
       dryRun: 'execute',
     } as CapabilityDeclaration,
     async execute(ctx, input) {
-      const framed =
-        input.data === undefined
-          ? ''
-          : `\n\n${frameAsData('workflow data', typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2))}`;
+      const dataText = typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2);
+      const framed = input.data === undefined ? '' : `\n\n${frameAsData('workflow data', dataText)}`;
       const schemaNote = input.schema
         ? `\n\nRespond with ONLY a single JSON value that validates against this JSON Schema, with no commentary:\n${JSON.stringify(input.schema)}`
         : '';

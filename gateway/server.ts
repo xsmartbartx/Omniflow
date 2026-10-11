@@ -18,6 +18,12 @@ import { runRoutes } from './routes/runs.ts';
 import { webhookRoutes } from './routes/webhooks.ts';
 import { workflowRoutes } from './routes/workflows.ts';
 
+/** Plain-language messages for Fastify's own 4xx answers. */
+const CLIENT_ERROR_MESSAGES: Record<number, string> = {
+  413: 'The request body is too large',
+  415: 'Send application/json',
+};
+
 /** Walk up from this file to the directory holding `package.json`. */
 export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url))): string {
   let dir = from;
@@ -149,12 +155,7 @@ export async function buildServer(app: Constans): Promise<{ server: FastifyInsta
       void reply.code(status).send({
         error: {
           code: fv.code ?? 'BAD_REQUEST',
-          message:
-            status === 413
-              ? 'The request body is too large'
-              : status === 415
-                ? 'Send application/json'
-                : 'The request could not be understood',
+          message: CLIENT_ERROR_MESSAGES[status] ?? 'The request could not be understood',
           class: 'contract',
           requestId: req.id,
         },

@@ -88,6 +88,11 @@ const SYSTEM = { type: 'system', id: 'orchestrator', name: 'Orchestrator' } as c
  * `StepExecutor` port. Everything it decides is recomputed from durable state, so a crash at any
  * point is recovered by simply re-driving the run.
  */
+const deniedMessage = (a: { decidedBy?: string; comment?: string }) => {
+  const why = a.comment ? `: ${a.comment}` : '';
+  return `Approval denied by ${a.decidedBy ?? 'an approver'}${why}`;
+};
+
 export class Orchestrator {
   private readonly st: State;
   private readonly exec: StepExecutor;
@@ -313,9 +318,7 @@ export class Orchestrator {
         ps,
         {
           code: timedOut ? 'APPROVAL_TIMEOUT' : 'APPROVAL_DENIED',
-          message: timedOut
-            ? 'The approval request timed out and was denied'
-            : `Approval denied by ${a.decidedBy ?? 'an approver'}${a.comment ? `: ${a.comment}` : ''}`,
+          message: timedOut ? 'The approval request timed out and was denied' : deniedMessage(a),
           class: 'business',
           retryable: false,
         },
@@ -807,8 +810,9 @@ export class Orchestrator {
       );
       return;
     }
-    const handled =
-      ps.onError === 'continue' ? 'continue' : typeof ps.onError === 'object' && ps.onError !== null ? 'route' : null;
+    let handled: 'continue' | 'route' | null = null;
+    if (ps.onError === 'continue') handled = 'continue';
+    else if (typeof ps.onError === 'object' && ps.onError !== null) handled = 'route';
     this.st.runs.patchStep(run.id, ps.id, {
       status: 'failed',
       finishedAt: now.toISOString(),

@@ -23,6 +23,26 @@ import { runLink, wfLink } from './common.js';
 
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour12: false }) + iso.slice(19, 23);
 
+const DOT_TONES = new Set(['good', 'bad', 'warn']);
+
+/** Tone for an undo (compensation) status: failed is the only alarming one. */
+const undoTone = (status, otherwise) => (status === 'failed' ? 'bad' : otherwise);
+
+/** The "Note" cell of the step table: the error, or why the step was skipped. */
+function stepNote(s) {
+  if (s.error)
+    return h('span', { class: 'muted', title: s.error.message }, truncate(`${s.error.code}: ${s.error.message}`, 70));
+  return s.skippedReason ? h('span', { class: 'muted' }, s.skippedReason) : '';
+}
+
+/** What the step dialog shows for the step's output. */
+function outputPreview(step) {
+  if (step.output?.redacted)
+    return notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`);
+  if (step.output !== null && step.output !== undefined) return codeBlock(JSON.stringify(step.output, null, 2));
+  return h('span', { class: 'muted' }, 'No output recorded.');
+}
+
 export default async function run(ctx) {
   const id = ctx.params.id;
   const base = `/v1/runs/${api.enc(id)}`;
@@ -61,10 +81,13 @@ export default async function run(ctx) {
       .filter(Boolean)
       .join(' · ');
     const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+    let eventTone = '';
+    if (bad) eventTone = 'bad';
+    else if (good) eventTone = 'good';
     log.append(
       h(
         'div',
-        { class: ['ev', bad ? 'bad' : good ? 'good' : ''] },
+        { class: ['ev', eventTone] },
         h('span', { class: 't' }, clock(e.ts)),
         h('span', { class: 'ty' }, e.type),
         h('span', {}, [e.stepId ? h('strong', {}, `${e.stepId} `) : '', truncate(detail, 160)]),
@@ -184,13 +207,7 @@ export default async function run(ctx) {
                 h('span', {
                   class: [
                     'dot',
-                    tone(s.status) === 'good'
-                      ? 'good'
-                      : tone(s.status) === 'bad'
-                        ? 'bad'
-                        : tone(s.status) === 'warn'
-                          ? 'warn'
-                          : '',
+                    DOT_TONES.has(tone(s.status)) ? tone(s.status) : '',
                     s.status === 'running' ? 'pulse' : '',
                   ],
                 }),
@@ -215,7 +232,7 @@ export default async function run(ctx) {
                   statusBadge(s.status),
                   s.handled ? badge(`handled: ${s.handled}`, 'neutral') : null,
                   s.compensation?.status
-                    ? badge(`undo: ${s.compensation.status}`, s.compensation.status === 'failed' ? 'bad' : 'neutral')
+                    ? badge(`undo: ${s.compensation.status}`, undoTone(s.compensation.status, 'neutral'))
                     : null,
                 ),
             },
@@ -223,16 +240,7 @@ export default async function run(ctx) {
             { label: 'Took', class: 'num nowrap', render: (s) => duration(s.durationMs) },
             {
               label: 'Note',
-              render: (s) =>
-                s.error
-                  ? h(
-                      'span',
-                      { class: 'muted', title: s.error.message },
-                      truncate(`${s.error.code}: ${s.error.message}`, 70),
-                    )
-                  : s.skippedReason
-                    ? h('span', { class: 'muted' }, s.skippedReason)
-                    : '',
+              render: stepNote,
             },
           ],
         }),
@@ -413,11 +421,7 @@ async function stepDialog(step, base) {
       }
     },
   });
-  const preview = step.output?.redacted
-    ? notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`)
-    : step.output !== null && step.output !== undefined
-      ? codeBlock(JSON.stringify(step.output, null, 2))
-      : h('span', { class: 'muted' }, 'No output recorded.');
+  const preview = outputPreview(step);
   await openDialog({
     title: `Step ${step.id}`,
     wide: true,
@@ -441,7 +445,7 @@ async function stepDialog(step, base) {
         : null,
       step.compensation
         ? notice(
-            step.compensation.status === 'failed' ? 'bad' : 'info',
+            undoTone(step.compensation.status, 'info'),
             `Undo with ${step.compensation.capability}: ${step.compensation.status ?? 'not needed'}`,
           )
         : null,

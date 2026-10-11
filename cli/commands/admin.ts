@@ -239,6 +239,13 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
 
 // ------------------------------------------------------------------ doctor
 type Level = 'ok' | 'warn' | 'fail';
+
+const plural = (n: number) => (n === 1 ? '' : 's');
+
+const diskLevel = (freeMb: number): Level => {
+  if (freeMb < 200) return 'fail';
+  return freeMb < 1024 ? 'warn' : 'ok';
+};
 interface Check {
   level: Level;
   check: string;
@@ -266,7 +273,7 @@ function doctor(
   try {
     const fs = statfsSync(dataDir);
     const freeMb = Math.round((fs.bavail * fs.bsize) / 1_048_576);
-    add(freeMb < 200 ? 'fail' : freeMb < 1024 ? 'warn' : 'ok', 'disk space', `${freeMb.toLocaleString('en')} MiB free`);
+    add(diskLevel(freeMb), 'disk space', `${freeMb.toLocaleString('en')} MiB free`);
   } catch {
     /* not available on every platform */
   }
@@ -330,23 +337,19 @@ function doctor(
   } else if (ctx.env.CONSTANS_MASTER_KEY) add('ok', 'master key', 'supplied through CONSTANS_MASTER_KEY');
   else if (existsSync(keyFile)) {
     const loose = (statSync(keyFile).mode & 0o077) !== 0;
-    add(
-      loose ? 'fail' : config.environment === 'production' ? 'warn' : 'ok',
-      'master key',
-      loose
-        ? `${keyFile} is readable by other users (chmod 600)`
-        : `generated key in ${keyFile}${config.environment === 'production' ? ' — in production, supply CONSTANS_MASTER_KEY from a secret manager and keep a copy off this host' : ''}`,
-    );
+    const production = config.environment === 'production';
+    if (loose) add('fail', 'master key', `${keyFile} is readable by other users (chmod 600)`);
+    else {
+      const advice = production
+        ? ' — in production, supply CONSTANS_MASTER_KEY from a secret manager and keep a copy off this host'
+        : '';
+      add(production ? 'warn' : 'ok', 'master key', `generated key in ${keyFile}${advice}`);
+    }
   }
 
   const admins = state.identity.listUsers('default').filter((u) => u.roles.includes('admin') && !u.disabled);
-  add(
-    admins.length ? 'ok' : 'fail',
-    'administrators',
-    admins.length
-      ? `${admins.length} active admin${admins.length === 1 ? '' : 's'}`
-      : 'no active administrator — run: constans admin create-user --role admin',
-  );
+  if (admins.length) add('ok', 'administrators', `${admins.length} active admin${plural(admins.length)}`);
+  else add('fail', 'administrators', 'no active administrator — run: constans admin create-user --role admin');
 
   if (config.environment === 'production') {
     if (!config.publicUrl.startsWith('https://'))
@@ -392,17 +395,14 @@ function doctor(
 
   const failed = checks.filter((c) => c.level === 'fail').length;
   const warned = checks.filter((c) => c.level === 'warn').length;
+  const mark = (level: Level) => {
+    if (level === 'ok') return s.green('✓');
+    return level === 'warn' ? s.yellow('!') : s.red('✗');
+  };
+  const warnings = warned ? s.yellow(` — ${warned} warning${plural(warned)}`) : '';
+  const summary = failed ? s.red(`${failed} problem${plural(failed)} need attention`) : s.green('Healthy') + warnings;
   emit(ctx, { ok: failed === 0, failed, warnings: warned, checks }, () =>
-    [
-      ...checks.map(
-        (c) =>
-          `${c.level === 'ok' ? s.green('✓') : c.level === 'warn' ? s.yellow('!') : s.red('✗')} ${s.bold(c.check.padEnd(22))} ${c.detail}`,
-      ),
-      '',
-      failed
-        ? s.red(`${failed} problem${failed === 1 ? '' : 's'} need attention`)
-        : s.green('Healthy') + (warned ? s.yellow(` — ${warned} warning${warned === 1 ? '' : 's'}`) : ''),
-    ].join('\n'),
+    [...checks.map((c) => `${mark(c.level)} ${s.bold(c.check.padEnd(22))} ${c.detail}`), '', summary].join('\n'),
   );
   return failed === 0 ? 0 : 1;
 }

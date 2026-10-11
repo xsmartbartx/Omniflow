@@ -137,9 +137,11 @@ export async function draftsCommand(ctx: CliContext): Promise<number> {
     }
     case 'apply': {
       const r = await api.post(`${path}/apply`);
+      const outcome =
+        r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`;
       emit(ctx, r, () =>
         r.applied
-          ? `${s.green('✓')} tier ${r.tier}: ${r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`}\n  ${r.verdict.reason}`
+          ? `${s.green('✓')} tier ${r.tier}: ${outcome}\n  ${r.verdict.reason}`
           : `${s.yellow('—')} tier ${r.tier}: nothing applied. ${r.verdict.reason}`,
       );
       return 0;

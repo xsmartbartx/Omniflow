@@ -1,6 +1,6 @@
 import { type Clock, type ErrorInfo, newId, ConstansError, systemClock } from '../core/index.ts';
 import type { Principal } from '../schemas/index.ts';
-import { type Db, fromJson, toJson } from './database.ts';
+import { type Db, fromJson, toBit, toJson } from './database.ts';
 
 /** Run state machine (architecture §9.2). */
 export type RunStatus =
@@ -433,7 +433,7 @@ export class RunStore {
           toJson(patch.error),
           toJson(patch.outputs),
           patch.cost ?? null,
-          patch.cancelRequested === undefined ? null : patch.cancelRequested ? 1 : 0,
+          toBit(patch.cancelRequested),
           runId,
         ],
       );
@@ -445,13 +445,7 @@ export class RunStore {
     this.db.run(
       `UPDATE runs SET error = COALESCE(?, error), outputs = COALESCE(?, outputs), cost = COALESCE(?, cost),
          cancel_requested = COALESCE(?, cancel_requested) WHERE id = ?`,
-      [
-        toJson(patch.error),
-        toJson(patch.outputs),
-        patch.cost ?? null,
-        patch.cancelRequested === undefined ? null : patch.cancelRequested ? 1 : 0,
-        runId,
-      ],
+      [toJson(patch.error), toJson(patch.outputs), patch.cost ?? null, toBit(patch.cancelRequested), runId],
     );
   }
 
@@ -494,7 +488,8 @@ export class RunStore {
     const set = (col: string, v: unknown, json = false) => {
       if (v === undefined) return;
       sets.push(`${col} = ?`);
-      params.push(v === null ? null : json ? JSON.stringify(v) : (v as string | number));
+      if (v === null) params.push(null);
+      else params.push(json ? JSON.stringify(v) : (v as string | number));
     };
     set('status', patch.status);
     set('attempt', patch.attempt);
