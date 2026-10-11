@@ -269,4 +269,4 @@ api.onUnauthenticated(() => {
   }
 });
 window.addEventListener('hashchange', renderRoute);
-void start();
+await start();

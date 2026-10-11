@@ -25,7 +25,7 @@ export function inputsToJsonSchema(inputs: Record<string, InputSpec>): JsonObjec
     type: 'object',
     properties,
     // Sorted: the plan hash must not depend on the order keys were written in.
-    ...(required.length ? { required: required.sort(compareStrings) } : {}),
+    ...(required.length ? { required: [...required].sort(compareStrings) } : {}),
     additionalProperties: false,
   };
 }

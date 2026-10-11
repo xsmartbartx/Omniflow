@@ -4,5 +4,6 @@
  * canonical JSON and the audit chain depend on it; `localeCompare` would make them depend on the locale).
  */
 export function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
 }
