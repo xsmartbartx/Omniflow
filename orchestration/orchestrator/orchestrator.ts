@@ -694,6 +694,29 @@ export class Orchestrator {
     );
   }
 
+  /** Record what a running step reported: cancelled, succeeded, failed, or deferred to retry later. */
+  private applyStepResult(run: RunRecord, stepId: string, attempt: number, res: StepResult): void {
+    const ps = this.plan(run).steps.find((x) => x.id === stepId)!;
+    if (run.cancelRequested && res.kind !== 'succeeded') {
+      // Cancellation is not a fault: the aborted step simply ends as cancelled.
+      this.st.runs.patchStep(run.id, stepId, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
+      this.event(run, 'step.skipped', { reason: 'run-cancelled' }, stepId, attempt);
+    } else if (res.kind === 'succeeded') {
+      this.succeedStep(run, ps, res.output, {
+        cost: res.cost,
+        durationMs: res.durationMs,
+        replayed: res.replayed ?? false,
+        simulated: res.simulated ?? false,
+      });
+    } else if (res.kind === 'failed') {
+      this.failStep(run, ps, res.error, res.phase, res.durationMs);
+    } else {
+      const wake = new Date(this.clock.now().getTime() + res.retryAfterMs).toISOString();
+      this.st.runs.patchStep(run.id, stepId, { status: 'retry-wait', attempt: attempt - 1, wakeAt: wake });
+      this.event(run, 'step.waiting', { on: res.reason, retryAfterMs: res.retryAfterMs }, stepId, attempt);
+    }
+  }
+
   private onStepResult(runId: string, stepId: string, attempt: number, res: StepResult, d: Driver): void {
     this.slots--;
     d.inflight.delete(stepId);
@@ -704,25 +727,7 @@ export class Orchestrator {
       const run = this.st.runs.getRun(runId);
       const step = this.st.runs.getStep(runId, stepId);
       if (run && step && step.status === 'running' && step.attempt === attempt && !isTerminalRun(run.status)) {
-        const ps = this.plan(run).steps.find((x) => x.id === stepId)!;
-        if (run.cancelRequested && res.kind !== 'succeeded') {
-          // Cancellation is not a fault: the aborted step simply ends as cancelled.
-          this.st.runs.patchStep(runId, stepId, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
-          this.event(run, 'step.skipped', { reason: 'run-cancelled' }, stepId, attempt);
-        } else if (res.kind === 'succeeded') {
-          this.succeedStep(run, ps, res.output, {
-            cost: res.cost,
-            durationMs: res.durationMs,
-            replayed: res.replayed ?? false,
-            simulated: res.simulated ?? false,
-          });
-        } else if (res.kind === 'failed') {
-          this.failStep(run, ps, res.error, res.phase, res.durationMs);
-        } else {
-          const wake = new Date(this.clock.now().getTime() + res.retryAfterMs).toISOString();
-          this.st.runs.patchStep(runId, stepId, { status: 'retry-wait', attempt: attempt - 1, wakeAt: wake });
-          this.event(run, 'step.waiting', { on: res.reason, retryAfterMs: res.retryAfterMs }, stepId, attempt);
-        }
+        this.applyStepResult(run, stepId, attempt, res);
       }
     } catch (e) {
       this.log.error('step result handling failed', { runId, stepId, error: e });

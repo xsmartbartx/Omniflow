@@ -687,24 +687,23 @@ export function compile(source: unknown, options: CompileOptions): CompileResult
   };
   if (manifest.outputs) checkWorkflowRefs(manifest.outputs, ['outputs']);
   // `context.*` is only knowable at compile time — check every expression for undefined keys.
+  const knownContext = new Set([
+    'now',
+    'environment',
+    'tenant',
+    ...Object.keys(manifest.context ?? {}),
+    ...Object.keys(options.context ?? {}),
+  ]);
   manifest.steps.forEach((s, i) => {
     for (const { path, refs } of refsOf(s)) {
       for (const r of refs) {
-        if (r.root === 'context' && r.path[0]) {
-          const known = new Set([
-            'now',
-            'environment',
-            'tenant',
-            ...Object.keys(manifest.context ?? {}),
-            ...Object.keys(options.context ?? {}),
-          ]);
-          if (!known.has(r.path[0]))
-            error(
-              path.length ? path : ['steps', i],
-              'UNKNOWN_CONTEXT_KEY',
-              `context.${r.path[0]} is not defined (declare it in 'context' or provide it via the deployment)`,
-            );
-        }
+        const key = r.root === 'context' ? r.path[0] : undefined;
+        if (key && !knownContext.has(key))
+          error(
+            path.length ? path : ['steps', i],
+            'UNKNOWN_CONTEXT_KEY',
+            `context.${key} is not defined (declare it in 'context' or provide it via the deployment)`,
+          );
       }
     }
   });

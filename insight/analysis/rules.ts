@@ -334,24 +334,28 @@ export const shellSunsets: Rule = (input, t) => {
       if (Number.isNaN(due)) continue;
       const days = Math.round((due - today) / 86_400_000);
       if (days > t.sunsetWarnDays) continue;
-      out.push({
-        rule: 'shell-sunset',
-        severity: days < 0 ? 'high' : 'medium',
-        workflow: wf.name,
-        stepId: s.id,
-        key: `shell-sunset:${wf.name}:${s.id}`,
-        title:
-          days < 0
-            ? `Shell step '${s.id}' is ${-days} days past its sunset date`
-            : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
-        summary: `${wf.name} › ${s.id} was meant to be replaced by ${s.sunset}. Temporary bridges that outlive their date become permanent.`,
-        recommendation: `Replace it with a typed capability, or renew the sunset date with a written justification.`,
-        evidence: { sunset: s.sunset, daysRemaining: days, capability: capOf(s) },
-      });
+      out.push(sunsetFinding(wf.name, s, days));
     }
   }
   return out;
 };
+
+function sunsetFinding(workflow: string, s: PlanStep, days: number): Finding {
+  return {
+    rule: 'shell-sunset',
+    severity: days < 0 ? 'high' : 'medium',
+    workflow,
+    stepId: s.id,
+    key: `shell-sunset:${workflow}:${s.id}`,
+    title:
+      days < 0
+        ? `Shell step '${s.id}' is ${-days} days past its sunset date`
+        : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
+    summary: `${workflow} › ${s.id} was meant to be replaced by ${s.sunset}. Temporary bridges that outlive their date become permanent.`,
+    recommendation: `Replace it with a typed capability, or renew the sunset date with a written justification.`,
+    evidence: { sunset: s.sunset, daysRemaining: days, capability: capOf(s) },
+  };
+}
 
 // ------------------------------------------------------------------ timing
 
