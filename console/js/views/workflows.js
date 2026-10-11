@@ -5,7 +5,16 @@ import { can } from '../session.js';
 import { badge, button, card, dataTable, icon, input, pageHeader, select, statusBadge } from '../ui.js';
 import { triggerChips, wfLink, when } from './common.js';
 
-const stateOf = (w) => (w.killed ? 'killed' : w.enabled ? 'enabled' : 'disabled');
+const stateOf = (w) => {
+  if (w.killed) return 'killed';
+  return w.enabled ? 'enabled' : 'disabled';
+};
+
+const recentCell = (w) => {
+  if (!w.recent.total) return '—';
+  const failed = w.recent.failed ? badge(`${w.recent.failed} failed`, 'bad') : null;
+  return h('span', {}, `${w.recent.succeeded}/${w.recent.total}`, failed);
+};
 
 export default async function workflows(ctx) {
   const { items } = await api.get('/v1/workflows');
@@ -65,15 +74,7 @@ export default async function workflows(ctx) {
           {
             label: 'Recent',
             class: 'num nowrap',
-            render: (w) =>
-              w.recent.total
-                ? h(
-                    'span',
-                    {},
-                    `${w.recent.succeeded}/${w.recent.total}`,
-                    w.recent.failed ? badge(`${w.recent.failed} failed`, 'bad') : null,
-                  )
-                : '—',
+            render: recentCell,
           },
           {
             label: 'Last run',

@@ -47,8 +47,7 @@ export default async function capabilities(ctx) {
           { label: 'Effect', render: (c) => badge(c.effect, effectTone[c.effect] ?? 'neutral') },
           {
             label: 'Network',
-            render: (c) =>
-              c.egress.mode === 'none' ? 'none' : c.egress.mode === 'static' ? c.egress.hosts.join(', ') : 'per step',
+            render: networkCell,
           },
           {
             label: 'Scopes',
@@ -56,12 +55,7 @@ export default async function capabilities(ctx) {
           },
           {
             label: 'State',
-            render: (c) =>
-              c.killed
-                ? badge('killed', 'bad')
-                : c.circuit !== 'closed'
-                  ? badge(`circuit ${c.circuit}`, 'warn')
-                  : statusBadge('ok'),
+            render: stateCell,
           },
         ],
       }),
@@ -80,6 +74,48 @@ export default async function capabilities(ctx) {
     h('div', { class: 'toolbar' }, q),
     card(null, box, { flush: true }),
   );
+}
+
+const networkCell = (c) => {
+  if (c.egress.mode === 'none') return 'none';
+  return c.egress.mode === 'static' ? c.egress.hosts.join(', ') : 'per step';
+};
+
+const stateCell = (c) => {
+  if (c.killed) return badge('killed', 'bad');
+  return c.circuit !== 'closed' ? badge(`circuit ${c.circuit}`, 'warn') : statusBadge('ok');
+};
+
+/** Lift the kill switch if it is on, or offer to turn it on. */
+function killSwitchButton(c, ctx, close) {
+  if (c.killed)
+    return button('Lift kill switch', {
+      kind: 'primary',
+      onClick: async () => {
+        await api.post(`/v1/capabilities/${api.enc(c.name)}/revive`, {});
+        toast('Capability revived', 'good');
+        close(true);
+        ctx.navigate('/capabilities');
+      },
+    });
+  return button('Kill switch', {
+    kind: 'danger',
+    onClick: async () => {
+      const v = await formDialog({
+        title: `Kill ${c.name}?`,
+        intro: 'Every step that uses it fails fast until you lift the switch.',
+        fields: [{ name: 'reason', label: 'Reason', required: true }],
+        submitLabel: 'Kill',
+        danger: true,
+      });
+      if (v) {
+        await api.post(`/v1/capabilities/${api.enc(c.name)}/kill`, { reason: v.reason });
+        toast('Capability killed', 'good');
+        close(true);
+        ctx.navigate('/capabilities');
+      }
+    },
+  });
 }
 
 async function detail(c, ctx) {
@@ -119,36 +155,7 @@ async function detail(c, ctx) {
         : null,
     ),
     actions: (close) => [
-      manage
-        ? c.killed
-          ? button('Lift kill switch', {
-              kind: 'primary',
-              onClick: async () => {
-                await api.post(`/v1/capabilities/${api.enc(c.name)}/revive`, {});
-                toast('Capability revived', 'good');
-                close(true);
-                ctx.navigate('/capabilities');
-              },
-            })
-          : button('Kill switch', {
-              kind: 'danger',
-              onClick: async () => {
-                const v = await formDialog({
-                  title: `Kill ${c.name}?`,
-                  intro: 'Every step that uses it fails fast until you lift the switch.',
-                  fields: [{ name: 'reason', label: 'Reason', required: true }],
-                  submitLabel: 'Kill',
-                  danger: true,
-                });
-                if (v) {
-                  await api.post(`/v1/capabilities/${api.enc(c.name)}/kill`, { reason: v.reason });
-                  toast('Capability killed', 'good');
-                  close(true);
-                  ctx.navigate('/capabilities');
-                }
-              },
-            })
-        : null,
+      manage ? killSwitchButton(c, ctx, close) : null,
       button('Close', { onClick: () => close(true) }),
     ],
   });

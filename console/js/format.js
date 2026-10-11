@@ -136,3 +136,6 @@ export function matcher(term) {
   );
   return (text) => re.test(text);
 }
+
+/** `plural(1, 'step')` is "step", `plural(2, 'step')` is "steps"; pass the plural form for irregular words. */
+export const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);

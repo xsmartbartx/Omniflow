@@ -5,6 +5,30 @@ import { duration, number, percent } from '../format.js';
 import { badge, button, card, dataTable, notice, pageHeader } from '../ui.js';
 import { wfLink } from './common.js';
 
+/** The warning shown as the plan runs out (NEXORA mode). */
+function limitNotice(left, ratio) {
+  if (left === 0)
+    return notice(
+      'bad',
+      h('strong', {}, 'Plan limit reached'),
+      h('p', {}, 'New runs are refused until the next period or an upgrade. Dry runs still work.'),
+    );
+  if (ratio >= 0.8)
+    return notice(
+      'warn',
+      h('strong', {}, `${number(left)} runs left this month`),
+      h('p', {}, 'Dry runs never count against the plan.'),
+    );
+  return null;
+}
+
+/** Colour of the success-rate tile. */
+function rateTone(rate) {
+  if (rate === null) return '';
+  if (rate >= 0.95) return 'good';
+  return rate >= 0.8 ? 'warn' : 'bad';
+}
+
 /** Runs used this month against the plan (NEXORA mode). Always shows the numbers as text, not just a bar. */
 function usageMeter(u) {
   const unlimited = u.limit === null;
@@ -37,19 +61,7 @@ function usageMeter(u) {
         h('p', { class: 'muted' }, summary),
       ),
     ),
-    left === 0
-      ? notice(
-          'bad',
-          h('strong', {}, 'Plan limit reached'),
-          h('p', {}, 'New runs are refused until the next period or an upgrade. Dry runs still work.'),
-        )
-      : ratio >= 0.8
-        ? notice(
-            'warn',
-            h('strong', {}, `${number(left)} runs left this month`),
-            h('p', {}, 'Dry runs never count against the plan.'),
-          )
-        : null,
+    limitNotice(left, ratio),
   );
 }
 
@@ -109,7 +121,7 @@ export default async function dashboard(ctx) {
           'Success rate',
           percent(rate, 1),
           `${o.runs.succeeded} of ${o.runs.succeeded + o.runs.failed} finished`,
-          rate === null ? '' : rate >= 0.95 ? 'good' : rate >= 0.8 ? 'warn' : 'bad',
+          rateTone(rate),
         ),
         kpi('Runs', number(o.runs.total), `${o.runs.failed} failed · ${o.runs.cancelled} cancelled`),
         kpi('In flight', number(o.runs.active), `${o.runs.queued} queued`),
