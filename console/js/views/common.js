@@ -9,7 +9,7 @@ export const runLink = (id) =>
   h('a', { href: `#/runs/${enc(id)}`, class: 'mono', title: id }, id.replace(/^run_/, '').slice(-10));
 export const when = (iso) => h('span', { title: timestamp(iso) }, ago(iso));
 
-export function runsTable(items, { showWorkflow = true, empty = 'No runs yet.' } = {}) {
+export function runsTable(items, { showWorkflow = true, empty = 'No runs yet. Start one from a workflow page.' } = {}) {
   return dataTable({
     empty,
     rows: items,

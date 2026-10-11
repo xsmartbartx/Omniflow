@@ -263,7 +263,7 @@ async function start() {
 
 api.onUnauthenticated(() => {
   if (session.me) {
-    toast('Your session has ended. Please sign in again.', 'warn');
+    toast('Your session ended. Sign in again to pick up where you were.', 'warn');
     showLogin();
   }
 });
