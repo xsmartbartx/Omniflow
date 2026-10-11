@@ -65,14 +65,18 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
-  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_EXCEEDED') return 429;
-  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_DENIED') return 403;
-  if (e instanceof ConstansError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
-  if (e instanceof ConstansError && e.code === 'AI_NOT_CONFIGURED') return 503;
-  if (e instanceof ConstansError && e.code.startsWith('LLM_')) return 502;
-  if (e instanceof ConstansError) return CLASS_STATUS[e.errorClass] ?? 500;
+  if (e instanceof ConstansError)
+    return CODE_STATUS[e.code] ?? (e.code.startsWith('LLM_') ? 502 : (CLASS_STATUS[e.errorClass] ?? 500));
   return 500;
 }
+
+/** HTTP status for specific error codes that need more than their class implies. */
+const CODE_STATUS: Record<string, number> = {
+  ENTITLEMENT_EXCEEDED: 429,
+  ENTITLEMENT_DENIED: 403,
+  ENTITLEMENT_UNAVAILABLE: 503,
+  AI_NOT_CONFIGURED: 503,
+};
 
 /** HTTP status for a failure with no more specific mapping, by error class (architecture §12.2). */
 const CLASS_STATUS: Record<string, number> = { contract: 400, authorisation: 403, business: 409 };

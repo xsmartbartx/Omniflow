@@ -97,6 +97,18 @@ export const deadSteps: Rule = (input, t) => {
   return out;
 };
 
+/** Errors that retrying cannot fix, and whether the step is configured to retry exactly those classes. */
+function misclassifiedRetries<E extends { errorClass: string }>(
+  planStep: PlanStep | undefined,
+  errs: readonly E[],
+): { nonTransient: E[]; misclassified: boolean } {
+  const nonTransient = errs.filter((e) => e.errorClass !== 'transient' && e.errorClass !== 'systemic');
+  const misclassified =
+    nonTransient.length > 0 &&
+    planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
+  return { nonTransient, misclassified };
+}
+
 /** Repeated retries: a flaky dependency, or errors classified so that they are retried pointlessly. */
 export const retryStorms: Rule = (input, t) => {
   const out: Finding[] = [];
@@ -108,10 +120,7 @@ export const retryStorms: Rule = (input, t) => {
       if (rate < t.retryStormRate) continue;
       const planStep = wf.plan.steps.find((p) => p.id === s.stepId);
       const errs = wf.errors.get(s.stepId) ?? [];
-      const nonTransient = errs.filter((e) => e.errorClass !== 'transient' && e.errorClass !== 'systemic');
-      const misclassified =
-        nonTransient.length > 0 &&
-        planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
+      const { nonTransient, misclassified } = misclassifiedRetries(planStep, errs);
       out.push({
         rule: 'retry-storm',
         severity: misclassified || rate >= 0.6 ? 'high' : 'medium',

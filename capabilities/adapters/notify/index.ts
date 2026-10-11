@@ -77,6 +77,23 @@ export async function sendToChannel(
   if (err) throw err;
 }
 
+const SMTP_NETWORK_ERRORS = new Set(['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS']);
+
+/** Classify a failed SMTP send: a 5xx reply is a permanent rejection; everything else is worth retrying. */
+function smtpError(e: unknown): CapabilityError {
+  const err = e as { responseCode?: number; code?: string; message?: string };
+  const code = err.responseCode ?? 0;
+  const message = `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`;
+  const rejected = code >= 500;
+  const recognised = rejected || (code >= 400 && code < 500) || SMTP_NETWORK_ERRORS.has(err.code ?? '');
+  if (!recognised)
+    return new CapabilityError('EMAIL_UNAVAILABLE', message, { errorClass: 'transient', retryable: true });
+  return new CapabilityError(rejected ? 'EMAIL_REJECTED' : 'EMAIL_UNAVAILABLE', message, {
+    errorClass: rejected ? 'business' : 'transient',
+    retryable: !rejected,
+  });
+}
+
 /** Chat prefix by severity; anything else is sent unmarked. */
 const SEVERITY_PREFIX: Record<string, string> = { error: '🔴 ', warning: '🟠 ' };
 
@@ -268,26 +285,7 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
           rejected: (info.rejected ?? []).map(String),
         };
       } catch (e) {
-        const err = e as { responseCode?: number; code?: string; message?: string };
-        const code = err.responseCode ?? 0;
-        if (
-          code >= 500 ||
-          (code >= 400 && code < 500) ||
-          ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'ECONNRESET', 'EDNS'].includes(err.code ?? '')
-        ) {
-          throw new CapabilityError(
-            code >= 500 ? 'EMAIL_REJECTED' : 'EMAIL_UNAVAILABLE',
-            `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`,
-            {
-              errorClass: code >= 500 ? 'business' : 'transient',
-              retryable: code < 500,
-            },
-          );
-        }
-        throw new CapabilityError('EMAIL_UNAVAILABLE', `SMTP: ${(err.message ?? 'send failed').slice(0, 200)}`, {
-          errorClass: 'transient',
-          retryable: true,
-        });
+        throw smtpError(e);
       }
     },
   };

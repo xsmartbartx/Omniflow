@@ -50,6 +50,16 @@ export interface WebhookSecretInfo {
   secret: string;
 }
 
+/** An event trigger's optional filter expression: absent passes, and one that fails to evaluate rejects the event. */
+function passesFilter(filter: string | undefined, facts: Parameters<typeof evaluate>[1]): boolean {
+  if (!filter) return true;
+  try {
+    return isTruthy(evaluate(parseExpressionField(filter), facts));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Trigger Manager (architecture §5.1 #8): owns schedules, event subscriptions, webhook endpoints
  * and workflow-completion links. It converts a trigger firing into a run request; whether the run
@@ -352,14 +362,7 @@ export class TriggerManager {
     const runs: string[] = [];
     for (const t of this.st.triggers.eventSubscribers(tenant, type)) {
       const facts = { event: { type, payload, correlation: correlation ?? null } };
-      const filter = t.config.filter as string | undefined;
-      if (filter) {
-        try {
-          if (!isTruthy(evaluate(parseExpressionField(filter), facts))) continue;
-        } catch {
-          continue;
-        }
-      }
+      if (!passesFilter(t.config.filter as string | undefined, facts)) continue;
       try {
         const inputs = this.mapInputs(t, facts.event, tenant);
         const key = correlation ?? `${Date.now()}:${randomToken(8)}`;
