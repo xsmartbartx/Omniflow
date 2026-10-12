@@ -146,6 +146,39 @@ interface CompiledRule {
   approvals: number;
 }
 
+interface Gates {
+  denials: Array<{ code: string; reason: string; rule?: string }>;
+  approvals: Array<{ code: string; reason: string; approvals: number; rule?: string }>;
+}
+
+const deny = (reasonCode: string, reason: string, ruleIds?: string[]): PolicyDecision => ({
+  effect: 'deny',
+  reasonCode,
+  reason,
+  ...(ruleIds ? { ruleIds } : {}),
+});
+
+/** Any denial wins; otherwise any approval requirement (the strictest count); otherwise allow. */
+function verdict({ denials, approvals }: Gates): PolicyDecision {
+  if (denials.length > 0) {
+    return deny(
+      denials[0]!.code,
+      denials.map((d) => d.reason).join('; '),
+      denials.flatMap((d) => (d.rule ? [d.rule] : [])),
+    );
+  }
+  if (approvals.length > 0) {
+    return {
+      effect: 'require-approval',
+      reasonCode: approvals[0]!.code,
+      reason: approvals.map((r) => r.reason).join('; '),
+      requiredApprovals: Math.max(...approvals.map((r) => r.approvals)),
+      ruleIds: approvals.flatMap((r) => (r.rule ? [r.rule] : [])),
+    };
+  }
+  return { effect: 'allow', reasonCode: 'ALLOWED', reason: 'Permitted' };
+}
+
 export class PolicyEngine {
   private readonly config: PolicyConfig;
   private rules: CompiledRule[] = [];
@@ -203,16 +236,26 @@ export class PolicyEngine {
   }
 
   decide(req: PolicyRequest): PolicyDecision {
+    const { action } = req;
+    const hard = this.hardDenial(req);
+    if (hard) return hard;
+
+    const gates: Gates = { denials: [], approvals: [] };
+    const env = req.resource?.environment ?? this.config.environment;
+    const plan = req.resource?.plan;
+
+    if (action === 'workflow.publish') this.publishGates(req, env, gates);
+    // Cumulative scope analysis over the whole plan (T5) — on publish and run
+    if (plan && (action === 'workflow.publish' || action === 'workflow.run')) this.scopeGates(plan, action, env, gates);
+    // Operator-defined policy documents
+    if (this.rules.length > 0) this.documentGates(req, env, gates);
+    return verdict(gates);
+  }
+
+  /** Checks that refuse outright, in order: tenant isolation, agents' lack of execution authority, RBAC, four-eyes. */
+  private hardDenial(req: PolicyRequest): PolicyDecision | undefined {
     const { principal, action } = req;
     const res = req.resource ?? {};
-    const deny = (reasonCode: string, reason: string, ruleIds?: string[]): PolicyDecision => ({
-      effect: 'deny',
-      reasonCode,
-      reason,
-      ...(ruleIds ? { ruleIds } : {}),
-    });
-
-    // 1. Tenant isolation
     if (res.tenant && res.tenant !== principal.tenant) {
       const platformAdmin =
         principal.tenant === this.config.platformTenant &&
@@ -220,128 +263,101 @@ export class PolicyEngine {
         action === 'tenant.manage';
       if (!platformAdmin) return deny('TENANT_MISMATCH', 'The resource belongs to another tenant');
     }
-    // 2. Agents hold no execution authority
     if (principal.type === 'agent' && !AGENT_ACTIONS.has(action)) {
       return deny('AGENT_NO_EXECUTION', `Agents may only propose; '${action}' requires a human or a governed workflow`);
     }
-    // 3. RBAC
     if (!roleAllows(principal.roles, action)) {
       return deny('RBAC_DENIED', `Roles [${principal.roles.join(', ')}] do not permit '${action}'`);
     }
     if (action === 'tenant.manage' && principal.tenant !== this.config.platformTenant) {
       return deny('PLATFORM_ADMIN_ONLY', 'Only platform administrators can manage tenants');
     }
-    // 4. Four-eyes on change approval
     if (action === 'workflow.approve-change' && res.changeAuthor && res.changeAuthor === principal.id) {
       return deny('SELF_APPROVAL', 'A change cannot be approved by the person who requested it');
     }
+    return undefined;
+  }
 
-    const approvalReasons: Array<{ code: string; reason: string; approvals: number; rule?: string }> = [];
-    const denials: Array<{ code: string; reason: string; rule?: string }> = [];
-
-    const env = res.environment ?? this.config.environment;
+  private publishGates(req: PolicyRequest, env: EnvironmentName, gates: Gates): void {
+    const res = req.resource ?? {};
+    const approvals = this.config.publishApprovals;
+    if (res.risk?.blocking) {
+      gates.denials.push({
+        code: 'BLOCKING_FINDINGS',
+        reason: 'The pentest review raised blocking findings; resolve them before publishing',
+      });
+    }
+    if (env !== 'production') return;
     const plan = res.plan;
+    if (plan?.analysis.effects.effectful) {
+      gates.approvals.push({
+        code: 'PROD_EFFECTFUL_NEEDS_APPROVAL',
+        reason: 'Production workflows with effectful steps need a second pair of eyes',
+        approvals,
+      });
+    }
+    if (plan?.analysis.families.includes('shell')) {
+      gates.approvals.push({
+        code: 'PROD_SHELL_NEEDS_APPROVAL',
+        reason: 'Shell steps are the largest risk surface and need human approval',
+        approvals,
+      });
+    }
+    if (plan && (res.criticality === 'high' || res.criticality === 'critical')) {
+      gates.approvals.push({
+        code: 'PROD_CRITICAL_NEEDS_APPROVAL',
+        reason: `Workflow criticality is ${res.criticality}`,
+        approvals,
+      });
+    }
+    if (res.risk && (res.risk.level === 'high' || res.risk.level === 'critical')) {
+      gates.approvals.push({
+        code: 'HIGH_RISK_NEEDS_APPROVAL',
+        reason: `Risk level is ${res.risk.level} (score ${res.risk.score})`,
+        approvals,
+      });
+    }
+  }
 
-    // 5. Publish gates
-    if (action === 'workflow.publish') {
-      if (res.risk?.blocking) {
-        denials.push({
-          code: 'BLOCKING_FINDINGS',
-          reason: 'The pentest review raised blocking findings; resolve them before publishing',
+  private scopeGates(plan: Plan, action: Action, env: EnvironmentName, gates: Gates): void {
+    const scopes = new Set(plan.analysis.scopes);
+    for (const rule of this.config.scopeRules) {
+      if (!rule.scopes.every((s) => scopes.has(s))) continue;
+      const code = `SCOPE_COMBINATION_${rule.scopes
+        .join('+')
+        .toUpperCase()
+        .replace(/[^A-Z0-9+]/g, '_')}`;
+      const reason = `Combined scopes ${rule.scopes.join(' + ')}: ${rule.reason}`;
+      if (rule.effect === 'deny') gates.denials.push({ code, reason });
+      else if (env === 'production' || action === 'workflow.publish')
+        gates.approvals.push({ code, reason, approvals: this.config.publishApprovals });
+    }
+  }
+
+  private documentGates(req: PolicyRequest, env: EnvironmentName, gates: Gates): void {
+    const facts = this.facts(req, env);
+    for (const rule of this.rules) {
+      if (rule.actions && !rule.actions.has(req.action)) continue;
+      if (!this.ruleHits(rule, facts)) continue;
+      if (rule.effect === 'deny')
+        gates.denials.push({ code: 'POLICY_RULE_DENIED', reason: rule.reason, rule: rule.id });
+      else
+        gates.approvals.push({
+          code: 'POLICY_RULE_NEEDS_APPROVAL',
+          reason: rule.reason,
+          approvals: rule.approvals,
+          rule: rule.id,
         });
-      }
-      if (plan && env === 'production') {
-        if (plan.analysis.effects.effectful > 0) {
-          approvalReasons.push({
-            code: 'PROD_EFFECTFUL_NEEDS_APPROVAL',
-            reason: 'Production workflows with effectful steps need a second pair of eyes',
-            approvals: this.config.publishApprovals,
-          });
-        }
-        if (plan.analysis.families.includes('shell')) {
-          approvalReasons.push({
-            code: 'PROD_SHELL_NEEDS_APPROVAL',
-            reason: 'Shell steps are the largest risk surface and need human approval',
-            approvals: this.config.publishApprovals,
-          });
-        }
-        if (res.criticality === 'high' || res.criticality === 'critical') {
-          approvalReasons.push({
-            code: 'PROD_CRITICAL_NEEDS_APPROVAL',
-            reason: `Workflow criticality is ${res.criticality}`,
-            approvals: this.config.publishApprovals,
-          });
-        }
-      }
-      if (res.risk && (res.risk.level === 'high' || res.risk.level === 'critical') && env === 'production') {
-        approvalReasons.push({
-          code: 'HIGH_RISK_NEEDS_APPROVAL',
-          reason: `Risk level is ${res.risk.level} (score ${res.risk.score})`,
-          approvals: this.config.publishApprovals,
-        });
-      }
     }
+  }
 
-    // 6. Cumulative scope analysis over the whole plan (T5) — on publish and run
-    if (plan && (action === 'workflow.publish' || action === 'workflow.run')) {
-      const scopes = new Set(plan.analysis.scopes);
-      for (const rule of this.config.scopeRules) {
-        if (rule.scopes.every((s) => scopes.has(s))) {
-          const code = `SCOPE_COMBINATION_${rule.scopes
-            .join('+')
-            .toUpperCase()
-            .replace(/[^A-Z0-9+]/g, '_')}`;
-          const reason = `Combined scopes ${rule.scopes.join(' + ')}: ${rule.reason}`;
-          if (rule.effect === 'deny') denials.push({ code, reason });
-          else if (env === 'production' || action === 'workflow.publish')
-            approvalReasons.push({ code, reason, approvals: this.config.publishApprovals });
-        }
-      }
+  private ruleHits(rule: CompiledRule, facts: Record<string, unknown>): boolean {
+    try {
+      return isTruthy(evaluate(rule.when, facts));
+    } catch (e) {
+      // A policy rule that cannot be evaluated fails closed for deny rules.
+      return rule.effect === 'deny' && e instanceof ExpressionError;
     }
-
-    // 7. Operator-defined policy documents
-    if (this.rules.length > 0) {
-      const facts = this.facts(req, env);
-      for (const rule of this.rules) {
-        if (rule.actions && !rule.actions.has(action)) continue;
-        let hit = false;
-        try {
-          hit = isTruthy(evaluate(rule.when, facts));
-        } catch (e) {
-          // A policy rule that cannot be evaluated fails closed for deny rules.
-          if (rule.effect === 'deny' && e instanceof ExpressionError) hit = true;
-        }
-        if (!hit) continue;
-        if (rule.effect === 'deny') denials.push({ code: 'POLICY_RULE_DENIED', reason: rule.reason, rule: rule.id });
-        else
-          approvalReasons.push({
-            code: 'POLICY_RULE_NEEDS_APPROVAL',
-            reason: rule.reason,
-            approvals: rule.approvals,
-            rule: rule.id,
-          });
-      }
-    }
-
-    if (denials.length > 0) {
-      const first = denials[0]!;
-      return deny(
-        first.code,
-        denials.map((d) => d.reason).join('; '),
-        denials.flatMap((d) => (d.rule ? [d.rule] : [])),
-      );
-    }
-    if (approvalReasons.length > 0) {
-      const first = approvalReasons[0]!;
-      return {
-        effect: 'require-approval',
-        reasonCode: first.code,
-        reason: approvalReasons.map((r) => r.reason).join('; '),
-        requiredApprovals: Math.max(...approvalReasons.map((r) => r.approvals)),
-        ruleIds: approvalReasons.flatMap((r) => (r.rule ? [r.rule] : [])),
-      };
-    }
-    return { effect: 'allow', reasonCode: 'ALLOWED', reason: 'Permitted' };
   }
 
   private facts(req: PolicyRequest, env: EnvironmentName): Record<string, unknown> {
