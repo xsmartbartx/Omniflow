@@ -250,7 +250,7 @@ export async function devCommand(ctx: CliContext): Promise<number> {
     const deadline = started + (Number(flag(ctx.args, 'timeout') ?? 120) || 120) * 1000;
     const printed = new Set<string>();
     let run = app.state.runs.getRun(runId)!;
-    while (!DONE_STATUSES.includes(run.status)) {
+    while (!DONE_STATUSES.has(run.status)) {
       if (Date.now() > deadline) {
         off();
         ctx.err(`${s.red('Timed out')} waiting for the run to finish (status ${run.status})\n`);
@@ -272,7 +272,7 @@ export async function devCommand(ctx: CliContext): Promise<number> {
 
 type DevApp = ReturnType<typeof createConstans>;
 
-const DONE_STATUSES = ['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled'];
+const DONE_STATUSES = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled']);
 
 /** Answer (or announce) approval gates of the run as they are requested; returns the function that stops listening. */
 function watchApprovals(ctx: CliContext, app: DevApp, runId: string): () => void {
