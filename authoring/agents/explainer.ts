@@ -54,16 +54,24 @@ export function describeCron(expr: string, timezone?: string): string {
 
   const sub = describeSubDaily(min, hour, dom === '*' && mon === '*' && dow === '*');
   if (sub) return sub;
-  if (time && dom === '*' && mon === '*' && dow === '*') return `every day at ${time}${tz}`;
-  if (time && dom === '*' && mon === '*' && num(dow)) return `every ${DAYS[Number(dow) % 7]} at ${time}${tz}`;
-  if (time && dom === '*' && mon === '*' && dow === '1-5') return `every weekday at ${time}${tz}`;
-  if (time && num(dom) && mon === '*' && dow === '*')
-    return `on the ${ordinal(Number(dom))} of every month at ${time}${tz}`;
-  if (time && num(dom) && num(mon) && dow === '*') {
-    const month = MONTHS[Number(mon) - 1] ?? `month ${mon}`;
-    return `every ${month} ${ordinal(Number(dom))} at ${time}${tz}`;
+  const at = time ? describeAt(time, [dom, mon, dow]) : undefined;
+  return at ? `${at}${tz}` : `on the cron schedule \`${expr}\`${tz}`;
+}
+
+/** Daily, weekly, weekday, monthly and yearly schedules at a fixed time. */
+function describeAt(time: string, [dom, mon, dow]: [string, string, string]): string | undefined {
+  const num = (s: string) => /^\d+$/.test(s);
+  if (dom === '*' && mon === '*') {
+    if (dow === '*') return `every day at ${time}`;
+    if (num(dow)) return `every ${DAYS[Number(dow) % 7]} at ${time}`;
+    if (dow === '1-5') return `every weekday at ${time}`;
+    return undefined;
   }
-  return `on the cron schedule \`${expr}\`${tz}`;
+  if (!num(dom) || dow !== '*') return undefined;
+  if (mon === '*') return `on the ${ordinal(Number(dom))} of every month at ${time}`;
+  if (!num(mon)) return undefined;
+  const month = MONTHS[Number(mon) - 1] ?? `month ${mon}`;
+  return `every ${month} ${ordinal(Number(dom))} at ${time}`;
 }
 
 // ------------------------------------------------------------------- plans

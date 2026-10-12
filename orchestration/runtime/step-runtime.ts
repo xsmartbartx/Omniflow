@@ -251,7 +251,21 @@ export class StepRuntime implements StepExecutor {
     });
     await Promise.all(workers);
 
-    const durationMs = this.clock.now().getTime() - started;
+    return this.mapOutcome(a, this.clock.now().getTime() - started, { n, allowed, failures, results, cost });
+  }
+
+  /** The step result once every item has been tried: cancelled, too many failures, or the collected results. */
+  private mapOutcome(
+    a: StepAttempt,
+    durationMs: number,
+    r: {
+      n: number;
+      allowed: number;
+      failures: Array<{ index: number; error: ErrorInfo }>;
+      results: unknown[];
+      cost: number;
+    },
+  ): StepResult {
     if (a.signal.aborted) {
       return this.failed('execute', durationMs, {
         code: 'CANCELLED',
@@ -260,20 +274,21 @@ export class StepRuntime implements StepExecutor {
         retryable: false,
       });
     }
-    if (failures.length > allowed) {
-      const first = failures.toSorted((x, y) => x.index - y.index)[0]!;
+    const sorted = r.failures.toSorted((x, y) => x.index - y.index);
+    if (r.failures.length > r.allowed) {
+      const first = sorted[0]!;
       return this.failed('execute', durationMs, {
         code: 'MAP_TOLERANCE_EXCEEDED',
-        message: `${failures.length} of ${n} items failed (tolerated: ${allowed}); first failure at index ${first.index}: ${first.error.message}`,
+        message: `${r.failures.length} of ${r.n} items failed (tolerated: ${r.allowed}); first failure at index ${first.index}: ${first.error.message}`,
         class: first.error.class,
         retryable: false,
-        details: { failures: failures.slice(0, 10) },
+        details: { failures: r.failures.slice(0, 10) },
       });
     }
     return {
       kind: 'succeeded',
-      output: { results, failures: failures.toSorted((x, y) => x.index - y.index), count: n },
-      cost,
+      output: { results: r.results, failures: sorted, count: r.n },
+      cost: r.cost,
       durationMs,
     };
   }
@@ -361,69 +376,21 @@ export class StepRuntime implements StepExecutor {
     let secretValues: string[] = [];
 
     try {
-      // ---- Authorised: kill switch and circuit breaker
-      const killed = this.d.kv.isCapabilityKilled(a.tenant, decl.name);
-      if (killed.killed) {
-        const reason = killed.reason ? `: ${killed.reason}` : '';
-        return this.failed('authorise', elapsed(), {
-          code: 'CAPABILITY_KILLED',
-          message: `Capability '${decl.name}' is disabled by an operator${reason}`,
-          class: 'systemic',
-          retryable: false,
-        });
-      }
-      const gate = this.d.breakers.check(decl.name);
-      if (!gate.allowed)
-        return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
+      const early = this.authorise(a, decl, elapsed);
+      if (early) return early;
 
       // ---- Prepared: lease secrets, resolve and validate the input
       const names = secretNamesIn(p.withTemplate);
-      try {
-        lease =
-          names.length > 0
-            ? this.d.broker.lease({
-                tenant: a.tenant,
-                runId: a.runId,
-                stepId: a.step.id,
-                names,
-                ttlMs: p.timeoutMs + grace,
-              })
-            : this.d.broker.emptyLease();
-      } catch (e) {
-        this.d.breakers.release(decl.name);
-        return this.failed('authorise', elapsed(), { ...toInfo(e), class: 'contract', retryable: false });
-      }
+      const leased = this.leaseSecrets(a, p, names, grace, elapsed);
+      if ('result' in leased) return leased.result;
+      lease = leased.lease;
       secretValues = lease.values();
       if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
 
-      const baseScope = { ...a.scope, ...p.extraScope };
-      let input: unknown;
-      try {
-        input = resolveValue(p.withTemplate, { ...baseScope, secrets: lease.scope() }, { seed: a.seed });
-        if (p.keyTemplate !== undefined) key = String(resolveValue(p.keyTemplate, baseScope, { seed: a.seed }));
-      } catch (e) {
-        this.d.breakers.release(decl.name);
-        return this.failed('prepare', elapsed(), {
-          code: 'INPUT_RESOLUTION_FAILED',
-          message: scrubString((e as Error).message, { secretValues }),
-          class: 'contract',
-          retryable: false,
-        });
-      }
-      const valid = validateValue(decl.inputSchema, input);
-      if (!valid.ok) {
-        this.d.breakers.release(decl.name);
-        const msg = valid.issues
-          .slice(0, 5)
-          .map((i) => `${i.path || 'input'}: ${i.message}`)
-          .join('; ');
-        return this.failed('prepare', elapsed(), {
-          code: 'INPUT_INVALID',
-          message: scrubString(`Input for '${decl.name}' is invalid — ${msg}`, { secretValues }),
-          class: 'contract',
-          retryable: false,
-        });
-      }
+      const prepared = this.prepareInput(a, p, lease, secretValues, elapsed);
+      if ('result' in prepared) return prepared.result;
+      key = prepared.key;
+      const valid = prepared;
 
       const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
       const ctx: CapabilityContext = {
@@ -489,19 +456,7 @@ export class StepRuntime implements StepExecutor {
 
       // ---- Validated
       const checked = validateValue(p.outputSchema, output);
-      if (!checked.ok) {
-        this.d.breakers.release(decl.name);
-        const msg = checked.issues
-          .slice(0, 5)
-          .map((i) => `${i.path || 'output'}: ${i.message}`)
-          .join('; ');
-        return this.failed('validate', elapsed(), {
-          code: 'OUTPUT_INVALID',
-          message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }),
-          class: 'contract',
-          retryable: true,
-        });
-      }
+      if (!checked.ok) return this.outputInvalid(decl, checked.issues, secretValues, elapsed());
       this.d.breakers.success(decl.name);
       return {
         kind: 'succeeded',
@@ -517,13 +472,125 @@ export class StepRuntime implements StepExecutor {
       else this.d.breakers.release(decl.name);
       return this.failed('execute', elapsed(), err);
     } finally {
-      if (lease) {
-        const id = lease.id;
-        const granted = lease.names.length;
-        lease.revoke();
-        if (granted > 0) this.emit(a, 'secret.lease.revoked', { leaseId: id });
-      }
+      if (lease) this.revokeLease(a, lease);
     }
+  }
+
+  /** Kill switch and circuit breaker: a failure result when the capability may not run now, otherwise undefined. */
+  private authorise(
+    a: StepAttempt,
+    decl: RegisteredCapability['declaration'],
+    elapsed: () => number,
+  ): StepResult | undefined {
+    const killed = this.d.kv.isCapabilityKilled(a.tenant, decl.name);
+    if (killed.killed) {
+      const reason = killed.reason ? `: ${killed.reason}` : '';
+      return this.failed('authorise', elapsed(), {
+        code: 'CAPABILITY_KILLED',
+        message: `Capability '${decl.name}' is disabled by an operator${reason}`,
+        class: 'systemic',
+        retryable: false,
+      });
+    }
+    const gate = this.d.breakers.check(decl.name);
+    if (gate.allowed) return undefined;
+    return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
+  }
+
+  private leaseSecrets(
+    a: StepAttempt,
+    p: InvokeParams,
+    names: string[],
+    grace: number,
+    elapsed: () => number,
+  ): { lease: ActiveLease } | { result: StepResult } {
+    try {
+      const lease =
+        names.length > 0
+          ? this.d.broker.lease({
+              tenant: a.tenant,
+              runId: a.runId,
+              stepId: a.step.id,
+              names,
+              ttlMs: p.timeoutMs + grace,
+            })
+          : this.d.broker.emptyLease();
+      return { lease };
+    } catch (e) {
+      this.d.breakers.release(p.cap.declaration.name);
+      return { result: this.failed('authorise', elapsed(), { ...toInfo(e), class: 'contract', retryable: false }) };
+    }
+  }
+
+  /** Resolve the step's input and idempotency key from the scope, then check the input against the contract. */
+  private prepareInput(
+    a: StepAttempt,
+    p: InvokeParams,
+    lease: ActiveLease,
+    secretValues: string[],
+    elapsed: () => number,
+  ): { value: unknown; key: string | undefined } | { result: StepResult } {
+    const decl = p.cap.declaration;
+    const baseScope = { ...a.scope, ...p.extraScope };
+    let input: unknown;
+    let key: string | undefined;
+    try {
+      input = resolveValue(p.withTemplate, { ...baseScope, secrets: lease.scope() }, { seed: a.seed });
+      if (p.keyTemplate !== undefined) key = String(resolveValue(p.keyTemplate, baseScope, { seed: a.seed }));
+    } catch (e) {
+      this.d.breakers.release(decl.name);
+      return {
+        result: this.failed('prepare', elapsed(), {
+          code: 'INPUT_RESOLUTION_FAILED',
+          message: scrubString((e as Error).message, { secretValues }),
+          class: 'contract',
+          retryable: false,
+        }),
+      };
+    }
+    const valid = validateValue(decl.inputSchema, input);
+    if (!valid.ok) {
+      this.d.breakers.release(decl.name);
+      const msg = valid.issues
+        .slice(0, 5)
+        .map((i) => `${i.path || 'input'}: ${i.message}`)
+        .join('; ');
+      return {
+        result: this.failed('prepare', elapsed(), {
+          code: 'INPUT_INVALID',
+          message: scrubString(`Input for '${decl.name}' is invalid — ${msg}`, { secretValues }),
+          class: 'contract',
+          retryable: false,
+        }),
+      };
+    }
+    return { value: valid.value, key };
+  }
+
+  private outputInvalid(
+    decl: RegisteredCapability['declaration'],
+    issues: Array<{ path: string; message: string }>,
+    secretValues: string[],
+    durationMs: number,
+  ): StepResult {
+    this.d.breakers.release(decl.name);
+    const msg = issues
+      .slice(0, 5)
+      .map((i) => `${i.path || 'output'}: ${i.message}`)
+      .join('; ');
+    return this.failed('validate', durationMs, {
+      code: 'OUTPUT_INVALID',
+      message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }),
+      class: 'contract',
+      retryable: true,
+    });
+  }
+
+  private revokeLease(a: StepAttempt, lease: ActiveLease): void {
+    const id = lease.id;
+    const granted = lease.names.length;
+    lease.revoke();
+    if (granted > 0) this.emit(a, 'secret.lease.revoked', { leaseId: id });
   }
 
   /** Map anything an adapter throws onto the failure taxonomy, honouring the capability's declared failure modes. */

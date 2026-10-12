@@ -138,119 +138,109 @@ function addDays(date: string, days: number): string {
 const CRON_FIELD =
   /^(\*|\*\/\d+|\d+(-\d+)?(\/\d+)?)(,(\*|\d+(-\d+)?(\/\d+)?))*$|^[A-Za-z]{3}(-[A-Za-z]{3})?(,[A-Za-z]{3}(-[A-Za-z]{3})?)*$/;
 
-export function importCrontab(text: string, opts: ImportOptions): ImportResult {
-  const result: ImportResult = { workflows: [], skipped: [], environment: {} };
-  const used = new Set<string>();
-  const lines = text.split(/\r?\n/);
+type CronLine = { cron: string; command: string } | { skip: string };
 
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i]!;
-    const line = raw.trim();
-    if (line === '' || line.startsWith('#')) continue;
-    const skip = (reason: string) => result.skipped.push({ line: i + 1, source: line, reason });
-
-    const env = /^([A-Za-z_]\w*)\s*=\s*(.*)$/.exec(line);
-    if (env) {
-      result.environment[env[1]!] = env[2]!.replace(/^["']|["']$/g, '');
-      continue;
+/** Split one crontab entry into its schedule and command, or say why it cannot be imported. */
+function parseCronLine(line: string): CronLine {
+  const words = line.split(/\s+/);
+  const first = words[0]!;
+  if (first.startsWith('@')) {
+    if (first === '@reboot') {
+      return {
+        skip: '@reboot jobs run at machine start; Constans has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.',
+      };
     }
+    const expanded = MACROS[first.toLowerCase()];
+    if (!expanded) return { skip: `Unknown schedule macro ${first}` };
+    const command = line.slice(first.length).trim();
+    return command === '' ? { skip: 'The entry has a schedule but no command' } : { cron: expanded, command };
+  }
+  const fields = words.slice(0, 5);
+  if (words.length < 6 || !fields.every((f) => CRON_FIELD.test(f))) {
+    return { skip: 'Not a crontab entry (expected five schedule fields followed by a command)' };
+  }
+  // recover the original spacing of the command (split/join above collapsed it)
+  const m = /^\s*(?:\S+\s+){5}([\s\S]*)$/.exec(line);
+  const command = m ? m[1]!.trim() : words.slice(5).join(' ');
+  return command === '' ? { skip: 'The entry has a schedule but no command' } : { cron: fields.join(' '), command };
+}
 
-    let cron: string;
-    let command: string;
-    const words = line.split(/\s+/);
-    if (words[0]!.startsWith('@')) {
-      if (words[0] === '@reboot') {
-        skip(
-          '@reboot jobs run at machine start; Constans has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.',
-        );
-        continue;
-      }
-      const expanded = MACROS[words[0]!.toLowerCase()];
-      if (!expanded) {
-        skip(`Unknown schedule macro ${words[0]}`);
-        continue;
-      }
-      cron = expanded;
-      command = line.slice(words[0]!.length).trim();
-    } else {
-      const fields = words.slice(0, 5);
-      if (words.length < 6 || !fields.every((f) => CRON_FIELD.test(f))) {
-        skip('Not a crontab entry (expected five schedule fields followed by a command)');
-        continue;
-      }
-      cron = fields.join(' ');
-      command = words.slice(5).join(' ');
-      // recover the original spacing of the command (split/join above collapsed it)
-      const m = /^\s*(?:\S+\s+){5}([\s\S]*)$/.exec(line);
-      if (m) command = m[1]!.trim();
-    }
-    if (command === '') {
-      skip('The entry has a schedule but no command');
-      continue;
-    }
+/** A stable, readable, unique workflow name from the first word(s) of the command. */
+function workflowName(command: string, used: Set<string>): string {
+  const words = command.split(/[\s|&;<>]+/).filter(Boolean);
+  const exeWord = (words[0] ?? 'job').split('/').pop() ?? 'job';
+  const second = words[1];
+  const target =
+    second && !second.startsWith('-') && !needsShell(second) ? `-${slug(second.split('/').pop() ?? '')}` : '';
+  let name = `cron-${slug(exeWord)}${target}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
+  for (let n = 2; used.has(name); ) name = `${name.replace(/-\d+$/, '')}-${n++}`;
+  used.add(name);
+  return name;
+}
 
-    const notes: string[] = [];
-    let script: ImportedWorkflow['script'];
-
-    // A stable, readable name from the first word(s) of the command.
-    const words0 = command.split(/[\s|&;<>]+/).filter(Boolean);
-    const exeWord = (words0[0] ?? 'job').split('/').pop() ?? 'job';
-    const second = words0[1];
-    const target =
-      second && !second.startsWith('-') && !needsShell(second) ? `-${slug(second.split('/').pop() ?? '')}` : '';
-    let name = `cron-${slug(exeWord)}${target}`.replace(/-{2,}/g, '-').replace(/-+$/, '');
-    for (let n = 2; used.has(name); ) name = `${name.replace(/-\d+$/, '')}-${n++}`;
-    used.add(name);
-
-    let argv: string[];
-    if (needsShell(command)) {
-      const path = `${(opts.scriptDir ?? '/opt/constans/scripts').replace(/\/$/, '')}/${name}.sh`;
-      script = { path, content: `#!/bin/sh\nset -eu\n${command}\n` };
-      argv = [path];
-      notes.push(
-        `The command uses shell syntax (pipes, redirects, globs or substitutions). Constans refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to CONSTANS_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`,
-      );
-    } else {
-      const parsed = tokenize(command);
-      if (!parsed || parsed.length === 0) {
-        skip('The command has unbalanced quotes');
-        used.delete(name);
-        continue;
-      }
-      argv = parsed;
-      const exe = argv[0]!;
-      if (!exe.startsWith('/')) {
-        const known = KNOWN_PATHS[exe];
-        argv[0] = known ?? `/usr/bin/${exe}`;
-        notes.push(
-          `'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to CONSTANS_SHELL_ALLOWED_COMMANDS.`,
-        );
-      } else notes.push(`Add ${exe} to CONSTANS_SHELL_ALLOWED_COMMANDS or the shell capability will refuse to run it.`);
-    }
-    if (/\b(rm\s+-rf?|dd\s+if=|mkfs|:\s*\(\)\s*\{)/.test(command))
-      notes.push('This command looks destructive. Review it carefully before publishing.');
-    if (
-      /(password|passwd|secret|token|api[_-]?key)\s*=/i.test(command) ||
-      /https?:\/\/[^\s/@]+:[^\s/@]+@/.test(command)
-    ) {
-      notes.push(
-        'The command appears to contain a credential. Move it into a secret and pass it with ${{ secrets.NAME }} before publishing.',
-      );
-    }
-    if (result.environment.MAILTO)
-      notes.push(
-        `The crontab mailed output to ${result.environment.MAILTO}. Configure an alert channel (CONSTANS_ALERT_CHANNELS) so failures are reported the same way.`,
-      );
-    if (Object.keys(result.environment).some((k) => k !== 'MAILTO'))
-      notes.push(
-        'The crontab sets environment variables. Shell steps run with a scrubbed environment; pass what the job needs through the step `env`.',
-      );
+/** The argument vector for the step: a script file when the command needs a shell, otherwise the parsed words. */
+function commandArgv(
+  command: string,
+  name: string,
+  opts: ImportOptions,
+  notes: string[],
+): { argv: string[]; script?: ImportedWorkflow['script'] } | undefined {
+  if (needsShell(command)) {
+    const path = `${(opts.scriptDir ?? '/opt/constans/scripts').replace(/\/$/, '')}/${name}.sh`;
     notes.push(
-      `Schedules run in ${opts.timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`,
+      `The command uses shell syntax (pipes, redirects, globs or substitutions). Constans refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to CONSTANS_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`,
     );
+    return { argv: [path], script: { path, content: `#!/bin/sh\nset -eu\n${command}\n` } };
+  }
+  const argv = tokenize(command);
+  if (!argv || argv.length === 0) return undefined;
+  const exe = argv[0]!;
+  if (exe.startsWith('/')) {
+    notes.push(`Add ${exe} to CONSTANS_SHELL_ALLOWED_COMMANDS or the shell capability will refuse to run it.`);
+  } else {
+    argv[0] = KNOWN_PATHS[exe] ?? `/usr/bin/${exe}`;
+    notes.push(
+      `'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to CONSTANS_SHELL_ALLOWED_COMMANDS.`,
+    );
+  }
+  return { argv };
+}
 
-    const shortCommand = command.length > 120 ? `${command.slice(0, 117)}...` : command;
-    const manifest = {
+/** Review notes about risks visible in the command and in the crontab's environment. */
+function riskNotes(command: string, environment: Record<string, string>, timezone: string | undefined): string[] {
+  const notes: string[] = [];
+  if (/\b(rm\s+-rf?|dd\s+if=|mkfs|:\s*\(\)\s*\{)/.test(command))
+    notes.push('This command looks destructive. Review it carefully before publishing.');
+  if (
+    /(password|passwd|secret|token|api[_-]?key)\s*=/i.test(command) ||
+    /https?:\/\/[^\s/@]+:[^\s/@]+@/.test(command)
+  ) {
+    notes.push(
+      'The command appears to contain a credential. Move it into a secret and pass it with ${{ secrets.NAME }} before publishing.',
+    );
+  }
+  if (environment.MAILTO)
+    notes.push(
+      `The crontab mailed output to ${environment.MAILTO}. Configure an alert channel (CONSTANS_ALERT_CHANNELS) so failures are reported the same way.`,
+    );
+  if (Object.keys(environment).some((k) => k !== 'MAILTO'))
+    notes.push(
+      'The crontab sets environment variables. Shell steps run with a scrubbed environment; pass what the job needs through the step `env`.',
+    );
+  notes.push(
+    `Schedules run in ${timezone ?? 'UTC'}. Cron ran in the server's local time zone; set the trigger's timezone if that differs.`,
+  );
+  return notes;
+}
+
+function cronManifest(
+  entry: { name: string; cron: string; command: string; argv: string[]; lineNo: number },
+  opts: ImportOptions,
+): string {
+  const { name, cron, command, argv, lineNo } = entry;
+  const shortCommand = command.length > 120 ? `${command.slice(0, 117)}...` : command;
+  return stringify(
+    {
       apiVersion: 'constans/v1',
       kind: 'Workflow',
       metadata: {
@@ -258,7 +248,7 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
         version: '1.0.0',
         owner: opts.owner,
         ...(opts.team ? { team: opts.team } : {}),
-        description: `Imported from crontab line ${i + 1}: ${shortCommand}`,
+        description: `Imported from crontab line ${lineNo}: ${shortCommand}`,
         criticality: 'medium',
         labels: { 'imported-from': 'crontab', strategy: 'lift' },
       },
@@ -276,14 +266,49 @@ export function importCrontab(text: string, opts: ImportOptions): ImportResult {
           sunset: addDays(opts.today, opts.sunsetDays ?? 90),
         },
       ],
-    };
+    },
+    { lineWidth: 0 },
+  );
+}
+
+export function importCrontab(text: string, opts: ImportOptions): ImportResult {
+  const result: ImportResult = { workflows: [], skipped: [], environment: {} };
+  const used = new Set<string>();
+  const lines = text.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    const skip = (reason: string) => result.skipped.push({ line: i + 1, source: line, reason });
+
+    const env = /^([A-Za-z_]\w*)\s*=\s*(.*)$/.exec(line);
+    if (env) {
+      result.environment[env[1]!] = env[2]!.replace(/^["']|["']$/g, '');
+      continue;
+    }
+
+    const parsed = parseCronLine(line);
+    if ('skip' in parsed) {
+      skip(parsed.skip);
+      continue;
+    }
+    const { cron, command } = parsed;
+    const notes: string[] = [];
+    const name = workflowName(command, used);
+    const step = commandArgv(command, name, opts, notes);
+    if (!step) {
+      skip('The command has unbalanced quotes');
+      used.delete(name);
+      continue;
+    }
+    notes.push(...riskNotes(command, result.environment, opts.timezone));
     result.workflows.push({
       name,
       line: i + 1,
       source: line,
-      manifest: stringify(manifest, { lineWidth: 0 }),
+      manifest: cronManifest({ name, cron, command, argv: step.argv, lineNo: i + 1 }, opts),
       notes,
-      ...(script ? { script } : {}),
+      ...(step.script ? { script: step.script } : {}),
     });
   }
   return result;

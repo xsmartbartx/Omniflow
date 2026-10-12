@@ -48,40 +48,16 @@ export function evaluate(node: Node, scope: Record<string, unknown>, options: Ev
     switch (n.type) {
       case 'literal':
         return n.value;
-      case 'ident': {
-        if (!Object.hasOwn(scope, n.name)) {
-          throw new ExpressionError('EXPR_UNKNOWN_IDENT', `Unknown identifier '${n.name}'`, n.pos);
-        }
-        return scope[n.name] ?? null;
-      }
-      case 'member': {
-        const obj = ev(n.object);
-        return readProperty(obj, n.property);
-      }
-      case 'index': {
-        const obj = ev(n.object);
-        const idx = ev(n.index);
-        if (Array.isArray(obj)) {
-          return isNum(idx) && Number.isInteger(idx) && idx >= 0 ? (obj[idx] ?? null) : null;
-        }
-        if (isStr(idx) || isNum(idx)) return readProperty(obj, String(idx));
-        return null;
-      }
-      case 'call': {
-        const spec = Object.hasOwn(FUNCTIONS, n.name) ? FUNCTIONS[n.name] : undefined;
-        if (!spec) throw new ExpressionError('EXPR_UNKNOWN_FUNCTION', `Unknown function '${n.name}'`, n.pos);
-        const args = n.args.map(ev);
-        const result = spec.fn(args, fnCtx);
-        return result === undefined ? null : result;
-      }
-      case 'unary': {
-        const v = ev(n.arg);
-        if (n.op === '!') return !isTruthy(v);
-        if (!isNum(v)) {
-          throw new ExpressionError('EXPR_TYPE', `Cannot negate a ${describeType(v)}`, n.pos);
-        }
-        return -v;
-      }
+      case 'ident':
+        return readIdentifier(scope, n.name, n.pos);
+      case 'member':
+        return readProperty(ev(n.object), n.property);
+      case 'index':
+        return readIndex(ev(n.object), ev(n.index));
+      case 'call':
+        return callFunction(n.name, n.args.map(ev), fnCtx, n.pos);
+      case 'unary':
+        return unary(n.op, ev(n.arg), n.pos);
       case 'logical': {
         const left = ev(n.left);
         if (n.op === '&&') return isTruthy(left) ? ev(n.right) : left;
@@ -98,6 +74,34 @@ export function evaluate(node: Node, scope: Record<string, unknown>, options: Ev
   };
 
   return ev(node);
+}
+
+function readIdentifier(scope: Record<string, unknown>, name: string, pos: number): unknown {
+  if (!Object.hasOwn(scope, name)) {
+    throw new ExpressionError('EXPR_UNKNOWN_IDENT', `Unknown identifier '${name}'`, pos);
+  }
+  return scope[name] ?? null;
+}
+
+function readIndex(obj: unknown, idx: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return isNum(idx) && Number.isInteger(idx) && idx >= 0 ? (obj[idx] ?? null) : null;
+  }
+  if (isStr(idx) || isNum(idx)) return readProperty(obj, String(idx));
+  return null;
+}
+
+function callFunction(name: string, args: unknown[], ctx: FunctionContext, pos: number): unknown {
+  const spec = Object.hasOwn(FUNCTIONS, name) ? FUNCTIONS[name] : undefined;
+  if (!spec) throw new ExpressionError('EXPR_UNKNOWN_FUNCTION', `Unknown function '${name}'`, pos);
+  const result = spec.fn(args, ctx);
+  return result === undefined ? null : result;
+}
+
+function unary(op: string, v: unknown, pos: number): unknown {
+  if (op === '!') return !isTruthy(v);
+  if (!isNum(v)) throw new ExpressionError('EXPR_TYPE', `Cannot negate a ${describeType(v)}`, pos);
+  return -v;
 }
 
 function readProperty(obj: unknown, prop: string): unknown {
@@ -119,58 +123,69 @@ function binary(op: string, l: unknown, r: unknown, pos: number): unknown {
     case '<':
     case '<=':
     case '>':
-    case '>=': {
-      if (l === null || l === undefined || r === null || r === undefined) return false;
-      if ((isNum(l) && isNum(r)) || (isStr(l) && isStr(r))) {
-        if (op === '<') return l < r;
-        if (op === '<=') return l <= r;
-        if (op === '>') return l > r;
-        return l >= r;
-      }
-      throw new ExpressionError(
-        'EXPR_TYPE',
-        `Cannot compare ${describeType(l)} with ${describeType(r)} using '${op}'`,
-        pos,
-      );
-    }
-    case 'in': {
-      if (Array.isArray(r)) return r.some((x) => deepEqual(x, l));
-      if (isStr(r)) return isStr(l) && r.includes(l);
-      if (r !== null && typeof r === 'object') return isStr(l) && Object.hasOwn(r as object, l);
-      return false;
-    }
-    case '+': {
-      if (isNum(l) && isNum(r)) return l + r;
-      if (isStr(l) && isStr(r)) {
-        if (l.length + r.length > MAX_STRING) throw new ExpressionError('EXPR_BUDGET', 'string too long', pos);
-        return l + r;
-      }
-      throw new ExpressionError(
-        'EXPR_TYPE',
-        `Cannot add ${describeType(l)} and ${describeType(r)} — use toString() to build strings`,
-        pos,
-      );
-    }
+    case '>=':
+      return compare(op, l, r, pos);
+    case 'in':
+      return contains(l, r);
+    case '+':
+      return add(l, r, pos);
     case '-':
     case '*':
     case '/':
-    case '%': {
-      if (!isNum(l) || !isNum(r)) {
-        throw new ExpressionError(
-          'EXPR_TYPE',
-          `Operator '${op}' needs numbers, got ${describeType(l)} and ${describeType(r)}`,
-          pos,
-        );
-      }
-      if ((op === '/' || op === '%') && r === 0) {
-        throw new ExpressionError('EXPR_DIV_ZERO', 'Division by zero', pos);
-      }
-      if (op === '-') return l - r;
-      if (op === '*') return l * r;
-      if (op === '/') return l / r;
-      return l % r;
-    }
+    case '%':
+      return arithmetic(op, l, r, pos);
     default:
       throw new ExpressionError('EXPR_SYNTAX', `Unknown operator '${op}'`, pos);
   }
+}
+
+function compare(op: string, l: unknown, r: unknown, pos: number): boolean {
+  if (l === null || l === undefined || r === null || r === undefined) return false;
+  if ((isNum(l) && isNum(r)) || (isStr(l) && isStr(r))) {
+    if (op === '<') return l < r;
+    if (op === '<=') return l <= r;
+    if (op === '>') return l > r;
+    return l >= r;
+  }
+  throw new ExpressionError(
+    'EXPR_TYPE',
+    `Cannot compare ${describeType(l)} with ${describeType(r)} using '${op}'`,
+    pos,
+  );
+}
+
+/** `l in r`: membership in an array, substring of a string, or key of an object. */
+function contains(l: unknown, r: unknown): boolean {
+  if (Array.isArray(r)) return r.some((x) => deepEqual(x, l));
+  if (isStr(r)) return isStr(l) && r.includes(l);
+  if (r !== null && typeof r === 'object') return isStr(l) && Object.hasOwn(r as object, l);
+  return false;
+}
+
+function add(l: unknown, r: unknown, pos: number): unknown {
+  if (isNum(l) && isNum(r)) return l + r;
+  if (isStr(l) && isStr(r)) {
+    if (l.length + r.length > MAX_STRING) throw new ExpressionError('EXPR_BUDGET', 'string too long', pos);
+    return l + r;
+  }
+  throw new ExpressionError(
+    'EXPR_TYPE',
+    `Cannot add ${describeType(l)} and ${describeType(r)} — use toString() to build strings`,
+    pos,
+  );
+}
+
+function arithmetic(op: string, l: unknown, r: unknown, pos: number): number {
+  if (!isNum(l) || !isNum(r)) {
+    throw new ExpressionError(
+      'EXPR_TYPE',
+      `Operator '${op}' needs numbers, got ${describeType(l)} and ${describeType(r)}`,
+      pos,
+    );
+  }
+  if ((op === '/' || op === '%') && r === 0) throw new ExpressionError('EXPR_DIV_ZERO', 'Division by zero', pos);
+  if (op === '-') return l - r;
+  if (op === '*') return l * r;
+  if (op === '/') return l / r;
+  return l % r;
 }

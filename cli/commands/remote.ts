@@ -152,11 +152,28 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   return 0;
 }
 
+function printPublished(ctx: CliContext, r: any): void {
+  const s = ctx.style;
+  if (r.status === 'published') {
+    const ref = s.bold(`${r.version.name}@${r.version.version}`);
+    ctx.out(`${s.green('✓')} published ${ref}  risk ${r.risk.level} (${r.risk.score})\n`);
+  } else {
+    const ref = s.bold(`${r.change.workflowName}@${r.change.version}`);
+    ctx.out(`${s.yellow('…')} ${ref} needs approval (${r.decision.reason}) — change ${r.change.id}\n`);
+  }
+}
+
+function printPublishFailure(ctx: CliContext, file: string, manifest: string, e: ApiError): void {
+  const s = ctx.style;
+  const issues = (e.details as { issues?: any[] } | undefined)?.issues;
+  for (const i of issues ?? []) ctx.err(`${renderIssue(s, file, manifest, i)}\n\n`);
+  ctx.err(`${s.red('✗')} ${file}: ${e.message}\n`);
+}
+
 export async function publishCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
   if (paths.length === 0) throw new UsageError('Usage: constans publish <file|dir> [--canary <percent>]');
   const api = client(ctx);
-  const s = ctx.style;
   const canaryPercent = intFlag(ctx.args, 'canary');
   let failures = 0;
   const results: unknown[] = [];
@@ -165,24 +182,12 @@ export async function publishCommand(ctx: CliContext): Promise<number> {
     try {
       const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
       results.push({ file, ...r });
-      if (!ctx.json) {
-        if (r.status === 'published') {
-          const ref = s.bold(`${r.version.name}@${r.version.version}`);
-          ctx.out(`${s.green('✓')} published ${ref}  risk ${r.risk.level} (${r.risk.score})\n`);
-        } else {
-          const ref = s.bold(`${r.change.workflowName}@${r.change.version}`);
-          ctx.out(`${s.yellow('…')} ${ref} needs approval (${r.decision.reason}) — change ${r.change.id}\n`);
-        }
-      }
+      if (!ctx.json) printPublished(ctx, r);
     } catch (e) {
       if (!(e instanceof ApiError) || e.status >= 500) throw e;
       failures++;
       results.push({ file, error: { code: e.code, message: e.message, details: e.details } });
-      if (!ctx.json) {
-        const issues = (e.details as { issues?: any[] } | undefined)?.issues;
-        if (issues?.length) for (const i of issues) ctx.err(`${renderIssue(s, file, manifest, i)}\n\n`);
-        ctx.err(`${s.red('✗')} ${file}: ${e.message}\n`);
-      }
+      if (!ctx.json) printPublishFailure(ctx, file, manifest, e);
     }
   }
   if (ctx.json) ctx.out(`${JSON.stringify(results, null, 2)}\n`);

@@ -20,6 +20,33 @@ export function hasTemplate(text: string): boolean {
   return text.includes('${{');
 }
 
+/** Index of the `}}` closing an expression that starts at `from`, ignoring braces inside quotes; -1 when unterminated. */
+function findExpressionEnd(source: string, from: number): number {
+  let quote: string | null = null;
+  for (let j = from; j < source.length; j++) {
+    const c = source[j]!;
+    if (quote) {
+      if (c === '\\') j++;
+      else if (c === quote) quote = null;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+    } else if (c === '}' && source[j + 1] === '}') {
+      return j;
+    }
+  }
+  return -1;
+}
+
+/** Parse an embedded expression, reporting syntax errors relative to the whole template. */
+function parseExprAt(exprSource: string, offset: number): Node {
+  try {
+    return parseExpression(exprSource);
+  } catch (e) {
+    if (e instanceof ExpressionSyntaxError) throw new ExpressionSyntaxError(e.message, offset + e.pos);
+    throw e;
+  }
+}
+
 export function parseTemplate(source: string): Template {
   const parts: TemplatePart[] = [];
   let text = '';
@@ -36,33 +63,10 @@ export function parseTemplate(source: string): Template {
     }
     if (source.startsWith('${{', i)) {
       const exprStart = i + 3;
-      let j = exprStart;
-      let quote: string | null = null;
-      let end = -1;
-      while (j < source.length) {
-        const c = source[j]!;
-        if (quote) {
-          if (c === '\\') j++;
-          else if (c === quote) quote = null;
-        } else if (c === "'" || c === '"') {
-          quote = c;
-        } else if (c === '}' && source[j + 1] === '}') {
-          end = j;
-          break;
-        }
-        j++;
-      }
+      const end = findExpressionEnd(source, exprStart);
       if (end === -1) throw new ExpressionSyntaxError("Unterminated '${{' — missing '}}'", i);
       const exprSource = source.slice(exprStart, end);
-      let ast: Node;
-      try {
-        ast = parseExpression(exprSource);
-      } catch (e) {
-        if (e instanceof ExpressionSyntaxError) {
-          throw new ExpressionSyntaxError(e.message, exprStart + e.pos);
-        }
-        throw e;
-      }
+      const ast = parseExprAt(exprSource, exprStart);
       flush();
       parts.push({ kind: 'expr', source: exprSource.trim(), ast, offset: exprStart });
       i = end + 2;

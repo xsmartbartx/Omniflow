@@ -147,26 +147,31 @@ export class ApiClient {
       buffer += decoder.decode(chunk, { stream: true });
       let idx: number;
       while ((idx = buffer.indexOf('\n\n')) >= 0) {
-        const block = buffer.slice(0, idx);
+        const event = parseSseBlock(buffer.slice(0, idx));
         buffer = buffer.slice(idx + 2);
-        let id: string | undefined;
-        let event = 'message';
-        const data: string[] = [];
-        for (const line of block.split('\n')) {
-          if (line.startsWith('id:')) id = line.slice(3).trim();
-          else if (line.startsWith('event:')) event = line.slice(6).trim();
-          else if (line.startsWith('data:')) data.push(line.slice(5).trim());
-        }
-        if (data.length > 0) {
-          let parsed: unknown = data.join('\n');
-          try {
-            parsed = JSON.parse(data.join('\n'));
-          } catch {
-            /* keep text */
-          }
-          onEvent({ ...(id ? { id } : {}), event, data: parsed });
-        }
+        if (event) onEvent(event);
       }
     }
   }
+}
+
+/** One server-sent-events block (`id:`, `event:` and `data:` lines); undefined when it carries no data. */
+function parseSseBlock(block: string): { id?: string; event: string; data: any } | undefined {
+  let id: string | undefined;
+  let event = 'message';
+  const data: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('id:')) id = line.slice(3).trim();
+    else if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data.push(line.slice(5).trim());
+  }
+  if (data.length === 0) return undefined;
+  const text = data.join('\n');
+  let parsed: unknown = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* keep text */
+  }
+  return { ...(id ? { id } : {}), event, data: parsed };
 }
