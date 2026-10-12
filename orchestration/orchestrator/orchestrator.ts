@@ -425,53 +425,14 @@ export class Orchestrator {
       return;
     }
 
-    // Steps recorded as running that this process is not executing (defence in depth after a crash).
-    for (const s of recs.values()) {
-      if (s.status === 'running' && !d.inflight.has(s.stepId)) {
-        this.st.runs.patchStep(runId, s.stepId, {
-          status: 'retry-wait',
-          attempt: Math.max(0, s.attempt - 1),
-          wakeAt: this.clock.now().toISOString(),
-        });
-        this.event(run, 'step.recovered', { attempt: s.attempt }, s.stepId);
-      }
-    }
+    this.recoverOrphanedSteps(run, recs, d);
     recs = this.records(runId);
 
     const failing = () => unhandledFailures(recs).length > 0 || this.st.runs.getRun(runId)!.error !== undefined;
 
     if (!failing()) {
-      let progress = true;
-      for (let pass = 0; progress && pass < plan.steps.length + 5; pass++) {
-        progress = false;
-        const { runnable, skips } = classifyPending(plan, recs);
-        for (const sk of skips) {
-          this.skipStep(run, sk.step, sk.reason);
-          progress = true;
-        }
-        for (const ps of runnable) {
-          if (recs.get(ps.id)?.status !== 'pending') continue;
-          if (failing()) break;
-          if (ps.when && !this.evalWhen(run, plan, recs, ps)) {
-            if (this.st.runs.getStep(runId, ps.id)?.status === 'pending') this.skipStep(run, ps, 'condition-false');
-            progress = true;
-            recs = this.records(runId);
-            continue;
-          }
-          if (this.dispatch(run, plan, recs, ps, d)) progress = true;
-          recs = this.records(runId);
-        }
-        recs = this.records(runId);
-      }
-      // due retries (back-off elapsed)
-      const nowMs = this.clock.now().getTime();
-      for (const s of recs.values()) {
-        if (s.status === 'retry-wait' && s.wakeAt && Date.parse(s.wakeAt) <= nowMs && !failing()) {
-          const ps = plan.steps.find((x) => x.id === s.stepId)!;
-          this.launch(run, plan, recs, ps, d);
-          recs = this.records(runId);
-        }
-      }
+      recs = this.runReadySteps(run, plan, recs, d, failing);
+      recs = this.launchDueRetries(run, plan, recs, d, failing);
     }
 
     recs = this.records(runId);
@@ -489,6 +450,74 @@ export class Orchestrator {
     this.syncVisibility(run, recs);
   }
 
+  /** Steps recorded as running that this process is not executing (defence in depth after a crash). */
+  private recoverOrphanedSteps(run: RunRecord, recs: Map<string, StepRecord>, d: Driver): void {
+    for (const s of recs.values()) {
+      if (s.status === 'running' && !d.inflight.has(s.stepId)) {
+        this.st.runs.patchStep(run.id, s.stepId, {
+          status: 'retry-wait',
+          attempt: Math.max(0, s.attempt - 1),
+          wakeAt: this.clock.now().toISOString(),
+        });
+        this.event(run, 'step.recovered', { attempt: s.attempt }, s.stepId);
+      }
+    }
+  }
+
+  /** Repeat classify-and-dispatch until a pass makes no progress; returns the refreshed step records. */
+  private runReadySteps(
+    run: RunRecord,
+    plan: Plan,
+    start: Map<string, StepRecord>,
+    d: Driver,
+    failing: () => boolean,
+  ): Map<string, StepRecord> {
+    let recs = start;
+    let progress = true;
+    for (let pass = 0; progress && pass < plan.steps.length + 5; pass++) {
+      progress = false;
+      const { runnable, skips } = classifyPending(plan, recs);
+      for (const sk of skips) {
+        this.skipStep(run, sk.step, sk.reason);
+        progress = true;
+      }
+      for (const ps of runnable) {
+        if (recs.get(ps.id)?.status !== 'pending') continue;
+        if (failing()) break;
+        if (ps.when && !this.evalWhen(run, plan, recs, ps)) {
+          if (this.st.runs.getStep(run.id, ps.id)?.status === 'pending') this.skipStep(run, ps, 'condition-false');
+          progress = true;
+          recs = this.records(run.id);
+          continue;
+        }
+        if (this.dispatch(run, plan, recs, ps, d)) progress = true;
+        recs = this.records(run.id);
+      }
+      recs = this.records(run.id);
+    }
+    return recs;
+  }
+
+  /** Relaunch steps whose back-off has elapsed. */
+  private launchDueRetries(
+    run: RunRecord,
+    plan: Plan,
+    start: Map<string, StepRecord>,
+    d: Driver,
+    failing: () => boolean,
+  ): Map<string, StepRecord> {
+    let recs = start;
+    const nowMs = this.clock.now().getTime();
+    for (const s of recs.values()) {
+      if (s.status === 'retry-wait' && s.wakeAt && Date.parse(s.wakeAt) <= nowMs && !failing()) {
+        const ps = plan.steps.find((x) => x.id === s.stepId)!;
+        this.launch(run, plan, recs, ps, d);
+        recs = this.records(run.id);
+      }
+    }
+    return recs;
+  }
+
   // ================================================================ dispatch
   /** Returns true when the step completed inline (so downstream steps may now be ready). */
   private dispatch(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep, d: Driver): boolean {
@@ -497,139 +526,150 @@ export class Orchestrator {
       case 'map':
         this.launch(run, plan, recs, ps, d);
         return false;
-      case 'branch': {
-        const scope = this.scope(run, plan, recs);
-        let chosen: string | undefined;
-        try {
-          for (const c of ps.cases ?? []) {
-            if (isTruthy(evaluate(this.parse(c.when), scope, { seed: run.seed }))) {
-              chosen = c.name;
-              break;
-            }
-          }
-        } catch (e) {
-          this.startInline(run, ps);
-          this.failStep(
-            run,
-            ps,
-            { code: 'BRANCH_EVALUATION_FAILED', message: (e as Error).message, class: 'contract', retryable: false },
-            'branch',
-          );
-          return true;
-        }
-        this.startInline(run, ps);
-        if (chosen === undefined && ps.default === undefined) {
-          this.failStep(
-            run,
-            ps,
-            {
-              code: 'BRANCH_NO_MATCH',
-              message: 'No branch case matched and there is no default',
-              class: 'contract',
-              retryable: false,
-            },
-            'branch',
-          );
-        } else {
-          this.succeedStep(run, ps, { case: chosen ?? ps.default }, { cost: 0, durationMs: 0 });
-        }
-        return true;
-      }
-      case 'parallel': {
-        this.startInline(run, ps);
-        const results: Record<string, unknown> = {};
-        let anyOk = false;
-        for (const dep of ps.dependsOn) {
-          const r = recs.get(dep);
-          if (r?.status === 'succeeded') {
-            anyOk = true;
-            results[dep] = this.loadOutput(run.tenant, r) ?? null;
-          } else if (r && !isTerminalStep(r.status)) {
-            // join:any — the remaining branches are no longer needed
-            d.inflight.get(dep)?.abort();
-            this.st.runs.patchStep(run.id, dep, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
-            this.event(run, 'step.skipped', { reason: 'join-satisfied' }, dep);
-          }
-        }
-        if (ps.join === 'any' && !anyOk) {
-          this.failStep(
-            run,
-            ps,
-            {
-              code: 'PARALLEL_ALL_FAILED',
-              message: 'Every parallel branch failed',
-              class: 'business',
-              retryable: false,
-            },
-            'parallel',
-          );
-        } else {
-          this.succeedStep(run, ps, { results }, { cost: 0, durationMs: 0 });
-        }
-        return true;
-      }
+      case 'branch':
+        return this.dispatchBranch(run, plan, recs, ps);
+      case 'parallel':
+        return this.dispatchParallel(run, recs, ps, d);
       case 'approval':
         this.requestApproval(run, plan, recs, ps);
         return false;
-      case 'wait': {
-        const now = this.clock.now();
-        this.st.runs.patchStep(run.id, ps.id, {
-          startedAt: now.toISOString(),
-          attempt: 1,
-          ...(ps.until
-            ? (() => {
-                let corr: string | undefined;
-                if (ps.until.correlation) {
-                  try {
-                    corr = String(resolveValue(ps.until.correlation, this.scope(run, plan, recs), { seed: run.seed }));
-                  } catch {
-                    corr = undefined;
-                  }
-                }
-                return {
-                  status: 'waiting-event' as const,
-                  waitEvent: ps.until.event,
-                  waitCorrelation: corr ?? null,
-                  wakeAt: new Date(now.getTime() + ps.timeoutMs).toISOString(),
-                };
-              })()
-            : {
-                status: 'waiting-timer' as const,
-                wakeAt: new Date(now.getTime() + (ps.durationMs ?? 0)).toISOString(),
-              }),
-        });
-        this.event(run, 'step.waiting', { on: ps.until ? `event:${ps.until.event}` : 'timer' }, ps.id);
-        return false;
-      }
+      case 'wait':
+        return this.dispatchWait(run, plan, recs, ps);
       case 'subworkflow':
         this.startChild(run, plan, recs, ps);
         return false;
-      case 'terminate': {
-        this.startInline(run, ps);
-        if (ps.status === 'success') {
-          this.succeedStep(run, ps, { terminated: true }, { cost: 0, durationMs: 0 });
-          for (const s of this.records(run.id).values()) {
-            if (s.status === 'pending')
-              this.skipStep(run, plan.steps.find((x) => x.id === s.stepId)!, 'run-terminated');
-          }
-        } else {
-          this.failStep(
-            run,
-            ps,
-            {
-              code: 'TERMINATED',
-              message: ps.message
-                ? String(this.safeResolve(ps.message, this.scope(run, plan, recs), run.seed))
-                : 'The workflow terminated with a failure',
-              class: ps.errorClass ?? 'business',
-              retryable: false,
-            },
-            'terminate',
-          );
+      case 'terminate':
+        return this.dispatchTerminate(run, plan, recs, ps);
+    }
+  }
+
+  private dispatchBranch(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+    const scope = this.scope(run, plan, recs);
+    let chosen: string | undefined;
+    try {
+      for (const c of ps.cases ?? []) {
+        if (isTruthy(evaluate(this.parse(c.when), scope, { seed: run.seed }))) {
+          chosen = c.name;
+          break;
         }
-        return true;
+      }
+    } catch (e) {
+      this.startInline(run, ps);
+      this.failStep(
+        run,
+        ps,
+        { code: 'BRANCH_EVALUATION_FAILED', message: (e as Error).message, class: 'contract', retryable: false },
+        'branch',
+      );
+      return true;
+    }
+    this.startInline(run, ps);
+    if (chosen === undefined && ps.default === undefined) {
+      this.failStep(
+        run,
+        ps,
+        {
+          code: 'BRANCH_NO_MATCH',
+          message: 'No branch case matched and there is no default',
+          class: 'contract',
+          retryable: false,
+        },
+        'branch',
+      );
+    } else {
+      this.succeedStep(run, ps, { case: chosen ?? ps.default }, { cost: 0, durationMs: 0 });
+    }
+    return true;
+  }
+
+  private dispatchParallel(run: RunRecord, recs: Map<string, StepRecord>, ps: PlanStep, d: Driver): boolean {
+    this.startInline(run, ps);
+    const results: Record<string, unknown> = {};
+    let anyOk = false;
+    for (const dep of ps.dependsOn) {
+      const r = recs.get(dep);
+      if (r?.status === 'succeeded') {
+        anyOk = true;
+        results[dep] = this.loadOutput(run.tenant, r) ?? null;
+      } else if (r && !isTerminalStep(r.status)) {
+        // join:any — the remaining branches are no longer needed
+        d.inflight.get(dep)?.abort();
+        this.st.runs.patchStep(run.id, dep, { status: 'cancelled', finishedAt: this.clock.now().toISOString() });
+        this.event(run, 'step.skipped', { reason: 'join-satisfied' }, dep);
       }
     }
+    if (ps.join === 'any' && !anyOk) {
+      this.failStep(
+        run,
+        ps,
+        {
+          code: 'PARALLEL_ALL_FAILED',
+          message: 'Every parallel branch failed',
+          class: 'business',
+          retryable: false,
+        },
+        'parallel',
+      );
+    } else {
+      this.succeedStep(run, ps, { results }, { cost: 0, durationMs: 0 });
+    }
+    return true;
+  }
+
+  private dispatchWait(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+    const now = this.clock.now();
+    this.st.runs.patchStep(run.id, ps.id, {
+      startedAt: now.toISOString(),
+      attempt: 1,
+      ...(ps.until
+        ? (() => {
+            let corr: string | undefined;
+            if (ps.until.correlation) {
+              try {
+                corr = String(resolveValue(ps.until.correlation, this.scope(run, plan, recs), { seed: run.seed }));
+              } catch {
+                corr = undefined;
+              }
+            }
+            return {
+              status: 'waiting-event' as const,
+              waitEvent: ps.until.event,
+              waitCorrelation: corr ?? null,
+              wakeAt: new Date(now.getTime() + ps.timeoutMs).toISOString(),
+            };
+          })()
+        : {
+            status: 'waiting-timer' as const,
+            wakeAt: new Date(now.getTime() + (ps.durationMs ?? 0)).toISOString(),
+          }),
+    });
+    this.event(run, 'step.waiting', { on: ps.until ? `event:${ps.until.event}` : 'timer' }, ps.id);
+    return false;
+  }
+
+  private dispatchTerminate(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+    this.startInline(run, ps);
+    if (ps.status === 'success') {
+      this.succeedStep(run, ps, { terminated: true }, { cost: 0, durationMs: 0 });
+      for (const s of this.records(run.id).values()) {
+        if (s.status === 'pending') this.skipStep(run, plan.steps.find((x) => x.id === s.stepId)!, 'run-terminated');
+      }
+    } else {
+      this.failStep(
+        run,
+        ps,
+        {
+          code: 'TERMINATED',
+          message: ps.message
+            ? String(this.safeResolve(ps.message, this.scope(run, plan, recs), run.seed))
+            : 'The workflow terminated with a failure',
+          class: ps.errorClass ?? 'business',
+          retryable: false,
+        },
+        'terminate',
+      );
+    }
+    return true;
   }
 
   private startInline(run: RunRecord, ps: PlanStep): void {
