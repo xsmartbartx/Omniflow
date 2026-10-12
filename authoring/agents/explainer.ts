@@ -31,6 +31,18 @@ function ordinal(n: number): string {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
 }
 
+/** "Every N minutes/hours" shapes, which only apply when day, month and weekday are all unrestricted. */
+function describeSubDaily(min: string, hour: string, anyDay: boolean): string | undefined {
+  if (!anyDay) return undefined;
+  const isNum = (s: string) => /^\d+$/.test(s);
+  const isStep = (s: string) => /^\*\/\d+$/.test(s);
+  if (min === '*' && hour === '*') return 'every minute';
+  if (isStep(min) && hour === '*') return `every ${min.slice(2)} minutes`;
+  if (isNum(min) && isStep(hour)) return `every ${hour.slice(2)} hours, at minute ${min}`;
+  if (isNum(min) && hour === '*') return min === '0' ? 'every hour, on the hour' : `every hour at minute ${min}`;
+  return undefined;
+}
+
 /** Describe the common cron shapes in words; anything unusual is quoted back verbatim rather than guessed at. */
 export function describeCron(expr: string, timezone?: string): string {
   const tz = timezone ? ` (${timezone})` : ' (UTC)';
@@ -40,13 +52,8 @@ export function describeCron(expr: string, timezone?: string): string {
   const num = (s: string) => /^\d+$/.test(s);
   const time = num(min) && num(hour) ? `${pad(hour)}:${pad(min)}` : undefined;
 
-  if (f.every((x) => x === '*')) return 'every minute';
-  if (/^\*\/\d+$/.test(min) && hour === '*' && dom === '*' && mon === '*' && dow === '*')
-    return `every ${min.slice(2)} minutes`;
-  if (num(min) && /^\*\/\d+$/.test(hour) && dom === '*' && mon === '*' && dow === '*')
-    return `every ${hour.slice(2)} hours, at minute ${min}`;
-  if (num(min) && hour === '*' && dom === '*' && mon === '*' && dow === '*')
-    return min === '0' ? 'every hour, on the hour' : `every hour at minute ${min}`;
+  const sub = describeSubDaily(min, hour, dom === '*' && mon === '*' && dow === '*');
+  if (sub) return sub;
   if (time && dom === '*' && mon === '*' && dow === '*') return `every day at ${time}${tz}`;
   if (time && dom === '*' && mon === '*' && num(dow)) return `every ${DAYS[Number(dow) % 7]} at ${time}${tz}`;
   if (time && dom === '*' && mon === '*' && dow === '1-5') return `every weekday at ${time}${tz}`;
@@ -142,6 +149,11 @@ function describeTrigger(t: Plan['triggers'][number]): string {
 function describeStep(s: PlanStep, plan: Plan): string {
   const by = new Map(plan.steps.map((x) => [x.id, x]));
   const label = (id: string) => `“${by.get(id)?.name ?? id}”`;
+  return [describeStepKind(s), ...describeStepExtras(s, label)].join(' ');
+}
+
+/** The sentence that says what kind of step this is and what it does. */
+function describeStepKind(s: PlanStep): string {
   const parts: string[] = [];
   const title = s.name ?? s.id;
   switch (s.type) {
@@ -181,6 +193,12 @@ function describeStep(s: PlanStep, plan: Plan): string {
       parts.push(`**${title}** — ends the run as ${s.status === 'success' ? 'a success' : 'a failure'}.`);
       break;
   }
+  return parts.join(' ');
+}
+
+/** Ordering, condition, retry, timeout, undo, error-route and sunset notes that apply to any step kind. */
+function describeStepExtras(s: PlanStep, label: (id: string) => string): string[] {
+  const parts: string[] = [];
   if (s.dependsOn.length) parts.push(`Runs after ${s.dependsOn.map(label).join(' and ')}.`);
   if (s.when) parts.push(`Only runs when \`${s.when}\`.`);
   if (s.retry && s.retry.attempts > 1)
@@ -193,17 +211,11 @@ function describeStep(s: PlanStep, plan: Plan): string {
     parts.push(`If it fails, the run continues at ${label(s.onError.routeTo)}.`);
   else if (s.onError === 'continue') parts.push('If it fails, the run carries on regardless.');
   if (s.sunset) parts.push(`Temporary bridge — must be reviewed by ${s.sunset}.`);
-  return parts.join(' ');
+  return parts;
 }
 
-export function explainPlan(plan: Plan): PlanExplanation {
-  const w = plan.workflow;
-  const triggers = plan.triggers.map(describeTrigger);
-  const inputs = Object.entries(plan.inputs).map(([k, v]) => describeInput(k, v));
-  const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
-  const steps = ordered.map((s) => ({ id: s.id, text: describeStep(s, plan) }));
-
-  const a = plan.analysis;
+/** Guards, caps, concurrency and approval gates, in plain sentences. */
+function safeguardsOf(plan: Plan, ordered: PlanStep[]): string[] {
   const safeguards: string[] = [];
   if (plan.guards.pre.length)
     safeguards.push(`Before it starts it checks: ${plan.guards.pre.map((g) => g.message ?? g.name).join('; ')}.`);
@@ -225,7 +237,12 @@ export function explainPlan(plan: Plan): PlanExplanation {
   if (plan.policy.dedupKey) safeguards.push('Duplicate triggers within a short window are ignored.');
   if (ordered.some((s) => s.type === 'approval'))
     safeguards.push('A person must approve before it proceeds past the approval step.');
+  return safeguards;
+}
 
+/** What a reader should know before trusting the workflow: effects that cannot be undone, shell use, data and reach. */
+function risksOf(plan: Plan, ordered: PlanStep[]): string[] {
+  const a = plan.analysis;
   const risks: string[] = [];
   const effectful = ordered.filter((s) => s.effect === 'effectful');
   if (effectful.length) {
@@ -248,6 +265,19 @@ export function explainPlan(plan: Plan): PlanExplanation {
   if (a.maxSensitivity === 'confidential' || a.maxSensitivity === 'secret')
     risks.push(`It handles ${a.maxSensitivity} data.`);
   if (a.egress.length) risks.push(`It can contact: ${a.egress.join(', ')}.`);
+  return risks;
+}
+
+export function explainPlan(plan: Plan): PlanExplanation {
+  const w = plan.workflow;
+  const triggers = plan.triggers.map(describeTrigger);
+  const inputs = Object.entries(plan.inputs).map(([k, v]) => describeInput(k, v));
+  const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
+  const steps = ordered.map((s) => ({ id: s.id, text: describeStep(s, plan) }));
+
+  const safeguards = safeguardsOf(plan, ordered);
+  const effectful = ordered.filter((s) => s.effect === 'effectful');
+  const risks = risksOf(plan, ordered);
 
   const intro = w.description ? `${w.description.replace(/\.?$/, '.')} ` : '';
   const summary = [
@@ -340,6 +370,115 @@ const ADVICE: Record<string, { cause: string; suggestion: string }> = {
 
 const dur = (from?: string, to?: string) => (from && to ? humanMs(Date.parse(to) - Date.parse(from)) : undefined);
 
+/** What happened to one step, as one or two sentences (the second when its undo ran or failed). */
+function stepSentences(s: StepRecord, n: string): string[] {
+  const out: string[] = [];
+  const main = stepSentence(s, n);
+  if (main) out.push(main);
+  if (s.compensationStatus === 'done') out.push(`“${n}” was undone (compensated) after the failure.`);
+  else if (s.compensationStatus === 'failed') {
+    const why = s.compensationError ? `: ${s.compensationError.message}` : '';
+    out.push(`Undoing “${n}” FAILED${why}. This needs a person to clean up.`);
+  }
+  return out;
+}
+
+function stepSentence(s: StepRecord, n: string): string | undefined {
+  switch (s.status) {
+    case 'succeeded': {
+      const onAttempt = s.attempt > 1 ? ` on attempt ${s.attempt}` : '';
+      const stepTook = dur(s.startedAt, s.finishedAt);
+      const inTime = stepTook ? ` in ${stepTook}` : '';
+      return `“${n}” succeeded${onAttempt}${inTime}.`;
+    }
+    case 'skipped': {
+      const why = s.skippedReason ? ` (${s.skippedReason})` : '';
+      return `“${n}” was skipped${why}.`;
+    }
+    case 'failed': {
+      const attempts = s.attempt > 1 ? ` after ${s.attempt} attempts` : '';
+      return `“${n}” failed${attempts}: ${s.error?.message ?? 'no detail recorded'}${handledNote(s.handled)}`;
+    }
+    case 'waiting-approval':
+      return `“${n}” is waiting for a person to approve it.`;
+    case 'waiting-event':
+      return `“${n}” is waiting for the “${s.waitEvent}” event.`;
+    case 'waiting-timer': {
+      const until = s.wakeAt ? ` until ${s.wakeAt}` : '';
+      return `“${n}” is waiting for a timer${until}.`;
+    }
+    case 'retry-wait': {
+      const at = s.wakeAt ? ` at ${s.wakeAt}` : '';
+      return `“${n}” failed and will be retried${at} (attempt ${s.attempt} so far).`;
+    }
+    case 'running':
+      return `“${n}” is running now.`;
+    case 'cancelled':
+      return `“${n}” was cancelled.`;
+    default:
+      return undefined;
+  }
+}
+
+/** The one-line verdict for a run, plus the failure analysis or the step it is waiting on when relevant. */
+function describeOutcome(
+  run: RunRecord,
+  steps: StepRecord[],
+  ordered: StepRecord[],
+  name: (id: string) => string,
+  took: string | undefined,
+): Pick<RunExplanation, 'headline' | 'failure' | 'waitingOn'> {
+  switch (run.status) {
+    case 'succeeded':
+      return { headline: took ? `Succeeded in ${took}.` : 'Succeeded.' };
+    case 'cancelled':
+      return { headline: 'Cancelled before it finished.' };
+    case 'queued':
+      return { headline: 'Queued; it has not started yet.' };
+    case 'running':
+      return { headline: 'Running.' };
+    case 'waiting-approval':
+    case 'waiting-event': {
+      const waiting = steps.find((s) => s.status.startsWith('waiting'));
+      const waitingOn = waiting ? name(waiting.stepId) : undefined;
+      const at = waitingOn ? ` at “${waitingOn}”` : '';
+      const headline =
+        run.status === 'waiting-approval' ? `Paused, waiting for approval${at}.` : `Paused, waiting for an event${at}.`;
+      return { headline, ...(waitingOn ? { waitingOn } : {}) };
+    }
+    default:
+      return describeFailure(run, ordered, name);
+  }
+}
+
+function describeFailure(
+  run: RunRecord,
+  ordered: StepRecord[],
+  name: (id: string) => string,
+): { headline: string; failure: NonNullable<RunExplanation['failure']> } {
+  const bad = ordered.find((s) => s.status === 'failed' && !s.handled) ?? ordered.find((s) => s.status === 'failed');
+  const err: ErrorInfo | undefined = bad?.error ?? run.error;
+  const advice = ADVICE[err?.class ?? 'systemic']!;
+  const compensated = ordered.filter((s) => s.compensationStatus === 'done').length;
+  const compFailed = ordered.filter((s) => s.compensationStatus === 'failed').length;
+  const failedAt = `Failed at “${bad ? name(bad.stepId) : 'a step'}”`;
+  let headline = `${failedAt}.`;
+  if (run.status === 'rolled-back') headline = `${failedAt} and was rolled back.`;
+  else if (run.status === 'compensation-failed')
+    headline = `${failedAt} and the rollback did not complete — needs attention.`;
+  return {
+    headline,
+    failure: {
+      stepId: bad?.stepId ?? '',
+      code: err?.code ?? 'UNKNOWN',
+      errorClass: err?.class ?? 'unknown',
+      cause: `${err?.message ?? 'No error detail was recorded.'} ${advice.cause}`,
+      whatHappenedNext: whatHappenedNext(compFailed, compensated),
+      suggestion: advice.suggestion,
+    },
+  };
+}
+
 export function explainRun(input: {
   run: RunRecord;
   steps: StepRecord[];
@@ -361,59 +500,7 @@ export function explainRun(input: {
     `${run.dryRun ? 'Dry run of' : 'Run of'} ${run.workflowName} ${run.workflowVersion}, started by ${startedBy(run)}${canary}.`,
   );
 
-  for (const s of ordered) {
-    const n = name(s.stepId);
-    switch (s.status) {
-      case 'succeeded': {
-        const onAttempt = s.attempt > 1 ? ` on attempt ${s.attempt}` : '';
-        const stepTook = dur(s.startedAt, s.finishedAt);
-        const inTime = stepTook ? ` in ${stepTook}` : '';
-        narrative.push(`“${n}” succeeded${onAttempt}${inTime}.`);
-        break;
-      }
-      case 'skipped': {
-        const why = s.skippedReason ? ` (${s.skippedReason})` : '';
-        narrative.push(`“${n}” was skipped${why}.`);
-        break;
-      }
-      case 'failed': {
-        const attempts = s.attempt > 1 ? ` after ${s.attempt} attempts` : '';
-        narrative.push(
-          `“${n}” failed${attempts}: ${s.error?.message ?? 'no detail recorded'}${handledNote(s.handled)}`,
-        );
-        break;
-      }
-      case 'waiting-approval':
-        narrative.push(`“${n}” is waiting for a person to approve it.`);
-        break;
-      case 'waiting-event':
-        narrative.push(`“${n}” is waiting for the “${s.waitEvent}” event.`);
-        break;
-      case 'waiting-timer': {
-        const until = s.wakeAt ? ` until ${s.wakeAt}` : '';
-        narrative.push(`“${n}” is waiting for a timer${until}.`);
-        break;
-      }
-      case 'retry-wait': {
-        const at = s.wakeAt ? ` at ${s.wakeAt}` : '';
-        narrative.push(`“${n}” failed and will be retried${at} (attempt ${s.attempt} so far).`);
-        break;
-      }
-      case 'running':
-        narrative.push(`“${n}” is running now.`);
-        break;
-      case 'cancelled':
-        narrative.push(`“${n}” was cancelled.`);
-        break;
-      default:
-        break;
-    }
-    if (s.compensationStatus === 'done') narrative.push(`“${n}” was undone (compensated) after the failure.`);
-    else if (s.compensationStatus === 'failed') {
-      const why = s.compensationError ? `: ${s.compensationError.message}` : '';
-      narrative.push(`Undoing “${n}” FAILED${why}. This needs a person to clean up.`);
-    }
-  }
+  for (const s of ordered) narrative.push(...stepSentences(s, name(s.stepId)));
   for (const a of approvals) {
     if (a.status === 'pending') continue;
     const by = a.decidedBy ? ` by ${a.decidedBy}` : '';
@@ -421,53 +508,7 @@ export function explainRun(input: {
     narrative.push(`Approval “${a.stepId}” was ${a.status}${by}${comment}.`);
   }
 
-  let headline: string;
-  let failure: RunExplanation['failure'];
-  let waitingOn: string | undefined;
-  switch (run.status) {
-    case 'succeeded':
-      headline = took ? `Succeeded in ${took}.` : 'Succeeded.';
-      break;
-    case 'cancelled':
-      headline = 'Cancelled before it finished.';
-      break;
-    case 'queued':
-      headline = 'Queued; it has not started yet.';
-      break;
-    case 'running':
-      headline = 'Running.';
-      break;
-    case 'waiting-approval':
-    case 'waiting-event': {
-      const waiting = steps.find((s) => s.status.startsWith('waiting'));
-      waitingOn = waiting ? name(waiting.stepId) : undefined;
-      const at = waitingOn ? ` at “${waitingOn}”` : '';
-      headline =
-        run.status === 'waiting-approval' ? `Paused, waiting for approval${at}.` : `Paused, waiting for an event${at}.`;
-      break;
-    }
-    default: {
-      const bad =
-        ordered.find((s) => s.status === 'failed' && !s.handled) ?? ordered.find((s) => s.status === 'failed');
-      const err: ErrorInfo | undefined = bad?.error ?? run.error;
-      const advice = ADVICE[err?.class ?? 'systemic']!;
-      const compensated = ordered.filter((s) => s.compensationStatus === 'done').length;
-      const compFailed = ordered.filter((s) => s.compensationStatus === 'failed').length;
-      const failedAt = `Failed at “${bad ? name(bad.stepId) : 'a step'}”`;
-      if (run.status === 'rolled-back') headline = `${failedAt} and was rolled back.`;
-      else if (run.status === 'compensation-failed')
-        headline = `${failedAt} and the rollback did not complete — needs attention.`;
-      else headline = `${failedAt}.`;
-      failure = {
-        stepId: bad?.stepId ?? '',
-        code: err?.code ?? 'UNKNOWN',
-        errorClass: err?.class ?? 'unknown',
-        cause: `${err?.message ?? 'No error detail was recorded.'} ${advice.cause}`,
-        whatHappenedNext: whatHappenedNext(compFailed, compensated),
-        suggestion: advice.suggestion,
-      };
-    }
-  }
+  const { headline, failure, waitingOn } = describeOutcome(run, steps, ordered, name, took);
 
   const md = [`**${headline}**`, '', ...narrative.map((n) => `- ${n}`)];
   if (failure)

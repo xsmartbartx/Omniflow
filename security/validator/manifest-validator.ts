@@ -91,6 +91,28 @@ function finish(issues: Issue[]): ManifestValidation {
   return { ok: errors.length === 0, issues: sorted, errors, warnings };
 }
 
+interface Ctx {
+  m: Manifest;
+  error: (path: readonly PathSegment[], code: string, message: string, keyLoc?: boolean) => void;
+  warn: (path: readonly PathSegment[], code: string, message: string) => void;
+  checkValue: (value: unknown, path: PathSegment[], scope: ExprScope) => void;
+  checkExpression: (src: string, path: PathSegment[], scope: ExprScope) => void;
+  checkStepEgress: (egress: string[] | undefined, path: PathSegment[]) => void;
+  checkSunset: (sunset: string | undefined, path: PathSegment[]) => void;
+  checkCapabilityRef: (ref: string, path: PathSegment[]) => void;
+  inputNames: ReadonlySet<string>;
+  stepIds: ReadonlySet<string>;
+}
+
+type ScopeFor = (s: Step, o: { secrets?: boolean; item?: boolean; self?: boolean; where: string }) => ExprScope;
+
+/** What the per-step checks need beyond the shared context: the step graph and how to scope a step's references. */
+interface StepCtx extends Ctx {
+  byId: ReadonlyMap<string, { step: Step; index: number }>;
+  terminateIds: ReadonlySet<string>;
+  scopeFor: ScopeFor;
+}
+
 function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   const issues: Issue[] = [];
 
@@ -114,7 +136,39 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     add('error', path, code, message, keyLoc);
   const warn = (path: readonly PathSegment[], code: string, message: string) => add('warning', path, code, message);
 
-  // ------------------------------------------------------------ metadata
+  const inputNames = new Set(Object.keys(m.inputs));
+  const stepIds = new Set(m.steps.map((s) => s.id));
+  const c: Ctx = {
+    m,
+    error,
+    warn,
+    inputNames,
+    stepIds,
+    ...makeChecks(error, inputNames, stepIds),
+    checkCapabilityRef: (ref, path) => {
+      if (!parseCapabilityRef(ref)) {
+        error(
+          path,
+          'INVALID_CAPABILITY_REF',
+          `'${ref}' must look like name@constraint with a valid, explicit semver constraint (e.g. http-get@^1)`,
+        );
+      }
+    },
+  };
+
+  checkMetadata(c);
+  checkInputs(c);
+  checkTriggers(c);
+  checkSteps(c);
+  checkGuards(c);
+  checkOutputs(c);
+  checkPolicy(c);
+  checkObservability(c);
+  return issues;
+}
+
+function checkMetadata(c: Ctx): void {
+  const { m, error, warn } = c;
   if (!m.metadata.description) {
     warn(['metadata'], 'MISSING_DESCRIPTION', 'Add a description so reviewers know what this workflow is for');
   }
@@ -126,59 +180,64 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       error(['context', key], 'RESERVED_CONTEXT_KEY', `'${key}' is reserved and injected by the engine`, true);
     }
   }
+}
 
-  // -------------------------------------------------------------- inputs
-  const inputNames = new Set(Object.keys(m.inputs));
-  for (const [name, spec] of Object.entries(m.inputs) as Array<[string, InputSpec]>) {
-    const p = ['inputs', name];
-    if (spec.pattern !== undefined) {
-      if (isSuspiciousRegex(spec.pattern)) {
-        error([...p, 'pattern'], 'UNSAFE_REGEX', 'Pattern risks catastrophic backtracking; simplify it');
-      } else {
-        try {
-          new RegExp(spec.pattern, 'u');
-        } catch (e) {
-          error([...p, 'pattern'], 'INVALID_REGEX', (e as Error).message);
-        }
-      }
-    }
-    for (const k of ['items', 'properties'] as const) {
-      const sub = spec[k];
-      if (sub !== undefined && k === 'items') {
-        const bad = checkSchemaDefinition(sub);
-        if (bad) error([...p, k], 'INVALID_SCHEMA', bad);
-      }
-    }
-    if (spec.type === 'integer' || spec.type === 'number') {
-      if (spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) {
-        error([...p, 'minimum'], 'INVALID_RANGE', 'minimum is greater than maximum');
-      }
-    }
-    if (spec.default !== undefined) {
-      const res = validateValue(inputsToJsonSchema({ [name]: { ...spec, required: false } }), {
-        [name]: spec.default,
-      });
-      if (!res.ok) {
-        error(
-          [...p, 'default'],
-          'INVALID_DEFAULT',
-          `Default does not satisfy the input's own constraints: ${res.issues[0]?.message ?? ''}`,
-        );
-      }
-    }
-    if (spec.sensitivity === 'secret') {
-      error(
-        [...p, 'sensitivity'],
-        'SECRET_INPUT_FORBIDDEN',
-        "Inputs are stored with the run and cannot be 'secret'. Provide credentials through the Secret Broker and reference them as ${{ secrets.NAME }}.",
-      );
-    }
-    if (spec.required === true && spec.default !== undefined) {
-      warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
+function checkInputs(c: Ctx): void {
+  for (const [name, spec] of Object.entries(c.m.inputs) as Array<[string, InputSpec]>) checkInput(c, name, spec);
+}
+
+function checkInput(c: Ctx, name: string, spec: InputSpec): void {
+  const { error, warn } = c;
+  const p = ['inputs', name];
+  checkInputPattern(c, spec, p);
+  if (spec.items !== undefined) {
+    const bad = checkSchemaDefinition(spec.items);
+    if (bad) error([...p, 'items'], 'INVALID_SCHEMA', bad);
+  }
+  if (spec.type === 'integer' || spec.type === 'number') {
+    if (spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) {
+      error([...p, 'minimum'], 'INVALID_RANGE', 'minimum is greater than maximum');
     }
   }
+  if (spec.default !== undefined) {
+    const res = validateValue(inputsToJsonSchema({ [name]: { ...spec, required: false } }), {
+      [name]: spec.default,
+    });
+    if (!res.ok) {
+      error(
+        [...p, 'default'],
+        'INVALID_DEFAULT',
+        `Default does not satisfy the input's own constraints: ${res.issues[0]?.message ?? ''}`,
+      );
+    }
+  }
+  if (spec.sensitivity === 'secret') {
+    error(
+      [...p, 'sensitivity'],
+      'SECRET_INPUT_FORBIDDEN',
+      "Inputs are stored with the run and cannot be 'secret'. Provide credentials through the Secret Broker and reference them as ${{ secrets.NAME }}.",
+    );
+  }
+  if (spec.required === true && spec.default !== undefined) {
+    warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
+  }
+}
 
-  // ------------------------------------------------------------ triggers
+function checkInputPattern(c: Ctx, spec: InputSpec, p: string[]): void {
+  if (spec.pattern === undefined) return;
+  if (isSuspiciousRegex(spec.pattern)) {
+    c.error([...p, 'pattern'], 'UNSAFE_REGEX', 'Pattern risks catastrophic backtracking; simplify it');
+    return;
+  }
+  try {
+    new RegExp(spec.pattern, 'u');
+  } catch (e) {
+    c.error([...p, 'pattern'], 'INVALID_REGEX', (e as Error).message);
+  }
+}
+
+function checkTriggers(c: Ctx): void {
+  const { m, error, checkValue, checkExpression } = c;
   const triggerNames = new Set<string>();
   m.triggers.forEach((t, i) => {
     const p: PathSegment[] = ['triggers', i];
@@ -230,8 +289,10 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       error([...p, 'workflow'], 'SELF_TRIGGER', 'A workflow cannot be triggered by its own completion');
     }
   });
+}
 
-  // --------------------------------------------------------------- steps
+function checkSteps(c: Ctx): void {
+  const { m, error } = c;
   if (m.steps.length > LIMITS.maxSteps) {
     error(['steps'], 'TOO_MANY_STEPS', `A workflow may have at most ${LIMITS.maxSteps} steps`);
   }
@@ -264,7 +325,7 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   }
   const ancestors = topo.cycle ? new Map<string, Set<string>>() : transitiveDependencies(topo.order, deps);
 
-  const scopeFor = (s: Step, o: { secrets?: boolean; item?: boolean; self?: boolean; where: string }): ExprScope => {
+  const scopeFor: ScopeFor = (s, o) => {
     const up = new Set(ancestors.get(s.id) ?? []);
     if (o.self) up.add(s.id);
     return {
@@ -277,205 +338,253 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
 
   const terminateIds = new Set(m.steps.filter((s) => s.type === 'terminate').map((s) => s.id));
 
-  const checkCapabilityRef = (ref: string, path: PathSegment[]) => {
-    if (!parseCapabilityRef(ref)) {
-      error(
-        path,
-        'INVALID_CAPABILITY_REF',
-        `'${ref}' must look like name@constraint with a valid, explicit semver constraint (e.g. http-get@^1)`,
-      );
-    }
-  };
-
+  const sc: StepCtx = { ...c, byId, terminateIds, scopeFor };
   m.steps.forEach((s, i) => {
-    const p: PathSegment[] = ['steps', i];
-    (s.dependsOn ?? []).forEach((d, j) => {
-      if (terminateIds.has(d)) {
-        error([...p, 'dependsOn', j], 'DEPENDS_ON_TERMINATE', `'${d}' ends the run, so nothing can depend on it`);
-      }
-    });
+    checkStep(sc, s, i);
+  });
+}
 
-    for (const key of ['timeout'] as const) {
-      const v = s[key];
-      if (v !== undefined && !isDuration(v))
-        error([...p, key], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
-    }
-    if (s.produces !== undefined) {
-      const bad = checkSchemaDefinition(s.produces);
-      if (bad) error([...p, 'produces'], 'INVALID_SCHEMA', `'produces' is not a valid JSON Schema: ${bad}`);
-    }
-    if (s.retry) {
-      if (!['capability', 'map', 'subworkflow'].includes(s.type)) {
-        error([...p, 'retry'], 'RETRY_NOT_APPLICABLE', `'retry' is not allowed on '${s.type}' steps`);
-      }
-      for (const k of ['initialDelay', 'maxDelay'] as const) {
-        const v = s.retry[k];
-        if (v !== undefined && !isDuration(v))
-          error([...p, 'retry', k], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
-      }
-    }
-    if (s.idempotencyKey !== undefined) {
-      if (s.type !== 'capability' && s.type !== 'map') {
-        error(
-          [...p, 'idempotencyKey'],
-          'IDEMPOTENCY_NOT_APPLICABLE',
-          `'idempotencyKey' is not allowed on '${s.type}' steps`,
-        );
-      } else {
-        checkValue(
-          s.idempotencyKey,
-          [...p, 'idempotencyKey'],
-          scopeFor(s, { item: s.type === 'map', where: 'idempotencyKey' }),
-        );
-      }
-    }
-    if (s.when !== undefined) {
-      checkExpression(s.when, [...p, 'when'], scopeFor(s, { where: "'when' condition" }));
-    }
-    if (s.compensate) {
-      if (s.type !== 'capability') {
-        error([...p, 'compensate'], 'COMPENSATE_NOT_APPLICABLE', "'compensate' is only allowed on capability steps");
-      } else {
-        checkCapabilityRef(s.compensate.uses, [...p, 'compensate', 'uses']);
-        if (s.compensate.with) {
-          checkValue(
-            s.compensate.with,
-            [...p, 'compensate', 'with'],
-            scopeFor(s, { secrets: true, self: true, where: 'compensation input' }),
-          );
-        }
-        if (s.compensate.idempotencyKey) {
-          checkValue(
-            s.compensate.idempotencyKey,
-            [...p, 'compensate', 'idempotencyKey'],
-            scopeFor(s, { self: true, where: 'compensation idempotencyKey' }),
-          );
-        }
-        if (s.compensate.timeout !== undefined && !isDuration(s.compensate.timeout)) {
-          error([...p, 'compensate', 'timeout'], 'INVALID_DURATION', 'Invalid duration');
-        }
-      }
-    }
-    if (typeof s.onError === 'object' && s.onError !== null) {
-      const target = s.onError.routeTo;
-      const t = byId.get(target);
-      if (!t) error([...p, 'onError', 'routeTo'], 'UNKNOWN_ROUTE_TARGET', `routeTo target '${target}' does not exist`);
-      else if (target === s.id) error([...p, 'onError', 'routeTo'], 'SELF_ROUTE', 'A step cannot route to itself');
-      else if (!(t.step.dependsOn ?? []).includes(s.id)) {
-        error(
-          [...p, 'onError', 'routeTo'],
-          'ROUTE_TARGET_NOT_DEPENDENT',
-          `routeTo target '${target}' must list '${s.id}' in its dependsOn`,
-        );
-      }
-    }
+function checkStep(c: StepCtx, s: Step, i: number): void {
+  const p: PathSegment[] = ['steps', i];
+  checkStepCommon(c, s, p);
+  checkCompensation(c, s, p);
+  checkErrorRoute(c, s, p);
+  checkStepKind(c, s, p);
+}
 
-    switch (s.type) {
-      case 'capability': {
-        checkCapabilityRef(s.uses, [...p, 'uses']);
-        if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, where: 'step input' }));
-        checkStepEgress(s.egress, [...p, 'egress']);
-        checkSunset(s.sunset, [...p, 'sunset']);
-        break;
-      }
-      case 'map': {
-        checkCapabilityRef(s.uses, [...p, 'uses']);
-        checkExpression(s.items, [...p, 'items'], scopeFor(s, { where: "'items' expression" }));
-        if (s.with)
-          checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, item: true, where: 'map body input' }));
-        if (s.maxItems > LIMITS.maxMapItems)
-          error([...p, 'maxItems'], 'FANOUT_TOO_LARGE', `maxItems may not exceed ${LIMITS.maxMapItems}`);
-        checkStepEgress(s.egress, [...p, 'egress']);
-        checkSunset(s.sunset, [...p, 'sunset']);
-        if (s.errorTolerance && s.errorTolerance.count === undefined && s.errorTolerance.percent === undefined) {
-          error([...p, 'errorTolerance'], 'EMPTY_TOLERANCE', "Set 'count' and/or 'percent'");
-        }
-        break;
-      }
-      case 'branch': {
-        const names = new Set<string>();
-        s.cases.forEach((c, j) => {
-          if (names.has(c.name)) error([...p, 'cases', j, 'name'], 'DUPLICATE_CASE', `Duplicate case '${c.name}'`);
-          names.add(c.name);
-          checkExpression(c.when, [...p, 'cases', j, 'when'], scopeFor(s, { where: 'branch condition' }));
-        });
-        if (s.default !== undefined && names.has(s.default)) {
-          error([...p, 'default'], 'DEFAULT_COLLIDES_WITH_CASE', `default name '${s.default}' is also a case name`);
-        }
-        const last = s.cases.at(-1);
-        const alwaysTrue = last !== undefined && /^\s*(\$\{\{\s*)?true(\s*\}\})?\s*$/.test(last.when);
-        if (s.default === undefined && !alwaysTrue) {
-          error(
-            [...p],
-            'BRANCH_NOT_EXHAUSTIVE',
-            "A branch must declare a 'default' or end with an always-true case (when: true)",
-          );
-        }
-        break;
-      }
-      case 'parallel': {
-        if ((s.dependsOn ?? []).length < 2) {
-          error(
-            [...p, 'dependsOn'],
-            'PARALLEL_NEEDS_BRANCHES',
-            "A parallel join needs at least two 'dependsOn' branches",
-          );
-        }
-        break;
-      }
-      case 'approval': {
-        if (!isDuration(s.timeout)) error([...p, 'timeout'], 'INVALID_DURATION', 'Invalid duration');
-        if (s.onTimeout === 'approve' && !s.justification) {
-          error(
-            [...p, 'justification'],
-            'APPROVE_BY_DEFAULT_NEEDS_JUSTIFICATION',
-            "'onTimeout: approve' requires a 'justification'",
-          );
-        }
-        if (s.onTimeout === 'approve') {
-          warn(
-            [...p, 'onTimeout'],
-            'APPROVE_BY_DEFAULT',
-            'Approve-on-timeout weakens the gate; a Pentest finding will be raised',
-          );
-        }
-        checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'approval message' }));
-        break;
-      }
-      case 'wait': {
-        const hasDuration = s.duration !== undefined;
-        const hasUntil = s.until !== undefined;
-        if (hasDuration === hasUntil) {
-          error(p, 'WAIT_NEEDS_ONE_OF', "A wait step needs exactly one of 'duration' or 'until'");
-        }
-        if (hasDuration && !isDuration(s.duration)) error([...p, 'duration'], 'INVALID_DURATION', 'Invalid duration');
-        if (hasUntil) {
-          if (s.timeout === undefined)
-            error(p, 'WAIT_EVENT_NEEDS_TIMEOUT', "Waiting for an event requires a 'timeout'");
-          if (s.until?.correlation) {
-            checkValue(s.until.correlation, [...p, 'until', 'correlation'], scopeFor(s, { where: 'wait correlation' }));
-          }
-        }
-        break;
-      }
-      case 'subworkflow': {
-        if (s.workflow === m.metadata.name) {
-          error([...p, 'workflow'], 'RECURSIVE_SUBWORKFLOW', 'A workflow cannot invoke itself');
-        }
-        if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { where: 'subworkflow input' }));
-        break;
-      }
-      case 'terminate': {
-        if (s.message) checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'terminate message' }));
-        if (s.status === 'failure' && !s.errorClass) {
-          warn([...p, 'errorClass'], 'TERMINATE_FAILURE_UNCLASSIFIED', "Classify the failure with 'errorClass'");
-        }
-        break;
-      }
+function checkStepCommon(c: StepCtx, s: Step, p: PathSegment[]): void {
+  const { error, terminateIds } = c;
+  (s.dependsOn ?? []).forEach((d, j) => {
+    if (terminateIds.has(d)) {
+      error([...p, 'dependsOn', j], 'DEPENDS_ON_TERMINATE', `'${d}' ends the run, so nothing can depend on it`);
     }
   });
+  for (const key of ['timeout'] as const) {
+    const v = s[key];
+    if (v !== undefined && !isDuration(v))
+      error([...p, key], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
+  }
+  if (s.produces !== undefined) {
+    const bad = checkSchemaDefinition(s.produces);
+    if (bad) error([...p, 'produces'], 'INVALID_SCHEMA', `'produces' is not a valid JSON Schema: ${bad}`);
+  }
+  checkStepRetry(c, s, p);
+  checkStepExpressions(c, s, p);
+}
 
-  // -------------------------------------------------------------- guards
+function checkStepRetry(c: StepCtx, s: Step, p: PathSegment[]): void {
+  if (!s.retry) return;
+  if (!['capability', 'map', 'subworkflow'].includes(s.type)) {
+    c.error([...p, 'retry'], 'RETRY_NOT_APPLICABLE', `'retry' is not allowed on '${s.type}' steps`);
+  }
+  for (const k of ['initialDelay', 'maxDelay'] as const) {
+    const v = s.retry[k];
+    if (v !== undefined && !isDuration(v))
+      c.error([...p, 'retry', k], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
+  }
+}
+
+function checkStepExpressions(c: StepCtx, s: Step, p: PathSegment[]): void {
+  const { error, checkValue, checkExpression, scopeFor } = c;
+  if (s.idempotencyKey !== undefined) {
+    if (s.type !== 'capability' && s.type !== 'map') {
+      error(
+        [...p, 'idempotencyKey'],
+        'IDEMPOTENCY_NOT_APPLICABLE',
+        `'idempotencyKey' is not allowed on '${s.type}' steps`,
+      );
+    } else {
+      checkValue(
+        s.idempotencyKey,
+        [...p, 'idempotencyKey'],
+        scopeFor(s, { item: s.type === 'map', where: 'idempotencyKey' }),
+      );
+    }
+  }
+  if (s.when !== undefined) {
+    checkExpression(s.when, [...p, 'when'], scopeFor(s, { where: "'when' condition" }));
+  }
+}
+
+function checkCompensation(c: StepCtx, s: Step, p: PathSegment[]): void {
+  const { error, checkValue, checkCapabilityRef, scopeFor } = c;
+  if (s.compensate) {
+    if (s.type !== 'capability') {
+      error([...p, 'compensate'], 'COMPENSATE_NOT_APPLICABLE', "'compensate' is only allowed on capability steps");
+    } else {
+      checkCapabilityRef(s.compensate.uses, [...p, 'compensate', 'uses']);
+      if (s.compensate.with) {
+        checkValue(
+          s.compensate.with,
+          [...p, 'compensate', 'with'],
+          scopeFor(s, { secrets: true, self: true, where: 'compensation input' }),
+        );
+      }
+      if (s.compensate.idempotencyKey) {
+        checkValue(
+          s.compensate.idempotencyKey,
+          [...p, 'compensate', 'idempotencyKey'],
+          scopeFor(s, { self: true, where: 'compensation idempotencyKey' }),
+        );
+      }
+      if (s.compensate.timeout !== undefined && !isDuration(s.compensate.timeout)) {
+        error([...p, 'compensate', 'timeout'], 'INVALID_DURATION', 'Invalid duration');
+      }
+    }
+  }
+}
+
+function checkErrorRoute(c: StepCtx, s: Step, p: PathSegment[]): void {
+  const { error, byId } = c;
+  if (typeof s.onError === 'object' && s.onError !== null) {
+    const target = s.onError.routeTo;
+    const t = byId.get(target);
+    if (!t) error([...p, 'onError', 'routeTo'], 'UNKNOWN_ROUTE_TARGET', `routeTo target '${target}' does not exist`);
+    else if (target === s.id) error([...p, 'onError', 'routeTo'], 'SELF_ROUTE', 'A step cannot route to itself');
+    else if (!(t.step.dependsOn ?? []).includes(s.id)) {
+      error(
+        [...p, 'onError', 'routeTo'],
+        'ROUTE_TARGET_NOT_DEPENDENT',
+        `routeTo target '${target}' must list '${s.id}' in its dependsOn`,
+      );
+    }
+  }
+}
+
+function checkStepKind(c: StepCtx, s: Step, p: PathSegment[]): void {
+  switch (s.type) {
+    case 'capability':
+      checkCapabilityStep(c, s, p);
+      break;
+    case 'map':
+      checkMapStep(c, s, p);
+      break;
+    case 'branch':
+      checkBranchStep(c, s, p);
+      break;
+    case 'parallel':
+      checkParallelStep(c, s, p);
+      break;
+    case 'approval':
+      checkApprovalStep(c, s, p);
+      break;
+    case 'wait':
+      checkWaitStep(c, s, p);
+      break;
+    case 'subworkflow':
+      checkSubworkflowStep(c, s, p);
+      break;
+    case 'terminate':
+      checkTerminateStep(c, s, p);
+      break;
+  }
+}
+
+function checkCapabilityStep(c: StepCtx, s: Extract<Step, { type: 'capability' }>, p: PathSegment[]): void {
+  const { checkValue, checkStepEgress, checkSunset, checkCapabilityRef, scopeFor } = c;
+  checkCapabilityRef(s.uses, [...p, 'uses']);
+  if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, where: 'step input' }));
+  checkStepEgress(s.egress, [...p, 'egress']);
+  checkSunset(s.sunset, [...p, 'sunset']);
+}
+
+function checkMapStep(c: StepCtx, s: Extract<Step, { type: 'map' }>, p: PathSegment[]): void {
+  const { error, checkValue, checkExpression, checkStepEgress, checkSunset, checkCapabilityRef, scopeFor } = c;
+  checkCapabilityRef(s.uses, [...p, 'uses']);
+  checkExpression(s.items, [...p, 'items'], scopeFor(s, { where: "'items' expression" }));
+  if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { secrets: true, item: true, where: 'map body input' }));
+  if (s.maxItems > LIMITS.maxMapItems)
+    error([...p, 'maxItems'], 'FANOUT_TOO_LARGE', `maxItems may not exceed ${LIMITS.maxMapItems}`);
+  checkStepEgress(s.egress, [...p, 'egress']);
+  checkSunset(s.sunset, [...p, 'sunset']);
+  if (s.errorTolerance && s.errorTolerance.count === undefined && s.errorTolerance.percent === undefined) {
+    error([...p, 'errorTolerance'], 'EMPTY_TOLERANCE', "Set 'count' and/or 'percent'");
+  }
+}
+
+function checkBranchStep(c: StepCtx, s: Extract<Step, { type: 'branch' }>, p: PathSegment[]): void {
+  const { error, checkExpression, scopeFor } = c;
+  const names = new Set<string>();
+  s.cases.forEach((c, j) => {
+    if (names.has(c.name)) error([...p, 'cases', j, 'name'], 'DUPLICATE_CASE', `Duplicate case '${c.name}'`);
+    names.add(c.name);
+    checkExpression(c.when, [...p, 'cases', j, 'when'], scopeFor(s, { where: 'branch condition' }));
+  });
+  if (s.default !== undefined && names.has(s.default)) {
+    error([...p, 'default'], 'DEFAULT_COLLIDES_WITH_CASE', `default name '${s.default}' is also a case name`);
+  }
+  const last = s.cases.at(-1);
+  const alwaysTrue = last !== undefined && /^\s*(\$\{\{\s*)?true(\s*\}\})?\s*$/.test(last.when);
+  if (s.default === undefined && !alwaysTrue) {
+    error(
+      [...p],
+      'BRANCH_NOT_EXHAUSTIVE',
+      "A branch must declare a 'default' or end with an always-true case (when: true)",
+    );
+  }
+}
+
+function checkParallelStep(c: StepCtx, s: Extract<Step, { type: 'parallel' }>, p: PathSegment[]): void {
+  const { error } = c;
+  if ((s.dependsOn ?? []).length < 2) {
+    error([...p, 'dependsOn'], 'PARALLEL_NEEDS_BRANCHES', "A parallel join needs at least two 'dependsOn' branches");
+  }
+}
+
+function checkApprovalStep(c: StepCtx, s: Extract<Step, { type: 'approval' }>, p: PathSegment[]): void {
+  const { error, warn, checkValue, scopeFor } = c;
+  if (!isDuration(s.timeout)) error([...p, 'timeout'], 'INVALID_DURATION', 'Invalid duration');
+  if (s.onTimeout === 'approve' && !s.justification) {
+    error(
+      [...p, 'justification'],
+      'APPROVE_BY_DEFAULT_NEEDS_JUSTIFICATION',
+      "'onTimeout: approve' requires a 'justification'",
+    );
+  }
+  if (s.onTimeout === 'approve') {
+    warn(
+      [...p, 'onTimeout'],
+      'APPROVE_BY_DEFAULT',
+      'Approve-on-timeout weakens the gate; a Pentest finding will be raised',
+    );
+  }
+  checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'approval message' }));
+}
+
+function checkWaitStep(c: StepCtx, s: Extract<Step, { type: 'wait' }>, p: PathSegment[]): void {
+  const { error, checkValue, scopeFor } = c;
+  const hasDuration = s.duration !== undefined;
+  const hasUntil = s.until !== undefined;
+  if (hasDuration === hasUntil) {
+    error(p, 'WAIT_NEEDS_ONE_OF', "A wait step needs exactly one of 'duration' or 'until'");
+  }
+  if (hasDuration && !isDuration(s.duration)) error([...p, 'duration'], 'INVALID_DURATION', 'Invalid duration');
+  if (hasUntil) {
+    if (s.timeout === undefined) error(p, 'WAIT_EVENT_NEEDS_TIMEOUT', "Waiting for an event requires a 'timeout'");
+    if (s.until?.correlation) {
+      checkValue(s.until.correlation, [...p, 'until', 'correlation'], scopeFor(s, { where: 'wait correlation' }));
+    }
+  }
+}
+
+function checkSubworkflowStep(c: StepCtx, s: Extract<Step, { type: 'subworkflow' }>, p: PathSegment[]): void {
+  const { m, error, checkValue, scopeFor } = c;
+  if (s.workflow === m.metadata.name) {
+    error([...p, 'workflow'], 'RECURSIVE_SUBWORKFLOW', 'A workflow cannot invoke itself');
+  }
+  if (s.with) checkValue(s.with, [...p, 'with'], scopeFor(s, { where: 'subworkflow input' }));
+}
+
+function checkTerminateStep(c: StepCtx, s: Extract<Step, { type: 'terminate' }>, p: PathSegment[]): void {
+  const { warn, checkValue, scopeFor } = c;
+  if (s.message) checkValue(s.message, [...p, 'message'], scopeFor(s, { where: 'terminate message' }));
+  if (s.status === 'failure' && !s.errorClass) {
+    warn([...p, 'errorClass'], 'TERMINATE_FAILURE_UNCLASSIFIED', "Classify the failure with 'errorClass'");
+  }
+}
+
+function checkGuards(c: Ctx): void {
+  const { m, error, checkExpression } = c;
   const seenGuards = new Set<string>();
   for (const kind of ['pre', 'invariants'] as const) {
     (m.guards?.[kind] ?? []).forEach((g, i) => {
@@ -490,8 +599,10 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       });
     });
   }
+}
 
-  // ------------------------------------------------------------- outputs
+function checkOutputs(c: Ctx): void {
+  const { m, checkValue } = c;
   if (m.outputs) {
     checkValue(m.outputs, ['outputs'], {
       roots: roots(...BASE, 'steps'),
@@ -500,42 +611,46 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
       where: 'workflow output',
     });
   }
+}
 
-  // -------------------------------------------------------------- policy
-  if (m.policy) {
-    for (const k of ['timeout', 'dedupWindow'] as const) {
-      const v = m.policy[k];
-      if (v !== undefined && !isDuration(v)) error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
-    }
-    for (const k of ['initialDelay', 'maxDelay'] as const) {
-      const v = m.policy.retry?.[k];
-      if (v !== undefined && !isDuration(v)) error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
-    }
-    if (m.policy.dedupKey) {
-      checkValue(m.policy.dedupKey, ['policy', 'dedupKey'], {
-        roots: roots('inputs', 'context'),
-        steps: new Set(),
-        secrets: false,
-        where: 'dedupKey',
-      });
-    }
-    if (m.policy.dedupKey && m.policy.dedupWindow === undefined) {
-      warn(['policy', 'dedupKey'], 'DEDUP_WITHOUT_WINDOW', "'dedupKey' has no effect without 'dedupWindow'");
-    }
-    if (
-      m.policy.maxRunCost !== undefined &&
-      m.policy.maxDailyCost !== undefined &&
-      m.policy.maxRunCost > m.policy.maxDailyCost
-    ) {
-      warn(
-        ['policy', 'maxRunCost'],
-        'RUN_COST_ABOVE_DAILY',
-        'maxRunCost exceeds maxDailyCost, so a single run can never fit the daily budget',
-      );
-    }
+function checkPolicy(c: Ctx): void {
+  const { m, error } = c;
+  if (!m.policy) return;
+  for (const k of ['timeout', 'dedupWindow'] as const) {
+    const v = m.policy[k];
+    if (v !== undefined && !isDuration(v)) error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
   }
+  for (const k of ['initialDelay', 'maxDelay'] as const) {
+    const v = m.policy.retry?.[k];
+    if (v !== undefined && !isDuration(v)) error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
+  }
+  checkPolicyDedupAndCost(c, m.policy);
+}
 
-  // ------------------------------------------------------- observability
+function checkPolicyDedupAndCost(c: Ctx, policy: NonNullable<Manifest['policy']>): void {
+  const { warn, checkValue } = c;
+  if (policy.dedupKey) {
+    checkValue(policy.dedupKey, ['policy', 'dedupKey'], {
+      roots: roots('inputs', 'context'),
+      steps: new Set(),
+      secrets: false,
+      where: 'dedupKey',
+    });
+  }
+  if (policy.dedupKey && policy.dedupWindow === undefined) {
+    warn(['policy', 'dedupKey'], 'DEDUP_WITHOUT_WINDOW', "'dedupKey' has no effect without 'dedupWindow'");
+  }
+  if (policy.maxRunCost !== undefined && policy.maxDailyCost !== undefined && policy.maxRunCost > policy.maxDailyCost) {
+    warn(
+      ['policy', 'maxRunCost'],
+      'RUN_COST_ABOVE_DAILY',
+      'maxRunCost exceeds maxDailyCost, so a single run can never fit the daily budget',
+    );
+  }
+}
+
+function checkObservability(c: Ctx): void {
+  const { m, error, checkExpression } = c;
   m.observability?.metrics?.forEach((metric, i) => {
     checkExpression(metric.value, ['observability', 'metrics', i, 'value'], {
       roots: roots(...BASE, 'steps'),
@@ -547,10 +662,28 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
   const p95 = m.observability?.slo?.p95Duration;
   if (p95 !== undefined && !isDuration(p95))
     error(['observability', 'slo', 'p95Duration'], 'INVALID_DURATION', 'Invalid duration');
+}
 
-  return issues;
+function relativeSegments(rel: string): PathSegment[] {
+  if (rel === '') return [];
+  const segs: PathSegment[] = [];
+  for (const m2 of rel.matchAll(/([^.[\]]+)|\[(\d+)\]/g)) {
+    if (m2[2] !== undefined) segs.push(Number(m2[2]));
+    else segs.push(m2[1]!);
+  }
+  return segs;
+}
 
-  // ------------------------------------------------------------ helpers
+function secretNotAllowed(scope: ExprScope): string {
+  return `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`;
+}
+
+/** The expression and value checkers, bound to one manifest's error sink and its input and step names. */
+function makeChecks(
+  error: Ctx['error'],
+  inputNames: ReadonlySet<string>,
+  stepIds: ReadonlySet<string>,
+): Pick<Ctx, 'checkValue' | 'checkExpression' | 'checkStepEgress' | 'checkSunset'> {
   function checkStepEgress(egress: string[] | undefined, path: PathSegment[]) {
     egress?.forEach((h, j) => {
       if (!isValidEgressHost(h)) {
@@ -594,24 +727,10 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
     }
   }
 
-  function relativeSegments(rel: string): PathSegment[] {
-    if (rel === '') return [];
-    const segs: PathSegment[] = [];
-    for (const m2 of rel.matchAll(/([^.[\]]+)|\[(\d+)\]/g)) {
-      if (m2[2] !== undefined) segs.push(Number(m2[2]));
-      else segs.push(m2[1]!);
-    }
-    return segs;
-  }
-
   function checkRefs(refs: Reference[], path: PathSegment[], scope: ExprScope) {
     for (const r of refs) {
       if (r.root === 'secrets' && !scope.secrets) {
-        error(
-          path,
-          'SECRET_NOT_ALLOWED',
-          `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`,
-        );
+        error(path, 'SECRET_NOT_ALLOWED', secretNotAllowed(scope));
         continue;
       }
       if (!scope.roots.has(r.root)) {
@@ -619,67 +738,57 @@ function semanticChecks(m: Manifest, locate?: Locator): Issue[] {
         error(path, 'UNKNOWN_REFERENCE_ROOT', `'${r.root}' is not available in ${scope.where}${hint}`);
         continue;
       }
-      switch (r.root) {
-        case 'inputs': {
-          const first = r.path[0];
-          if (first !== undefined && !inputNames.has(first)) {
-            error(path, 'UNKNOWN_INPUT', `Unknown input '${first}'`);
-          }
-          break;
-        }
-        case 'secrets': {
-          if (!scope.secrets) {
-            error(
-              path,
-              'SECRET_NOT_ALLOWED',
-              `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`,
-            );
-          } else if (r.path.length !== 1 || r.dynamic) {
-            error(path, 'INVALID_SECRET_REFERENCE', 'Reference a secret as secrets.NAME');
-          }
-          break;
-        }
-        case 'run': {
-          const first = r.path[0];
-          if (first === undefined || !RUN_SCOPE_KEYS.includes(first)) {
-            error(
-              path,
-              'UNKNOWN_RUN_FIELD',
-              `run.${first ?? ''} is not a run field (available: ${RUN_SCOPE_KEYS.join(', ')})`,
-            );
-          }
-          break;
-        }
-        case 'steps': {
-          const id = r.path[0];
-          if (id === undefined) {
-            error(path, 'STEP_REFERENCE_REQUIRED', 'Reference a specific step: steps.<id>.output');
-            break;
-          }
-          if (!stepIds.has(id)) {
-            error(path, 'UNKNOWN_STEP_REFERENCE', `Unknown step '${id}'`);
-            break;
-          }
-          if (scope.steps !== 'all' && !scope.steps.has(id)) {
-            error(
-              path,
-              'STEP_NOT_UPSTREAM',
-              `Step '${id}' is not upstream of this reference; add it to 'dependsOn' so it has finished first`,
-            );
-          }
-          const field = r.path[1];
-          if (field !== undefined && !STEP_OUTPUT_KEYS.includes(field)) {
-            error(
-              path,
-              'UNKNOWN_STEP_FIELD',
-              `steps.${id}.${field} is not available (use ${STEP_OUTPUT_KEYS.join(', ')})`,
-            );
-          }
-          break;
-        }
-        default:
-          break;
-      }
+      checkRootRef(r, path, scope);
     }
   }
+
+  function checkRootRef(r: Reference, path: PathSegment[], scope: ExprScope) {
+    switch (r.root) {
+      case 'inputs': {
+        const first = r.path[0];
+        if (first !== undefined && !inputNames.has(first)) error(path, 'UNKNOWN_INPUT', `Unknown input '${first}'`);
+        break;
+      }
+      case 'secrets':
+        if (!scope.secrets) error(path, 'SECRET_NOT_ALLOWED', secretNotAllowed(scope));
+        else if (r.path.length !== 1 || r.dynamic)
+          error(path, 'INVALID_SECRET_REFERENCE', 'Reference a secret as secrets.NAME');
+        break;
+      case 'run': {
+        const first = r.path[0];
+        if (first === undefined || !RUN_SCOPE_KEYS.includes(first)) {
+          error(
+            path,
+            'UNKNOWN_RUN_FIELD',
+            `run.${first ?? ''} is not a run field (available: ${RUN_SCOPE_KEYS.join(', ')})`,
+          );
+        }
+        break;
+      }
+      case 'steps':
+        checkStepRef(r, path, scope);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function checkStepRef(r: Reference, path: PathSegment[], scope: ExprScope) {
+    const id = r.path[0];
+    if (id === undefined) return error(path, 'STEP_REFERENCE_REQUIRED', 'Reference a specific step: steps.<id>.output');
+    if (!stepIds.has(id)) return error(path, 'UNKNOWN_STEP_REFERENCE', `Unknown step '${id}'`);
+    if (scope.steps !== 'all' && !scope.steps.has(id)) {
+      error(
+        path,
+        'STEP_NOT_UPSTREAM',
+        `Step '${id}' is not upstream of this reference; add it to 'dependsOn' so it has finished first`,
+      );
+    }
+    const field = r.path[1];
+    if (field !== undefined && !STEP_OUTPUT_KEYS.includes(field)) {
+      error(path, 'UNKNOWN_STEP_FIELD', `steps.${id}.${field} is not available (use ${STEP_OUTPUT_KEYS.join(', ')})`);
+    }
+  }
+
+  return { checkValue, checkExpression, checkStepEgress, checkSunset };
 }
