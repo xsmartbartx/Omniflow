@@ -14,15 +14,21 @@ export function schemaHasPath(schema: unknown, path: readonly string[]): PathVer
   const [seg, ...rest] = path as [string, ...string[]];
 
   if (type.includes('array') && !type.includes('object')) return arrayHasPath(s, seg, rest);
-  const props = s.properties as JsonObject | undefined;
-  if (props && Object.hasOwn(props, seg)) return schemaHasPath(props[seg], rest);
-  const additional = s.additionalProperties;
-  if (additional !== null && typeof additional === 'object') return schemaHasPath(additional, rest);
-  if (props && additional === false) return 'no';
+  const viaProperties = propertyHasPath(s, seg, rest);
+  if (viaProperties) return viaProperties;
   if (type.length === 1 && SCALAR_TYPES.has(type[0] as string)) {
     return seg === 'length' && type[0] === 'string' && rest.length === 0 ? 'yes' : 'no';
   }
   return 'unknown';
+}
+
+/** Follow `seg` through declared properties or `additionalProperties`; undefined when the schema says nothing. */
+function propertyHasPath(s: JsonObject, seg: string, rest: string[]): PathVerdict | undefined {
+  const props = s.properties as JsonObject | undefined;
+  if (props && Object.hasOwn(props, seg)) return schemaHasPath(props[seg], rest);
+  const additional = s.additionalProperties;
+  if (additional !== null && typeof additional === 'object') return schemaHasPath(additional, rest);
+  return props && additional === false ? 'no' : undefined;
 }
 
 const SCALAR_TYPES = new Set(['string', 'integer', 'number', 'boolean', 'null']);

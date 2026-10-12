@@ -43,6 +43,31 @@ function outputPreview(step) {
   return h('span', { class: 'muted' }, 'No output recorded.');
 }
 
+function summaryCard(r) {
+  const triggerName = r.trigger.name ? ` · ${r.trigger.name}` : '';
+  return card(
+    'Summary',
+    kv([
+      ['Workflow', wfLink(r.workflow, r.version)],
+      ['Status', statusBadge(r.status)],
+      ['Trigger', `${r.trigger.type}${triggerName}`],
+      ['Requested by', r.requestedBy.name],
+      ['Took', duration(r.durationMs)],
+      ['Cost', number(r.cost)],
+      ['Plan', h('code', { title: r.planHash }, shortHash(r.planHash))],
+      r.parentRunId ? ['Parent run', runLink(r.parentRunId)] : null,
+      r.correlationId ? ['Correlation', h('code', {}, r.correlationId)] : null,
+      [
+        'Inputs',
+        Object.keys(r.inputs).length
+          ? codeBlock(JSON.stringify(r.inputs, null, 2), { copy: false })
+          : h('span', { class: 'muted' }, 'none'),
+      ],
+      r.outputs && Object.keys(r.outputs).length ? ['Outputs', codeBlock(JSON.stringify(r.outputs, null, 2))] : null,
+    ]),
+  );
+}
+
 export default async function run(ctx) {
   const id = ctx.params.id;
   const base = `/v1/runs/${api.enc(id)}`;
@@ -141,32 +166,7 @@ export default async function run(ctx) {
       ),
     );
 
-    const triggerName = r.trigger.name ? ` · ${r.trigger.name}` : '';
-    clear(summary).append(
-      card(
-        'Summary',
-        kv([
-          ['Workflow', wfLink(r.workflow, r.version)],
-          ['Status', statusBadge(r.status)],
-          ['Trigger', `${r.trigger.type}${triggerName}`],
-          ['Requested by', r.requestedBy.name],
-          ['Took', duration(r.durationMs)],
-          ['Cost', number(r.cost)],
-          ['Plan', h('code', { title: r.planHash }, shortHash(r.planHash))],
-          r.parentRunId ? ['Parent run', runLink(r.parentRunId)] : null,
-          r.correlationId ? ['Correlation', h('code', {}, r.correlationId)] : null,
-          [
-            'Inputs',
-            Object.keys(r.inputs).length
-              ? codeBlock(JSON.stringify(r.inputs, null, 2), { copy: false })
-              : h('span', { class: 'muted' }, 'none'),
-          ],
-          r.outputs && Object.keys(r.outputs).length
-            ? ['Outputs', codeBlock(JSON.stringify(r.outputs, null, 2))]
-            : null,
-        ]),
-      ),
-    );
+    clear(summary).append(summaryCard(r));
 
     if (graph)
       clear(graphBox).append(

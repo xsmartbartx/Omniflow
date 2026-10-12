@@ -25,6 +25,24 @@ import {
 } from '../ui.js';
 import { runsTable } from './common.js';
 
+const isRunnable = (s) => !s.killed && s.enabled;
+
+function killedNotice(s) {
+  return s.killed
+    ? notice('bad', h('strong', {}, 'Killed. '), s.killReason ?? 'This workflow refuses new runs.')
+    : null;
+}
+
+function pendingNotice(count) {
+  return count
+    ? notice(
+        'warn',
+        h('strong', {}, `${count} change ${plural(count, 'request')} waiting. `),
+        h('a', { href: '#/changes' }, 'Review'),
+      )
+    : null;
+}
+
 export default async function workflow(ctx) {
   const name = ctx.params.name;
   const base = `/v1/workflows/${api.enc(name)}`;
@@ -63,7 +81,7 @@ export default async function workflow(ctx) {
   const toggle = s.enabled ? 'disable' : 'enable';
 
   const actions = [
-    can('workflow.run') && stable && !s.killed && s.enabled
+    can('workflow.run') && stable && isRunnable(s)
       ? button('Run', { kind: 'primary', icon: 'play', onClick: () => runDialog(name, detail) })
       : null,
     can('workflow.draft')
@@ -79,17 +97,8 @@ export default async function workflow(ctx) {
     detail.plan?.workflow.description ?? 'No description',
     actions,
   );
-  const killed = s.killed
-    ? notice('bad', h('strong', {}, 'Killed. '), s.killReason ?? 'This workflow refuses new runs.')
-    : null;
-  const changeCount = detail.pendingChanges.length;
-  const pending = changeCount
-    ? notice(
-        'warn',
-        h('strong', {}, `${changeCount} change ${plural(changeCount, 'request')} waiting. `),
-        h('a', { href: '#/changes' }, 'Review'),
-      )
-    : null;
+  const killed = killedNotice(s);
+  const pending = pendingNotice(detail.pendingChanges.length);
 
   const overview = async () => {
     const [explain, graph] = await Promise.all([

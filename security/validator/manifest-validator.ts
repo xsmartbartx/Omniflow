@@ -236,6 +236,32 @@ function checkInputPattern(c: Ctx, spec: InputSpec, p: string[]): void {
   }
 }
 
+function checkSchedule(c: Ctx, t: Extract<Manifest['triggers'][number], { type: 'schedule' }>, p: PathSegment[]): void {
+  const { m, error } = c;
+  try {
+    new Cron(t.cron, { paused: true, timezone: t.timezone });
+  } catch (e) {
+    error([...p, 'cron'], 'INVALID_CRON', `Invalid cron expression: ${(e as Error).message}`);
+  }
+  if (t.timezone) {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: t.timezone });
+    } catch {
+      error([...p, 'timezone'], 'INVALID_TIMEZONE', `Unknown IANA timezone '${t.timezone}'`);
+    }
+  }
+  if (t.inputs) {
+    const res = validateValue(inputsToJsonSchema(m.inputs), t.inputs);
+    if (!res.ok) {
+      error(
+        [...p, 'inputs'],
+        'INVALID_TRIGGER_INPUTS',
+        `Scheduled inputs are invalid: ${res.issues[0]?.path} ${res.issues[0]?.message}`,
+      );
+    }
+  }
+}
+
 function checkTriggers(c: Ctx): void {
   const { m, error, checkValue, checkExpression } = c;
   const triggerNames = new Set<string>();
@@ -245,30 +271,7 @@ function checkTriggers(c: Ctx): void {
       if (triggerNames.has(t.name)) error([...p, 'name'], 'DUPLICATE_TRIGGER', `Duplicate trigger name '${t.name}'`);
       triggerNames.add(t.name);
     }
-    if (t.type === 'schedule') {
-      try {
-        new Cron(t.cron, { paused: true, timezone: t.timezone });
-      } catch (e) {
-        error([...p, 'cron'], 'INVALID_CRON', `Invalid cron expression: ${(e as Error).message}`);
-      }
-      if (t.timezone) {
-        try {
-          new Intl.DateTimeFormat('en', { timeZone: t.timezone });
-        } catch {
-          error([...p, 'timezone'], 'INVALID_TIMEZONE', `Unknown IANA timezone '${t.timezone}'`);
-        }
-      }
-      if (t.inputs) {
-        const res = validateValue(inputsToJsonSchema(m.inputs), t.inputs);
-        if (!res.ok) {
-          error(
-            [...p, 'inputs'],
-            'INVALID_TRIGGER_INPUTS',
-            `Scheduled inputs are invalid: ${res.issues[0]?.path} ${res.issues[0]?.message}`,
-          );
-        }
-      }
-    }
+    if (t.type === 'schedule') checkSchedule(c, t, p);
     if (t.type === 'event' && t.filter) {
       checkExpression(t.filter, [...p, 'filter'], {
         roots: roots('event'),

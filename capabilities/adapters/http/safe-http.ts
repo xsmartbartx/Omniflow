@@ -196,6 +196,16 @@ async function readLimited(body: AsyncIterable<unknown> & Parameters<typeof disc
   return Buffer.concat(chunks);
 }
 
+const tooManyRedirects = (max: number) =>
+  new CapabilityError('HTTP_TOO_MANY_REDIRECTS', `More than ${max} redirects`, {
+    errorClass: 'business',
+    retryable: false,
+  });
+
+/** 303 always, and 301/302 after a POST, are followed with a body-less GET. */
+const switchesToGet = (status: number, method: string) =>
+  status === 303 || ((status === 301 || status === 302) && method === 'POST');
+
 /** An HTTP client that can only reach what it has been explicitly allowed to reach. */
 export async function safeRequest(req: SafeRequest): Promise<SafeResponse> {
   const headers = requestHeaders(req.headers);
@@ -219,14 +229,9 @@ export async function safeRequest(req: SafeRequest): Promise<SafeResponse> {
       const location = res.headers.location;
       if (status >= 300 && status < 400 && typeof location === 'string' && req.followRedirects !== false) {
         discard(res.body);
-        if (hop >= req.maxRedirects) {
-          throw new CapabilityError('HTTP_TOO_MANY_REDIRECTS', `More than ${req.maxRedirects} redirects`, {
-            errorClass: 'business',
-            retryable: false,
-          });
-        }
+        if (hop >= req.maxRedirects) throw tooManyRedirects(req.maxRedirects);
         url = validateTarget(new URL(location, url).toString(), guarded);
-        if (status === 303 || ((status === 301 || status === 302) && method === 'POST')) {
+        if (switchesToGet(status, method)) {
           method = 'GET';
           body = undefined;
         }
