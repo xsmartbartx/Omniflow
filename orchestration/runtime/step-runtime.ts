@@ -86,6 +86,19 @@ function secretNamesIn(value: unknown): string[] {
  * lease is revoked in every path — a credential outliving its step is how a bounded system becomes
  * an unbounded one.
  */
+interface MapRun {
+  a: StepAttempt;
+  cap: Exclude<ReturnType<StepRuntime['resolveCapability']>, StepResult>;
+  items: unknown[];
+  allowed: number;
+  signal: AbortSignal;
+  stop: AbortController;
+  results: unknown[];
+  failures: Array<{ index: number; error: ErrorInfo }>;
+  cost: number;
+  rng: ReturnType<typeof createRng>;
+}
+
 export class StepRuntime implements StepExecutor {
   private readonly d: RuntimeDeps;
   private readonly clock: Clock;
@@ -160,9 +173,51 @@ export class StepRuntime implements StepExecutor {
     const cap = this.resolveCapability(ref);
     if (!('adapter' in cap)) return cap;
 
+    const resolved = this.resolveMapItems(a);
+    if (!Array.isArray(resolved)) return resolved;
+    const items = resolved;
+    const n = items.length;
+    const tol = step.errorTolerance;
+    const allowed = Math.max(tol?.count ?? 0, Math.floor(((tol?.percent ?? 0) / 100) * n));
+    const stop = new AbortController();
+    const run: MapRun = {
+      a,
+      cap,
+      items,
+      allowed,
+      signal: AbortSignal.any([a.signal, stop.signal]),
+      stop,
+      results: new Array(n).fill(null),
+      failures: [],
+      cost: 0,
+      rng: createRng(a.seed).fork(`${step.id}/map`),
+    };
+
+    let next = 0;
+    const workers = Array.from({ length: Math.min(step.concurrency ?? 4, Math.max(n, 1)) }, async () => {
+      while (!run.signal.aborted) {
+        const idx = next++;
+        if (idx >= n) return;
+        await this.runMapItem(run, idx);
+      }
+    });
+    await Promise.all(workers);
+
+    return this.mapOutcome(a, this.clock.now().getTime() - started, {
+      n,
+      allowed,
+      failures: run.failures,
+      results: run.results,
+      cost: run.cost,
+    });
+  }
+
+  /** Evaluate the map's `items` expression and check it is an array within `maxItems`; a failure result otherwise. */
+  private resolveMapItems(a: StepAttempt): unknown[] | StepResult {
+    const step = a.step;
     let items: unknown;
     try {
-      items = evaluate(parseExpressionField(step.items), a.scope, { seed: a.seed });
+      items = evaluate(parseExpressionField(step.items!), a.scope, { seed: a.seed });
     } catch (e) {
       return this.failed('prepare', 0, {
         code: 'MAP_ITEMS_INVALID',
@@ -179,79 +234,61 @@ export class StepRuntime implements StepExecutor {
         retryable: false,
       });
     }
-    const n = items.length;
-    if (n > (step.maxItems ?? 0)) {
+    if (items.length > (step.maxItems ?? 0)) {
       return this.failed('prepare', 0, {
         code: 'MAP_TOO_LARGE',
-        message: `Collection has ${n} items; maxItems is ${step.maxItems}`,
+        message: `Collection has ${items.length} items; maxItems is ${step.maxItems}`,
         class: 'contract',
         retryable: false,
       });
     }
+    return items;
+  }
 
-    const tol = step.errorTolerance;
-    const allowed = Math.max(tol?.count ?? 0, Math.floor(((tol?.percent ?? 0) / 100) * n));
-    const results: unknown[] = new Array(n).fill(null);
-    const failures: Array<{ index: number; error: ErrorInfo }> = [];
-    let cost = 0;
-    let next = 0;
-    const stop = new AbortController();
-    const signal = AbortSignal.any([a.signal, stop.signal]);
+  /** Run one item to completion: retry per the step's policy, wait out deferrals, record success or failure. */
+  private async runMapItem(run: MapRun, index: number): Promise<void> {
+    const { a, cap, signal } = run;
+    const step = a.step;
     const retry = step.retry;
-    const rng = createRng(a.seed).fork(`${step.id}/map`);
-
-    const runItem = async (index: number): Promise<void> => {
-      let attempt = 0;
-      for (;;) {
-        attempt++;
-        const res = await this.invoke(
-          { ...a, signal, attempt },
-          {
-            cap,
-            withTemplate: step.with ?? {},
-            keyTemplate: step.idempotencyKey,
-            egress: step.egress ?? [],
-            timeoutMs: step.timeoutMs,
-            outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
-            extraScope: { item: items[index], index },
-            owner: `${a.runId}/${step.id}#${index}`,
-          },
-        );
-        if (res.kind === 'succeeded') {
-          results[index] = res.output;
-          cost += res.cost;
-          if (n <= 50) this.emit(a, 'step.item.succeeded', { index });
-          return;
-        }
-        if (res.kind === 'deferred') {
-          attempt--;
-          await sleep(res.retryAfterMs, signal);
-          if (signal.aborted) return;
-          continue;
-        }
-        const verdict = shouldRetry(retry, attempt, res.error);
-        if (verdict.retry && !signal.aborted) {
-          await sleep(backoffDelayMs(retry!, attempt, rng.next()), signal);
-          if (signal.aborted) return;
-          continue;
-        }
-        failures.push({ index, error: res.error });
-        this.emit(a, 'step.item.failed', { index, error: res.error });
-        if (failures.length > allowed) stop.abort();
+    let attempt = 0;
+    for (;;) {
+      attempt++;
+      const res = await this.invoke(
+        { ...a, signal, attempt },
+        {
+          cap,
+          withTemplate: step.with ?? {},
+          keyTemplate: step.idempotencyKey,
+          egress: step.egress ?? [],
+          timeoutMs: step.timeoutMs,
+          outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
+          extraScope: { item: run.items[index], index },
+          owner: `${a.runId}/${step.id}#${index}`,
+        },
+      );
+      if (res.kind === 'succeeded') {
+        run.results[index] = res.output;
+        run.cost += res.cost;
+        if (run.items.length <= 50) this.emit(a, 'step.item.succeeded', { index });
         return;
       }
-    };
-
-    const workers = Array.from({ length: Math.min(step.concurrency ?? 4, Math.max(n, 1)) }, async () => {
-      while (!signal.aborted) {
-        const idx = next++;
-        if (idx >= n) return;
-        await runItem(idx);
+      if (res.kind === 'deferred') {
+        attempt--;
+        await sleep(res.retryAfterMs, signal);
+        if (signal.aborted) return;
+        continue;
       }
-    });
-    await Promise.all(workers);
-
-    return this.mapOutcome(a, this.clock.now().getTime() - started, { n, allowed, failures, results, cost });
+      const verdict = shouldRetry(retry, attempt, res.error);
+      if (verdict.retry && !signal.aborted) {
+        await sleep(backoffDelayMs(retry!, attempt, run.rng.next()), signal);
+        if (signal.aborted) return;
+        continue;
+      }
+      run.failures.push({ index, error: res.error });
+      this.emit(a, 'step.item.failed', { index, error: res.error });
+      if (run.failures.length > run.allowed) run.stop.abort();
+      return;
+    }
   }
 
   /** The step result once every item has been tried: cancelled, too many failures, or the collected results. */

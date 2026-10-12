@@ -170,6 +170,25 @@ function printPublishFailure(ctx: CliContext, file: string, manifest: string, e:
   ctx.err(`${s.red('✗')} ${file}: ${e.message}\n`);
 }
 
+/** Publish one manifest; an API rejection (4xx) is reported and counted, anything else propagates. */
+async function publishOne(
+  ctx: CliContext,
+  api: ReturnType<typeof client>,
+  file: string,
+  manifest: string,
+  canaryPercent: number | undefined,
+): Promise<{ result: unknown; failed: boolean }> {
+  try {
+    const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
+    if (!ctx.json) printPublished(ctx, r);
+    return { result: { file, ...r }, failed: false };
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status >= 500) throw e;
+    if (!ctx.json) printPublishFailure(ctx, file, manifest, e);
+    return { result: { file, error: { code: e.code, message: e.message, details: e.details } }, failed: true };
+  }
+}
+
 export async function publishCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
   if (paths.length === 0) throw new UsageError('Usage: constans publish <file|dir> [--canary <percent>]');
@@ -179,16 +198,9 @@ export async function publishCommand(ctx: CliContext): Promise<number> {
   const results: unknown[] = [];
   for (const file of expandFiles(ctx, paths)) {
     const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-    try {
-      const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
-      results.push({ file, ...r });
-      if (!ctx.json) printPublished(ctx, r);
-    } catch (e) {
-      if (!(e instanceof ApiError) || e.status >= 500) throw e;
-      failures++;
-      results.push({ file, error: { code: e.code, message: e.message, details: e.details } });
-      if (!ctx.json) printPublishFailure(ctx, file, manifest, e);
-    }
+    const outcome = await publishOne(ctx, api, file, manifest, canaryPercent);
+    results.push(outcome.result);
+    if (outcome.failed) failures++;
   }
   if (ctx.json) ctx.out(`${JSON.stringify(results, null, 2)}\n`);
   return failures > 0 ? 1 : 0;

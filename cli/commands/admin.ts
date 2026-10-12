@@ -286,15 +286,27 @@ interface Check {
   detail: string;
 }
 
-/** A deployment health check: everything an operator would otherwise verify by hand. */
-function doctor(
-  ctx: CliContext,
-  { config, state, dataDir }: { config: ReturnType<typeof loadConfig>; state: State; dataDir: string },
-): number {
-  const s = ctx.style;
-  const checks: Check[] = [];
-  const add = (level: Level, check: string, detail: string) => checks.push({ level, check, detail });
+type Add = (level: Level, check: string, detail: string) => void;
+type DoctorEnv = { config: ReturnType<typeof loadConfig>; state: State; dataDir: string };
 
+/** A deployment health check: everything an operator would otherwise verify by hand. */
+function doctor(ctx: CliContext, env: DoctorEnv): number {
+  const checks: Check[] = [];
+  const add: Add = (level, check, detail) => checks.push({ level, check, detail });
+  const { config, state, dataDir } = env;
+  checkDataDir(add, dataDir);
+  checkDisk(add, dataDir);
+  checkDatabase(add, state);
+  checkAuditChain(add, state);
+  checkSecrets(add, config, state, dataDir);
+  checkMasterKeyFile(add, ctx, config, dataDir);
+  checkAdministrators(add, state);
+  if (config.environment === 'production') checkProduction(add, config);
+  checkRiskyAdapters(add, config);
+  return reportDoctor(ctx, checks);
+}
+
+function checkDataDir(add: Add, dataDir: string): void {
   try {
     accessSync(dataDir, constants.R_OK | constants.W_OK);
     const probe = join(dataDir, `.doctor-${process.pid}`);
@@ -304,6 +316,9 @@ function doctor(
   } catch (e) {
     add('fail', 'data directory', `${dataDir} is not writable: ${(e as Error).message}`);
   }
+}
+
+function checkDisk(add: Add, dataDir: string): void {
   try {
     const fs = statfsSync(dataDir);
     const freeMb = Math.round((fs.bavail * fs.bsize) / 1_048_576);
@@ -311,14 +326,18 @@ function doctor(
   } catch {
     /* not available on every platform */
   }
+}
 
+function checkDatabase(add: Add, state: State): void {
   const integrity = state.db.get<{ integrity_check: string }>('PRAGMA integrity_check')?.integrity_check;
   add(
     integrity === 'ok' ? 'ok' : 'fail',
     'database integrity',
     integrity === 'ok' ? 'SQLite integrity_check passed' : `SQLite reports: ${integrity}`,
   );
+}
 
+function checkAuditChain(add: Add, state: State): void {
   let chained = 0;
   const broken: string[] = [];
   for (const t of state.identity.listTenants()) {
@@ -333,7 +352,9 @@ function doctor(
       ? `hash chain broken: ${broken.join('; ')}`
       : `${chained.toLocaleString('en')} events, hash chain intact`,
   );
+}
 
+function checkSecrets(add: Add, config: DoctorEnv['config'], state: State, dataDir: string): void {
   const keyring = createKeyring(config.masterKey, config.previousMasterKeys);
   const secrets = config.masterKeySource === 'ephemeral' ? [] : state.secrets.all();
   if (config.masterKeySource === 'ephemeral') {
@@ -365,7 +386,9 @@ function doctor(
     add('warn', 'secrets', `${old} secret(s) still use an older master key; run 'constans admin rotate-master-key'`);
   else if (config.masterKeySource !== 'ephemeral')
     add('ok', 'secrets', `${secrets.length} stored, all readable with the current master key`);
+}
 
+function checkMasterKeyFile(add: Add, ctx: CliContext, config: DoctorEnv['config'], dataDir: string): void {
   const keyFile = join(dataDir, 'master.key');
   if (config.masterKeySource === 'ephemeral') {
     /* reported above */
@@ -381,40 +404,45 @@ function doctor(
       add(production ? 'warn' : 'ok', 'master key', `generated key in ${keyFile}${advice}`);
     }
   }
+}
 
+function checkAdministrators(add: Add, state: State): void {
   const admins = state.identity.listUsers('default').filter((u) => u.roles.includes('admin') && !u.disabled);
   if (admins.length) add('ok', 'administrators', `${admins.length} active admin${plural(admins.length)}`);
   else add('fail', 'administrators', 'no active administrator — run: constans admin create-user --role admin');
+}
 
-  if (config.environment === 'production') {
-    if (!config.publicUrl.startsWith('https://'))
-      add(
-        'warn',
-        'HTTPS',
-        `CONSTANS_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`,
-      );
-    else if (!config.trustProxy)
-      add(
-        'warn',
-        'reverse proxy',
-        "CONSTANS_PUBLIC_URL is https but CONSTANS_TRUST_PROXY is off: rate limits and audit will see the proxy's address, not the client's",
-      );
-    else add('ok', 'HTTPS', 'public URL is https and the proxy is trusted');
+function checkProduction(add: Add, config: DoctorEnv['config']): void {
+  if (!config.publicUrl.startsWith('https://'))
     add(
-      'ok',
-      'metrics',
-      config.metricsToken
-        ? '/metrics accepts the CONSTANS_METRICS_TOKEN bearer token'
-        : '/metrics needs an API key with audit access (set CONSTANS_METRICS_TOKEN for a dedicated scrape token)',
+      'warn',
+      'HTTPS',
+      `CONSTANS_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`,
     );
+  else if (!config.trustProxy)
     add(
-      config.alertChannels.length ? 'ok' : 'warn',
-      'alerting',
-      config.alertChannels.length
-        ? `alerts go to: ${config.alertChannels.join(', ')}`
-        : 'no CONSTANS_ALERT_CHANNELS: alerts are only visible in the console',
+      'warn',
+      'reverse proxy',
+      "CONSTANS_PUBLIC_URL is https but CONSTANS_TRUST_PROXY is off: rate limits and audit will see the proxy's address, not the client's",
     );
-  }
+  else add('ok', 'HTTPS', 'public URL is https and the proxy is trusted');
+  add(
+    'ok',
+    'metrics',
+    config.metricsToken
+      ? '/metrics accepts the CONSTANS_METRICS_TOKEN bearer token'
+      : '/metrics needs an API key with audit access (set CONSTANS_METRICS_TOKEN for a dedicated scrape token)',
+  );
+  add(
+    config.alertChannels.length ? 'ok' : 'warn',
+    'alerting',
+    config.alertChannels.length
+      ? `alerts go to: ${config.alertChannels.join(', ')}`
+      : 'no CONSTANS_ALERT_CHANNELS: alerts are only visible in the console',
+  );
+}
+
+function checkRiskyAdapters(add: Add, config: DoctorEnv['config']): void {
   if (config.adapters.shell.allowedCommands.length)
     add(
       'warn',
@@ -427,7 +455,10 @@ function doctor(
       'private network egress',
       'CONSTANS_ALLOW_PRIVATE_EGRESS is on: allow-listed hosts may resolve to private addresses',
     );
+}
 
+function reportDoctor(ctx: CliContext, checks: Check[]): number {
+  const s = ctx.style;
   const failed = checks.filter((c) => c.level === 'fail').length;
   const warned = checks.filter((c) => c.level === 'warn').length;
   const mark = (level: Level) => {
