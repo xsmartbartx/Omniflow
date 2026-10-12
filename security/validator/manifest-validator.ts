@@ -368,17 +368,20 @@ function checkStepCommon(c: StepCtx, s: Step, p: PathSegment[]): void {
     const bad = checkSchemaDefinition(s.produces);
     if (bad) error([...p, 'produces'], 'INVALID_SCHEMA', `'produces' is not a valid JSON Schema: ${bad}`);
   }
-  if (s.retry) {
-    if (!['capability', 'map', 'subworkflow'].includes(s.type)) {
-      error([...p, 'retry'], 'RETRY_NOT_APPLICABLE', `'retry' is not allowed on '${s.type}' steps`);
-    }
-    for (const k of ['initialDelay', 'maxDelay'] as const) {
-      const v = s.retry[k];
-      if (v !== undefined && !isDuration(v))
-        error([...p, 'retry', k], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
-    }
-  }
+  checkStepRetry(c, s, p);
   checkStepExpressions(c, s, p);
+}
+
+function checkStepRetry(c: StepCtx, s: Step, p: PathSegment[]): void {
+  if (!s.retry) return;
+  if (!['capability', 'map', 'subworkflow'].includes(s.type)) {
+    c.error([...p, 'retry'], 'RETRY_NOT_APPLICABLE', `'retry' is not allowed on '${s.type}' steps`);
+  }
+  for (const k of ['initialDelay', 'maxDelay'] as const) {
+    const v = s.retry[k];
+    if (v !== undefined && !isDuration(v))
+      c.error([...p, 'retry', k], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
+  }
 }
 
 function checkStepExpressions(c: StepCtx, s: Step, p: PathSegment[]): void {
