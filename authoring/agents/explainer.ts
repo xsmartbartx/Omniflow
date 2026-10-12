@@ -403,10 +403,14 @@ function stepSentence(s: StepRecord, n: string): string | undefined {
       return `“${n}” is waiting for a person to approve it.`;
     case 'waiting-event':
       return `“${n}” is waiting for the “${s.waitEvent}” event.`;
-    case 'waiting-timer':
-      return `“${n}” is waiting for a timer${s.wakeAt ? ` until ${s.wakeAt}` : ''}.`;
-    case 'retry-wait':
-      return `“${n}” failed and will be retried${s.wakeAt ? ` at ${s.wakeAt}` : ''} (attempt ${s.attempt} so far).`;
+    case 'waiting-timer': {
+      const until = s.wakeAt ? ` until ${s.wakeAt}` : '';
+      return `“${n}” is waiting for a timer${until}.`;
+    }
+    case 'retry-wait': {
+      const at = s.wakeAt ? ` at ${s.wakeAt}` : '';
+      return `“${n}” failed and will be retried${at} (attempt ${s.attempt} so far).`;
+    }
     case 'running':
       return `“${n}” is running now.`;
     case 'cancelled':
@@ -423,7 +427,7 @@ function describeOutcome(
   ordered: StepRecord[],
   name: (id: string) => string,
   took: string | undefined,
-): { headline: string; failure?: RunExplanation['failure']; waitingOn?: string } {
+): Pick<RunExplanation, 'headline' | 'failure' | 'waitingOn'> {
   switch (run.status) {
     case 'succeeded':
       return { headline: took ? `Succeeded in ${took}.` : 'Succeeded.' };
