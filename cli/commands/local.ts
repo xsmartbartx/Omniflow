@@ -106,6 +106,26 @@ function check(ctx: CliContext, file: string, source: string): Checked {
   return result;
 }
 
+function printChecked(ctx: CliContext, r: Checked): void {
+  const s = ctx.style;
+  for (const i of [...r.errors, ...r.warnings]) ctx.err(`${renderIssue(s, r.file, r.source, i)}\n\n`);
+  for (const f of r.risk?.findings.filter((x) => x.blocking || x.severity === 'high' || x.severity === 'critical') ??
+    []) {
+    const rule = s.dim(`[${f.ruleId}]`);
+    const step = f.stepId ? s.dim(` (step ${f.stepId})`) : '';
+    ctx.err(`${f.blocking ? s.red('blocking') : s.yellow('risk')}${rule}: ${f.message}${step}\n\n`);
+  }
+  if (r.planHash) {
+    const okMark = r.ok ? s.green('✓') : s.red('✗');
+    const ref = s.bold(`${r.workflow}@${r.version}`);
+    ctx.out(
+      `${okMark} ${ref}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`,
+    );
+  } else {
+    ctx.out(`${s.red('✗')} ${r.file}  ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}\n`);
+  }
+}
+
 export async function validateCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
   if (paths.length === 0) throw new UsageError('Usage: constans validate <file|dir|-> [...]');
@@ -124,26 +144,7 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
     );
     return failed.length > 0 ? 1 : 0;
   }
-  const s = ctx.style;
-  for (const r of results) {
-    for (const i of [...r.errors, ...r.warnings]) ctx.err(`${renderIssue(s, r.file, r.source, i)}\n\n`);
-    if (r.risk) {
-      for (const f of r.risk.findings.filter((x) => x.blocking || x.severity === 'high' || x.severity === 'critical')) {
-        const rule = s.dim(`[${f.ruleId}]`);
-        const step = f.stepId ? s.dim(` (step ${f.stepId})`) : '';
-        ctx.err(`${f.blocking ? s.red('blocking') : s.yellow('risk')}${rule}: ${f.message}${step}\n\n`);
-      }
-    }
-    if (r.planHash) {
-      const okMark = r.ok ? s.green('✓') : s.red('✗');
-      const ref = s.bold(`${r.workflow}@${r.version}`);
-      ctx.out(
-        `${okMark} ${ref}  ${r.steps} steps  risk ${r.risk?.level} (${r.risk?.score})  ${s.dim(r.planHash.slice(0, 19))}  ${s.dim(r.file)}\n`,
-      );
-    } else {
-      ctx.out(`${s.red('✗')} ${r.file}  ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}\n`);
-    }
-  }
+  for (const r of results) printChecked(ctx, r);
   const warnings = results.reduce((n, r) => n + r.warnings.length, 0);
   const noun = warnings === 1 ? 'warning' : 'warnings';
   const warningNote = warnings ? `, ${warnings} ${noun}` : '';
@@ -245,77 +246,99 @@ export async function devCommand(ctx: CliContext): Promise<number> {
       throw new UsageError(`The run was not started (${trig.status === 'skipped' ? trig.reason : trig.status})`);
     const runId = trig.run.id;
 
-    const printed = new Set<string>();
-    const approver = {
-      id: 'dev:approver',
-      type: 'system' as const,
-      name: 'dev-approver',
-      tenant: 'default',
-      roles: ['admin' as const],
-    };
-    const off = app.state.events.onAppend((e) => {
-      if (e.runId !== runId) return;
-      if (e.type === 'approval.requested') {
-        const id = String((e.data as { approvalId: string }).approvalId);
-        if (has(ctx.args, 'auto-approve')) {
-          try {
-            app.approvals.decide(approver, id, 'approved', 'auto-approved by constans dev');
-            ctx.err(`${s.yellow('approval')} ${id} auto-approved\n`);
-          } catch (error_) {
-            ctx.err(`${s.red('could not auto-approve')}: ${(error_ as Error).message}\n`);
-          }
-        } else
-          ctx.err(`${s.yellow('waiting for approval')} ${id} — re-run with --auto-approve to answer approval gates\n`);
-      }
-    });
-    const tick = () => {
-      const steps = [...app.state.runs.getSteps(runId)].sort(
-        (a, b) =>
-          (a.completedSeq ?? Number.MAX_SAFE_INTEGER) - (b.completedSeq ?? Number.MAX_SAFE_INTEGER) ||
-          a.stepId.localeCompare(b.stepId),
-      );
-      for (const step of steps) {
-        const key = `${step.stepId}:${step.status}`;
-        if (printed.has(key) || !['succeeded', 'failed', 'skipped', 'cancelled'].includes(step.status)) continue;
-        printed.add(key);
-        const failure = step.error ? s.dim(`  ${step.error.message}`) : '';
-        (ctx.json ? ctx.err : ctx.out)(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${failure}\n`);
-      }
-    };
-
+    const off = watchApprovals(ctx, app, runId);
     const deadline = started + (Number(flag(ctx.args, 'timeout') ?? 120) || 120) * 1000;
+    const printed = new Set<string>();
     let run = app.state.runs.getRun(runId)!;
-    while (!['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled'].includes(run.status)) {
+    while (!DONE_STATUSES.includes(run.status)) {
       if (Date.now() > deadline) {
         off();
         ctx.err(`${s.red('Timed out')} waiting for the run to finish (status ${run.status})\n`);
         return 1;
       }
       await ctx.sleep(25);
-      tick();
+      printNewSteps(ctx, app, runId, printed);
       run = app.state.runs.getRun(runId)!;
     }
-    tick();
+    printNewSteps(ctx, app, runId, printed);
     off();
-
-    const ok = run.status === 'succeeded';
-    if (ctx.json) {
-      ctx.out(
-        `${JSON.stringify({ status: run.status, outputs: run.outputs ?? null, error: run.error ?? null, steps: app.state.runs.getSteps(runId).map((x) => ({ id: x.stepId, status: x.status, output: x.output ?? null, error: x.error ?? null })) }, null, 2)}\n`,
-      );
-    } else {
-      ctx.out(
-        `\n${ok ? s.green('✓') : s.red('✗')} ${statusColour(s, run.status)} in ${humanDuration(Date.now() - started)}${run.dryRun ? s.dim(' (dry run)') : ''}\n`,
-      );
-      if (run.error) ctx.out(`${s.red(run.error.code)}: ${run.error.message}\n`);
-      if (run.outputs && Object.keys(run.outputs).length > 0)
-        ctx.out(`${s.bold('outputs')}\n${JSON.stringify(run.outputs, null, 2)}\n`);
-    }
-    return ok ? 0 : 1;
+    printDevResult(ctx, app, run, started);
+    return run.status === 'succeeded' ? 0 : 1;
   } finally {
     await app.stop().catch(() => undefined);
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+type DevApp = ReturnType<typeof createConstans>;
+
+const DONE_STATUSES = ['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled'];
+
+/** Answer (or announce) approval gates of the run as they are requested; returns the function that stops listening. */
+function watchApprovals(ctx: CliContext, app: DevApp, runId: string): () => void {
+  const s = ctx.style;
+  const approver = {
+    id: 'dev:approver',
+    type: 'system' as const,
+    name: 'dev-approver',
+    tenant: 'default',
+    roles: ['admin' as const],
+  };
+  return app.state.events.onAppend((e) => {
+    if (e.runId !== runId || e.type !== 'approval.requested') return;
+    const id = String((e.data as { approvalId: string }).approvalId);
+    if (!has(ctx.args, 'auto-approve')) {
+      ctx.err(`${s.yellow('waiting for approval')} ${id} — re-run with --auto-approve to answer approval gates\n`);
+      return;
+    }
+    try {
+      app.approvals.decide(approver, id, 'approved', 'auto-approved by constans dev');
+      ctx.err(`${s.yellow('approval')} ${id} auto-approved\n`);
+    } catch (error_) {
+      ctx.err(`${s.red('could not auto-approve')}: ${(error_ as Error).message}\n`);
+    }
+  });
+}
+
+/** Print each step the first time it reaches a final status, in completion order. */
+function printNewSteps(ctx: CliContext, app: DevApp, runId: string, printed: Set<string>): void {
+  const s = ctx.style;
+  const steps = [...app.state.runs.getSteps(runId)].sort(
+    (a, b) =>
+      (a.completedSeq ?? Number.MAX_SAFE_INTEGER) - (b.completedSeq ?? Number.MAX_SAFE_INTEGER) ||
+      a.stepId.localeCompare(b.stepId),
+  );
+  for (const step of steps) {
+    const key = `${step.stepId}:${step.status}`;
+    if (printed.has(key) || !['succeeded', 'failed', 'skipped', 'cancelled'].includes(step.status)) continue;
+    printed.add(key);
+    const failure = step.error ? s.dim(`  ${step.error.message}`) : '';
+    (ctx.json ? ctx.err : ctx.out)(`  ${statusColour(s, step.status).padEnd(10)} ${step.stepId}${failure}\n`);
+  }
+}
+
+function printDevResult(
+  ctx: CliContext,
+  app: DevApp,
+  run: NonNullable<ReturnType<DevApp['state']['runs']['getRun']>>,
+  started: number,
+): void {
+  const s = ctx.style;
+  if (ctx.json) {
+    const steps = app.state.runs
+      .getSteps(run.id)
+      .map((x) => ({ id: x.stepId, status: x.status, output: x.output ?? null, error: x.error ?? null }));
+    ctx.out(
+      `${JSON.stringify({ status: run.status, outputs: run.outputs ?? null, error: run.error ?? null, steps }, null, 2)}\n`,
+    );
+    return;
+  }
+  const mark = run.status === 'succeeded' ? s.green('✓') : s.red('✗');
+  const dry = run.dryRun ? s.dim(' (dry run)') : '';
+  ctx.out(`\n${mark} ${statusColour(s, run.status)} in ${humanDuration(Date.now() - started)}${dry}\n`);
+  if (run.error) ctx.out(`${s.red(run.error.code)}: ${run.error.message}\n`);
+  if (run.outputs && Object.keys(run.outputs).length > 0)
+    ctx.out(`${s.bold('outputs')}\n${JSON.stringify(run.outputs, null, 2)}\n`);
 }
 
 function parseSecrets(pairs: string[]): Record<string, string> {

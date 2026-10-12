@@ -127,37 +127,41 @@ export async function runCli(
   try {
     return await command(ctx);
   } catch (e) {
-    if (e instanceof UsageError) {
-      io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'constans --help' for usage.")}\n`);
-      return 2;
+    return reportFailure(e, io, style);
+  }
+}
+
+/** Print a failure for the user and return the exit code: 2 for usage errors, 1 for everything else. */
+function reportFailure(e: unknown, io: CliIo, style: CliContext['style']): number {
+  if (e instanceof UsageError) {
+    io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'constans --help' for usage.")}\n`);
+    return 2;
+  }
+  if (e instanceof ApiError) {
+    const hint =
+      e.status === 401
+        ? `\n${style.dim('Check CONSTANS_API_KEY. Create a key with: constans admin create-api-key --name cli')}`
+        : '';
+    const apiCode = style.dim(`[${e.code}]`);
+    io.err(`${style.red('error')}${apiCode}: ${e.message}${hint}\n`);
+    const issues = (e.details as { issues?: Array<{ path: string; message: string }> } | undefined)?.issues;
+    for (const i of issues ?? []) {
+      const where = i.path ? `${i.path}: ` : '';
+      io.err(`  - ${where}${i.message}\n`);
     }
-    if (e instanceof ApiError) {
-      const hint =
-        e.status === 401
-          ? `\n${style.dim('Check CONSTANS_API_KEY. Create a key with: constans admin create-api-key --name cli')}`
-          : '';
-      const apiCode = style.dim(`[${e.code}]`);
-      io.err(`${style.red('error')}${apiCode}: ${e.message}${hint}\n`);
-      const issues = (e.details as { issues?: Array<{ path: string; message: string }> } | undefined)?.issues;
-      if (issues?.length)
-        for (const i of issues) {
-          const where = i.path ? `${i.path}: ` : '';
-          io.err(`  - ${where}${i.message}\n`);
-        }
-      return 1;
-    }
-    if (e instanceof ConnectionError) {
-      io.err(`${style.red('error')}: ${e.message}\n`);
-      return 1;
-    }
-    if (e instanceof ConstansError) {
-      const appCode = style.dim(`[${e.code}]`);
-      io.err(`${style.red('error')}${appCode}: ${e.message}\n`);
-      return 1;
-    }
-    io.err(`${style.red('unexpected error')}: ${(e as Error).stack ?? String(e)}\n`);
     return 1;
   }
+  if (e instanceof ConnectionError) {
+    io.err(`${style.red('error')}: ${e.message}\n`);
+    return 1;
+  }
+  if (e instanceof ConstansError) {
+    const appCode = style.dim(`[${e.code}]`);
+    io.err(`${style.red('error')}${appCode}: ${e.message}\n`);
+    return 1;
+  }
+  io.err(`${style.red('unexpected error')}: ${(e as Error).stack ?? String(e)}\n`);
+  return 1;
 }
 
 async function readAllStdin(): Promise<string> {

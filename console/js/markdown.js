@@ -51,59 +51,85 @@ const splitRow = (line) =>
     .split(/(?<!\\)\|/)
     .map((c) => c.trim().replaceAll(String.raw`\|`, '|'));
 
+// Each reader looks at lines[i] and, when it recognises its block, returns { block, next }.
+const ORDERED_ITEM = /^\s*\d+\.\s+/;
+const BULLET_ITEM = /^\s*[-*]\s+/;
+
+function readCode(lines, i) {
+  const m = /^```\s*([\w-]*)\s*$/.exec(lines[i]);
+  if (!m) return undefined;
+  const body = [];
+  let j = i + 1;
+  while (j < lines.length && !/^```\s*$/.test(lines[j])) body.push(lines[j++]);
+  return { block: { t: 'code', lang: m[1], v: body.join('\n') }, next: j + 1 };
+}
+
+function readHeading(lines, i) {
+  const m = /^(#{1,4})\s+(.*)$/.exec(lines[i]);
+  return m ? { block: { t: 'heading', level: m[1].length, c: parseInline(m[2]) }, next: i + 1 } : undefined;
+}
+
+function readRule(lines, i) {
+  return /^(-{3,}|\*{3,})\s*$/.test(lines[i]) ? { block: { t: 'rule' }, next: i + 1 } : undefined;
+}
+
+function readTable(lines, i) {
+  const isTableRow = (l) => /^\|.*\|\s*$/.test(l);
+  if (!isTableRow(lines[i]) || i + 1 >= lines.length || !/^\|?\s*:?-{3,}/.test(lines[i + 1])) return undefined;
+  const head = splitRow(lines[i]);
+  let j = i + 2;
+  const rows = [];
+  while (j < lines.length && isTableRow(lines[j])) rows.push(splitRow(lines[j++]));
+  return { block: { t: 'table', head: head.map(parseInline), rows: rows.map((r) => r.map(parseInline)) }, next: j };
+}
+
+function readList(lines, i) {
+  const ordered = ORDERED_ITEM.test(lines[i]);
+  if (!ordered && !BULLET_ITEM.test(lines[i])) return undefined;
+  const marker = ordered ? ORDERED_ITEM : BULLET_ITEM;
+  const items = [];
+  let j = i;
+  while (j < lines.length && marker.test(lines[j])) items.push(parseInline(lines[j++].replace(marker, '')));
+  return { block: { t: 'list', ordered, items }, next: j };
+}
+
+function readQuote(lines, i) {
+  if (!/^>\s?/.test(lines[i])) return undefined;
+  const q = [];
+  let j = i;
+  while (j < lines.length && /^>\s?/.test(lines[j])) q.push(lines[j++].replace(/^>\s?/, ''));
+  return { block: { t: 'quote', c: parseInline(q.join(' ')) }, next: j };
+}
+
+function readParagraph(lines, i) {
+  const p = [];
+  let j = i;
+  while (j < lines.length && lines[j].trim() !== '' && !/^(#{1,4}\s|```|>|\s*[-*]\s+|\s*\d+\.\s+|\|)/.test(lines[j]))
+    p.push(lines[j++]);
+  if (p.length === 0) p.push(lines[j++]);
+  return { block: { t: 'p', c: parseInline(p.join(' ')) }, next: j };
+}
+
+const BLOCK_READERS = [readCode, readHeading, readRule, readTable, readList, readQuote, readParagraph];
+
 export function markdownToAst(src) {
   const lines = String(src ?? '')
     .replace(/\r\n?/g, '\n')
     .split('\n');
+  /** @type {any[]} */
   const blocks = [];
   let i = 0;
   while (i < lines.length) {
-    const line = lines[i];
-    if (line.trim() === '') {
+    if (lines[i].trim() === '') {
       i++;
       continue;
     }
-    let m;
-    if ((m = /^```\s*([\w-]*)\s*$/.exec(line))) {
-      const body = [];
-      i++;
-      while (i < lines.length && !/^```\s*$/.test(lines[i])) body.push(lines[i++]);
-      i++;
-      blocks.push({ t: 'code', lang: m[1], v: body.join('\n') });
-    } else if ((m = /^(#{1,4})\s+(.*)$/.exec(line))) {
-      blocks.push({ t: 'heading', level: m[1].length, c: parseInline(m[2]) });
-      i++;
-    } else if (/^(-{3,}|\*{3,})\s*$/.test(line)) {
-      blocks.push({ t: 'rule' });
-      i++;
-    } else if (/^\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\|?\s*:?-{3,}/.test(lines[i + 1])) {
-      const head = splitRow(line);
-      i += 2;
-      const rows = [];
-      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) rows.push(splitRow(lines[i++]));
-      blocks.push({ t: 'table', head: head.map(parseInline), rows: rows.map((r) => r.map(parseInline)) });
-    } else if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
-      const ordered = /^\s*\d+\.\s+/.test(line);
-      const items = [];
-      while (i < lines.length && (ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/).test(lines[i])) {
-        items.push(parseInline(lines[i].replace(ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/, '')));
-        i++;
-      }
-      blocks.push({ t: 'list', ordered, items });
-    } else if (/^>\s?/.test(line)) {
-      const q = [];
-      while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i++].replace(/^>\s?/, ''));
-      blocks.push({ t: 'quote', c: parseInline(q.join(' ')) });
-    } else {
-      const p = [];
-      while (
-        i < lines.length &&
-        lines[i].trim() !== '' &&
-        !/^(#{1,4}\s|```|>|\s*[-*]\s+|\s*\d+\.\s+|\|)/.test(lines[i])
-      )
-        p.push(lines[i++]);
-      if (p.length === 0) p.push(lines[i++]);
-      blocks.push({ t: 'p', c: parseInline(p.join(' ')) });
+    for (const read of BLOCK_READERS) {
+      const got = read(lines, i);
+      if (!got) continue;
+      blocks.push(got.block);
+      i = got.next;
+      break;
     }
   }
   return blocks;

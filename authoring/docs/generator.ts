@@ -137,6 +137,54 @@ export interface WorkflowDocContext {
   risk?: { level: string; score: number; findings: Array<{ severity: string; message: string; stepId?: string }> };
 }
 
+function inputsSection(plan: Plan): string[] {
+  const inputs = Object.entries(plan.inputs);
+  const out = ['', '## Inputs', ''];
+  if (inputs.length === 0) return [...out, '_None._'];
+  out.push('| Name | Type | Required | Default | Description |', '|---|---|---|---|---|');
+  for (const [k, v] of inputs) {
+    const def = v.default === undefined ? '' : code(cell(JSON.stringify(v.default)));
+    out.push(`| ${code(k)} | ${v.type} | ${v.required ? 'yes' : 'no'} | ${def} | ${cell(v.description)} |`);
+  }
+  return out;
+}
+
+function stepsSection(ordered: PlanStep[]): string[] {
+  const out = [
+    '',
+    '## Steps',
+    '',
+    '| # | Step | Kind | Capability | Effect | Depends on | Timeout | Retries | Undo |',
+    '|---|---|---|---|---|---|---|---|---|',
+  ];
+  for (const s of ordered) {
+    const capability = s.capability ? `${s.capability.name}@${s.capability.version}` : '';
+    const dependsOn = s.dependsOn.map(code).join(', ');
+    const timeout = s.timeoutMs ? `${s.timeoutMs / 1000}s` : '';
+    const undo = s.compensate ? code(s.compensate.capability.name) : '';
+    out.push(
+      `| ${s.order + 1} | ${code(s.id)} | ${s.type} | ${capability} | ${s.effect ?? ''} | ${dependsOn} | ${timeout} | ${s.retry ? s.retry.attempts - 1 : 0} | ${undo} |`,
+    );
+  }
+  return out;
+}
+
+function analysisSection(plan: Plan): string[] {
+  const a = plan.analysis;
+  return [
+    '',
+    '## Analysis',
+    '',
+    `- Effects: ${Object.entries(a.effects)
+      .map(([k, v]) => `${v} ${k}`)
+      .join(', ')}`,
+    `- Scopes required: ${a.scopes.length ? a.scopes.map(code).join(', ') : 'none'}`,
+    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside Constans'}`,
+    `- Data sensitivity: ${a.maxSensitivity}`,
+    `- Approval gates: ${a.hasApproval ? 'yes' : 'no'} · compensation: ${a.hasCompensation ? 'yes' : 'no'}`,
+  ];
+}
+
 export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): string {
   const w = plan.workflow;
   const ordered = [...plan.steps].sort((a, b) => a.order - b.order);
@@ -164,45 +212,7 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   for (const t of plan.triggers) {
     out.push(triggerLine(t));
   }
-  const inputs = Object.entries(plan.inputs);
-  out.push('', '## Inputs', '');
-  if (inputs.length === 0) out.push('_None._');
-  else {
-    out.push('| Name | Type | Required | Default | Description |', '|---|---|---|---|---|');
-    for (const [k, v] of inputs) {
-      const def = v.default === undefined ? '' : code(cell(JSON.stringify(v.default)));
-      out.push(`| ${code(k)} | ${v.type} | ${v.required ? 'yes' : 'no'} | ${def} | ${cell(v.description)} |`);
-    }
-  }
-  out.push(
-    '',
-    '## Steps',
-    '',
-    '| # | Step | Kind | Capability | Effect | Depends on | Timeout | Retries | Undo |',
-    '|---|---|---|---|---|---|---|---|---|',
-  );
-  for (const s of ordered) {
-    const capability = s.capability ? `${s.capability.name}@${s.capability.version}` : '';
-    const dependsOn = s.dependsOn.map(code).join(', ');
-    const timeout = s.timeoutMs ? `${s.timeoutMs / 1000}s` : '';
-    const undo = s.compensate ? code(s.compensate.capability.name) : '';
-    out.push(
-      `| ${s.order + 1} | ${code(s.id)} | ${s.type} | ${capability} | ${s.effect ?? ''} | ${dependsOn} | ${timeout} | ${s.retry ? s.retry.attempts - 1 : 0} | ${undo} |`,
-    );
-  }
-  const a = plan.analysis;
-  out.push(
-    '',
-    '## Analysis',
-    '',
-    `- Effects: ${Object.entries(a.effects)
-      .map(([k, v]) => `${v} ${k}`)
-      .join(', ')}`,
-    `- Scopes required: ${a.scopes.length ? a.scopes.map(code).join(', ') : 'none'}`,
-    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside Constans'}`,
-    `- Data sensitivity: ${a.maxSensitivity}`,
-    `- Approval gates: ${a.hasApproval ? 'yes' : 'no'} · compensation: ${a.hasCompensation ? 'yes' : 'no'}`,
-  );
+  out.push(...inputsSection(plan), ...stepsSection(ordered), ...analysisSection(plan));
   if (ctx.risk) {
     out.push('', `## Risk review — ${ctx.risk.level} (${ctx.risk.score}/100)`, '');
     out.push(
