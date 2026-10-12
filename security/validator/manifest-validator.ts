@@ -183,54 +183,56 @@ function checkMetadata(c: Ctx): void {
 }
 
 function checkInputs(c: Ctx): void {
-  const { m, error, warn } = c;
-  for (const [name, spec] of Object.entries(m.inputs) as Array<[string, InputSpec]>) {
-    const p = ['inputs', name];
-    if (spec.pattern !== undefined) {
-      if (isSuspiciousRegex(spec.pattern)) {
-        error([...p, 'pattern'], 'UNSAFE_REGEX', 'Pattern risks catastrophic backtracking; simplify it');
-      } else {
-        try {
-          new RegExp(spec.pattern, 'u');
-        } catch (e) {
-          error([...p, 'pattern'], 'INVALID_REGEX', (e as Error).message);
-        }
-      }
+  for (const [name, spec] of Object.entries(c.m.inputs) as Array<[string, InputSpec]>) checkInput(c, name, spec);
+}
+
+function checkInput(c: Ctx, name: string, spec: InputSpec): void {
+  const { error, warn } = c;
+  const p = ['inputs', name];
+  checkInputPattern(c, spec, p);
+  if (spec.items !== undefined) {
+    const bad = checkSchemaDefinition(spec.items);
+    if (bad) error([...p, 'items'], 'INVALID_SCHEMA', bad);
+  }
+  if (spec.type === 'integer' || spec.type === 'number') {
+    if (spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) {
+      error([...p, 'minimum'], 'INVALID_RANGE', 'minimum is greater than maximum');
     }
-    for (const k of ['items', 'properties'] as const) {
-      const sub = spec[k];
-      if (sub !== undefined && k === 'items') {
-        const bad = checkSchemaDefinition(sub);
-        if (bad) error([...p, k], 'INVALID_SCHEMA', bad);
-      }
-    }
-    if (spec.type === 'integer' || spec.type === 'number') {
-      if (spec.minimum !== undefined && spec.maximum !== undefined && spec.minimum > spec.maximum) {
-        error([...p, 'minimum'], 'INVALID_RANGE', 'minimum is greater than maximum');
-      }
-    }
-    if (spec.default !== undefined) {
-      const res = validateValue(inputsToJsonSchema({ [name]: { ...spec, required: false } }), {
-        [name]: spec.default,
-      });
-      if (!res.ok) {
-        error(
-          [...p, 'default'],
-          'INVALID_DEFAULT',
-          `Default does not satisfy the input's own constraints: ${res.issues[0]?.message ?? ''}`,
-        );
-      }
-    }
-    if (spec.sensitivity === 'secret') {
+  }
+  if (spec.default !== undefined) {
+    const res = validateValue(inputsToJsonSchema({ [name]: { ...spec, required: false } }), {
+      [name]: spec.default,
+    });
+    if (!res.ok) {
       error(
-        [...p, 'sensitivity'],
-        'SECRET_INPUT_FORBIDDEN',
-        "Inputs are stored with the run and cannot be 'secret'. Provide credentials through the Secret Broker and reference them as ${{ secrets.NAME }}.",
+        [...p, 'default'],
+        'INVALID_DEFAULT',
+        `Default does not satisfy the input's own constraints: ${res.issues[0]?.message ?? ''}`,
       );
     }
-    if (spec.required === true && spec.default !== undefined) {
-      warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
-    }
+  }
+  if (spec.sensitivity === 'secret') {
+    error(
+      [...p, 'sensitivity'],
+      'SECRET_INPUT_FORBIDDEN',
+      "Inputs are stored with the run and cannot be 'secret'. Provide credentials through the Secret Broker and reference them as ${{ secrets.NAME }}.",
+    );
+  }
+  if (spec.required === true && spec.default !== undefined) {
+    warn([...p, 'required'], 'REQUIRED_WITH_DEFAULT', "'required' has no effect when a default is given");
+  }
+}
+
+function checkInputPattern(c: Ctx, spec: InputSpec, p: string[]): void {
+  if (spec.pattern === undefined) return;
+  if (isSuspiciousRegex(spec.pattern)) {
+    c.error([...p, 'pattern'], 'UNSAFE_REGEX', 'Pattern risks catastrophic backtracking; simplify it');
+    return;
+  }
+  try {
+    new RegExp(spec.pattern, 'u');
+  } catch (e) {
+    c.error([...p, 'pattern'], 'INVALID_REGEX', (e as Error).message);
   }
 }
 
@@ -351,7 +353,7 @@ function checkStep(c: StepCtx, s: Step, i: number): void {
 }
 
 function checkStepCommon(c: StepCtx, s: Step, p: PathSegment[]): void {
-  const { error, checkValue, checkExpression, scopeFor, terminateIds } = c;
+  const { error, terminateIds } = c;
   (s.dependsOn ?? []).forEach((d, j) => {
     if (terminateIds.has(d)) {
       error([...p, 'dependsOn', j], 'DEPENDS_ON_TERMINATE', `'${d}' ends the run, so nothing can depend on it`);
@@ -376,6 +378,11 @@ function checkStepCommon(c: StepCtx, s: Step, p: PathSegment[]): void {
         error([...p, 'retry', k], 'INVALID_DURATION', `Invalid duration ${JSON.stringify(v)}`);
     }
   }
+  checkStepExpressions(c, s, p);
+}
+
+function checkStepExpressions(c: StepCtx, s: Step, p: PathSegment[]): void {
+  const { error, checkValue, checkExpression, scopeFor } = c;
   if (s.idempotencyKey !== undefined) {
     if (s.type !== 'capability' && s.type !== 'map') {
       error(
@@ -604,38 +611,38 @@ function checkOutputs(c: Ctx): void {
 }
 
 function checkPolicy(c: Ctx): void {
-  const { m, error, warn, checkValue } = c;
-  if (m.policy) {
-    for (const k of ['timeout', 'dedupWindow'] as const) {
-      const v = m.policy[k];
-      if (v !== undefined && !isDuration(v)) error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
-    }
-    for (const k of ['initialDelay', 'maxDelay'] as const) {
-      const v = m.policy.retry?.[k];
-      if (v !== undefined && !isDuration(v)) error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
-    }
-    if (m.policy.dedupKey) {
-      checkValue(m.policy.dedupKey, ['policy', 'dedupKey'], {
-        roots: roots('inputs', 'context'),
-        steps: new Set(),
-        secrets: false,
-        where: 'dedupKey',
-      });
-    }
-    if (m.policy.dedupKey && m.policy.dedupWindow === undefined) {
-      warn(['policy', 'dedupKey'], 'DEDUP_WITHOUT_WINDOW', "'dedupKey' has no effect without 'dedupWindow'");
-    }
-    if (
-      m.policy.maxRunCost !== undefined &&
-      m.policy.maxDailyCost !== undefined &&
-      m.policy.maxRunCost > m.policy.maxDailyCost
-    ) {
-      warn(
-        ['policy', 'maxRunCost'],
-        'RUN_COST_ABOVE_DAILY',
-        'maxRunCost exceeds maxDailyCost, so a single run can never fit the daily budget',
-      );
-    }
+  const { m, error } = c;
+  if (!m.policy) return;
+  for (const k of ['timeout', 'dedupWindow'] as const) {
+    const v = m.policy[k];
+    if (v !== undefined && !isDuration(v)) error(['policy', k], 'INVALID_DURATION', 'Invalid duration');
+  }
+  for (const k of ['initialDelay', 'maxDelay'] as const) {
+    const v = m.policy.retry?.[k];
+    if (v !== undefined && !isDuration(v)) error(['policy', 'retry', k], 'INVALID_DURATION', 'Invalid duration');
+  }
+  checkPolicyDedupAndCost(c, m.policy);
+}
+
+function checkPolicyDedupAndCost(c: Ctx, policy: NonNullable<Manifest['policy']>): void {
+  const { warn, checkValue } = c;
+  if (policy.dedupKey) {
+    checkValue(policy.dedupKey, ['policy', 'dedupKey'], {
+      roots: roots('inputs', 'context'),
+      steps: new Set(),
+      secrets: false,
+      where: 'dedupKey',
+    });
+  }
+  if (policy.dedupKey && policy.dedupWindow === undefined) {
+    warn(['policy', 'dedupKey'], 'DEDUP_WITHOUT_WINDOW', "'dedupKey' has no effect without 'dedupWindow'");
+  }
+  if (policy.maxRunCost !== undefined && policy.maxDailyCost !== undefined && policy.maxRunCost > policy.maxDailyCost) {
+    warn(
+      ['policy', 'maxRunCost'],
+      'RUN_COST_ABOVE_DAILY',
+      'maxRunCost exceeds maxDailyCost, so a single run can never fit the daily budget',
+    );
   }
 }
 
@@ -652,6 +659,20 @@ function checkObservability(c: Ctx): void {
   const p95 = m.observability?.slo?.p95Duration;
   if (p95 !== undefined && !isDuration(p95))
     error(['observability', 'slo', 'p95Duration'], 'INVALID_DURATION', 'Invalid duration');
+}
+
+function relativeSegments(rel: string): PathSegment[] {
+  if (rel === '') return [];
+  const segs: PathSegment[] = [];
+  for (const m2 of rel.matchAll(/([^.[\]]+)|\[(\d+)\]/g)) {
+    if (m2[2] !== undefined) segs.push(Number(m2[2]));
+    else segs.push(m2[1]!);
+  }
+  return segs;
+}
+
+function secretNotAllowed(scope: ExprScope): string {
+  return `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`;
 }
 
 /** The expression and value checkers, bound to one manifest's error sink and its input and step names. */
@@ -703,16 +724,6 @@ function makeChecks(
     }
   }
 
-  function relativeSegments(rel: string): PathSegment[] {
-    if (rel === '') return [];
-    const segs: PathSegment[] = [];
-    for (const m2 of rel.matchAll(/([^.[\]]+)|\[(\d+)\]/g)) {
-      if (m2[2] !== undefined) segs.push(Number(m2[2]));
-      else segs.push(m2[1]!);
-    }
-    return segs;
-  }
-
   function checkRefs(refs: Reference[], path: PathSegment[], scope: ExprScope) {
     for (const r of refs) {
       if (r.root === 'secrets' && !scope.secrets) {
@@ -726,10 +737,6 @@ function makeChecks(
       }
       checkRootRef(r, path, scope);
     }
-  }
-
-  function secretNotAllowed(scope: ExprScope): string {
-    return `Secrets may only be used inside a step's 'with' input, not in ${scope.where} (they would leak into logs and plans)`;
   }
 
   function checkRootRef(r: Reference, path: PathSegment[], scope: ExprScope) {

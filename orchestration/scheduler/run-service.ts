@@ -172,7 +172,7 @@ export class RunService {
   /** Operator controls: a disabled, killed or frozen workflow does not run. */
   private assertRunnable(
     workflow: string,
-    settings: { enabled: boolean; killed: boolean; killReason?: string | undefined },
+    settings: { enabled: boolean; killed: boolean; killReason?: string },
     version: { version: string; status: string },
   ): void {
     if (!settings.enabled) throw new ConflictError(`Workflow '${workflow}' is disabled`, { code: 'WORKFLOW_DISABLED' });
