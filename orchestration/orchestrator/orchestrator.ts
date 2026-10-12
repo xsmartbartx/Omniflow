@@ -484,18 +484,21 @@ export class Orchestrator {
       for (const ps of runnable) {
         if (recs.get(ps.id)?.status !== 'pending') continue;
         if (failing()) break;
-        if (ps.when && !this.evalWhen(run, plan, recs, ps)) {
-          if (this.st.runs.getStep(run.id, ps.id)?.status === 'pending') this.skipStep(run, ps, 'condition-false');
-          progress = true;
-          recs = this.records(run.id);
-          continue;
-        }
-        if (this.dispatch(run, plan, recs, ps, d)) progress = true;
+        if (this.runOrSkip(run, plan, recs, ps, d)) progress = true;
         recs = this.records(run.id);
       }
       recs = this.records(run.id);
     }
     return recs;
+  }
+
+  /** Dispatch a ready step, or skip it when its condition is false. Returns true when the step finished inline. */
+  private runOrSkip(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep, d: Driver): boolean {
+    if (ps.when && !this.evalWhen(run, plan, recs, ps)) {
+      if (this.st.runs.getStep(run.id, ps.id)?.status === 'pending') this.skipStep(run, ps, 'condition-false');
+      return true;
+    }
+    return this.dispatch(run, plan, recs, ps, d);
   }
 
   /** Relaunch steps whose back-off has elapsed. */
@@ -527,23 +530,27 @@ export class Orchestrator {
         this.launch(run, plan, recs, ps, d);
         return false;
       case 'branch':
-        return this.dispatchBranch(run, plan, recs, ps);
+        this.dispatchBranch(run, plan, recs, ps);
+        return true;
       case 'parallel':
-        return this.dispatchParallel(run, recs, ps, d);
+        this.dispatchParallel(run, recs, ps, d);
+        return true;
       case 'approval':
         this.requestApproval(run, plan, recs, ps);
         return false;
       case 'wait':
-        return this.dispatchWait(run, plan, recs, ps);
+        this.dispatchWait(run, plan, recs, ps);
+        return false;
       case 'subworkflow':
         this.startChild(run, plan, recs, ps);
         return false;
       case 'terminate':
-        return this.dispatchTerminate(run, plan, recs, ps);
+        this.dispatchTerminate(run, plan, recs, ps);
+        return true;
     }
   }
 
-  private dispatchBranch(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+  private dispatchBranch(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): void {
     const scope = this.scope(run, plan, recs);
     let chosen: string | undefined;
     try {
@@ -561,7 +568,6 @@ export class Orchestrator {
         { code: 'BRANCH_EVALUATION_FAILED', message: (e as Error).message, class: 'contract', retryable: false },
         'branch',
       );
-      return true;
     }
     this.startInline(run, ps);
     if (chosen === undefined && ps.default === undefined) {
@@ -579,10 +585,9 @@ export class Orchestrator {
     } else {
       this.succeedStep(run, ps, { case: chosen ?? ps.default }, { cost: 0, durationMs: 0 });
     }
-    return true;
   }
 
-  private dispatchParallel(run: RunRecord, recs: Map<string, StepRecord>, ps: PlanStep, d: Driver): boolean {
+  private dispatchParallel(run: RunRecord, recs: Map<string, StepRecord>, ps: PlanStep, d: Driver): void {
     this.startInline(run, ps);
     const results: Record<string, unknown> = {};
     let anyOk = false;
@@ -613,10 +618,9 @@ export class Orchestrator {
     } else {
       this.succeedStep(run, ps, { results }, { cost: 0, durationMs: 0 });
     }
-    return true;
   }
 
-  private dispatchWait(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+  private dispatchWait(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): void {
     const now = this.clock.now();
     this.st.runs.patchStep(run.id, ps.id, {
       startedAt: now.toISOString(),
@@ -644,10 +648,9 @@ export class Orchestrator {
           }),
     });
     this.event(run, 'step.waiting', { on: ps.until ? `event:${ps.until.event}` : 'timer' }, ps.id);
-    return false;
   }
 
-  private dispatchTerminate(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): boolean {
+  private dispatchTerminate(run: RunRecord, plan: Plan, recs: Map<string, StepRecord>, ps: PlanStep): void {
     this.startInline(run, ps);
     if (ps.status === 'success') {
       this.succeedStep(run, ps, { terminated: true }, { cost: 0, durationMs: 0 });
@@ -669,7 +672,6 @@ export class Orchestrator {
         'terminate',
       );
     }
-    return true;
   }
 
   private startInline(run: RunRecord, ps: PlanStep): void {
