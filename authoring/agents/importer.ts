@@ -184,7 +184,7 @@ function commandArgv(
   name: string,
   opts: ImportOptions,
   notes: string[],
-): { argv: string[]; script?: ImportedWorkflow['script'] } | undefined {
+): { argv: string[]; script?: NonNullable<ImportedWorkflow['script']> } | undefined {
   if (needsShell(command)) {
     const path = `${(opts.scriptDir ?? '/opt/constans/scripts').replace(/\/$/, '')}/${name}.sh`;
     notes.push(

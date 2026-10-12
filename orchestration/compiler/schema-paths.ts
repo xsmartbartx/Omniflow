@@ -19,13 +19,13 @@ export function schemaHasPath(schema: unknown, path: readonly string[]): PathVer
   const additional = s.additionalProperties;
   if (additional !== null && typeof additional === 'object') return schemaHasPath(additional, rest);
   if (props && additional === false) return 'no';
-  if (type.length === 1 && SCALAR_TYPES.includes(type[0] as string)) {
+  if (type.length === 1 && SCALAR_TYPES.has(type[0] as string)) {
     return seg === 'length' && type[0] === 'string' && rest.length === 0 ? 'yes' : 'no';
   }
   return 'unknown';
 }
 
-const SCALAR_TYPES = ['string', 'integer', 'number', 'boolean', 'null'];
+const SCALAR_TYPES = new Set(['string', 'integer', 'number', 'boolean', 'null']);
 
 /** Arrays expose `length` and numeric indexes (which continue into `items`); nothing else. */
 function arrayHasPath(s: JsonObject, seg: string, rest: string[]): PathVerdict {

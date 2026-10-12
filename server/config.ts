@@ -93,7 +93,7 @@ function buildAdapters(env: Env, cwd: string, dataDir: string): AdapterConfig {
   return adapters;
 }
 
-function resolveMode(env: Env, environment: EnvironmentName): { mode: 'standalone' | 'nexora'; nexoraCore: string } {
+function resolveMode(env: Env, environment: EnvironmentName): 'standalone' | 'nexora' {
   const mode = (env.CONSTANS_MODE ?? 'standalone') as 'standalone' | 'nexora';
   if (mode !== 'standalone' && mode !== 'nexora') fail('CONSTANS_MODE', 'must be standalone or nexora');
   const nexoraCore = (env.CONSTANS_NEXORA_CORE ?? '') as string;
@@ -103,7 +103,7 @@ function resolveMode(env: Env, environment: EnvironmentName): { mode: 'standalon
     if (environment === 'production')
       fail('CONSTANS_NEXORA_CORE', 'fake is unsigned and cannot be used when CONSTANS_ENV=production');
   }
-  return { mode, nexoraCore };
+  return mode;
 }
 
 /**
@@ -155,7 +155,7 @@ export function loadConfig(
     fail('CONSTANS_RUN_WEBHOOKS', (e as Error).message);
   }
 
-  const { mode, nexoraCore } = resolveMode(env, environment);
+  const mode = resolveMode(env, environment);
 
   return {
     environment,

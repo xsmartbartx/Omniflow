@@ -56,17 +56,17 @@ const ORDERED_ITEM = /^\s*\d+\.\s+/;
 const BULLET_ITEM = /^\s*[-*]\s+/;
 
 function readCode(lines, i) {
-  const m = /^```\s*([\w-]*)\s*$/.exec(lines[i]);
+  const m = /^```\s*([\w-]*)$/.exec(lines[i].trimEnd());
   if (!m) return undefined;
   const body = [];
   let j = i + 1;
-  while (j < lines.length && !/^```\s*$/.test(lines[j])) body.push(lines[j++]);
+  while (j < lines.length && lines[j].trimEnd() !== '```') body.push(lines[j++]);
   return { block: { t: 'code', lang: m[1], v: body.join('\n') }, next: j + 1 };
 }
 
 function readHeading(lines, i) {
-  const m = /^(#{1,4})\s+(.*)$/.exec(lines[i]);
-  return m ? { block: { t: 'heading', level: m[1].length, c: parseInline(m[2]) }, next: i + 1 } : undefined;
+  const m = /^(#{1,4})\s(.*)$/.exec(lines[i]);
+  return m ? { block: { t: 'heading', level: m[1].length, c: parseInline(m[2].trimStart()) }, next: i + 1 } : undefined;
 }
 
 function readRule(lines, i) {
