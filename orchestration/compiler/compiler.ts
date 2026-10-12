@@ -430,6 +430,11 @@ class PlanCompiler {
       ...(s.produces ? { produces: s.produces } : {}),
     };
 
+    this.fillStepKind(base, s, p);
+    return base;
+  }
+
+  private fillStepKind(base: PlanStep, s: Step, p: PathSegment[]): void {
     switch (s.type) {
       case 'capability':
       case 'map':
@@ -459,7 +464,6 @@ class PlanCompiler {
         if (s.message) base.message = s.message;
         break;
     }
-    return base;
   }
 
   private fillParallelStep(base: PlanStep, s: Extract<Step, { type: 'parallel' }>, p: PathSegment[]): void {
@@ -758,14 +762,12 @@ class PlanCompiler {
   /** References in the workflow's `outputs`: step fields must exist and `context.*` keys must be defined. */
   private checkWorkflowRefs(value: unknown, path: PathSegment[]): void {
     const known = this.knownContext();
-    for (const f of scanTemplates(value, '')) {
-      for (const part of f.template?.parts ?? []) {
-        if (part.kind !== 'expr') continue;
-        for (const r of collectReferences(part.ast)) {
-          if (r.root === 'steps' && r.path[0]) this.checkOutputField(r, path, false);
-          if (r.root === 'context' && r.path[0] && !known.has(r.path[0])) this.unknownContextKey(path, r.path[0]);
-        }
-      }
+    const refs = scanTemplates(value, '').flatMap((f) =>
+      (f.template?.parts ?? []).flatMap((part) => (part.kind === 'expr' ? collectReferences(part.ast) : [])),
+    );
+    for (const r of refs) {
+      if (r.root === 'steps' && r.path[0]) this.checkOutputField(r, path, false);
+      if (r.root === 'context' && r.path[0] && !known.has(r.path[0])) this.unknownContextKey(path, r.path[0]);
     }
   }
 
@@ -789,24 +791,12 @@ class PlanCompiler {
     const egress = new Set<string>();
     const families = new Set<string>();
     const effects: Record<EffectClass, number> = { pure: 0, idempotent: 0, effectful: 0 };
-    let sensMax: Sensitivity = 'public';
     for (const c of [...this.capOf.values(), ...this.compCapOf.values()]) {
       caps[c.name] = { name: c.name, version: c.version, hash: c.hash };
       for (const sc of c.declaration.scopes) scopes.add(sc);
       families.add(c.declaration.family);
     }
-    for (const st of this.planSteps) {
-      if (st.capability && st.effect) effects[st.effect]++;
-      for (const h of st.egress ?? []) egress.add(h);
-      sensMax = maxSensitivity(sensMax, st.sensitivity);
-    }
-    for (const st of this.planSteps) {
-      if (st.compensate) {
-        const d = this.compCapOf.get(st.id)?.declaration;
-        if (d) effects[d.effect as EffectClass]++;
-        for (const h of st.compensate.egress) egress.add(h);
-      }
-    }
+    const sensMax = this.tallyEffects(effects, egress);
     const analysis: PlanAnalysis = {
       stepCount: this.planSteps.length,
       depth: longestPath(this.orderedIds, this.deps),
@@ -828,6 +818,23 @@ class PlanCompiler {
       maxCost: this.maxCost,
     };
     return { analysis, caps };
+  }
+
+  /** Count effects and collect egress hosts over the plan's steps (and their compensations); returns the highest sensitivity. */
+  private tallyEffects(effects: Record<EffectClass, number>, egress: Set<string>): Sensitivity {
+    let sensMax: Sensitivity = 'public';
+    for (const st of this.planSteps) {
+      if (st.capability && st.effect) effects[st.effect]++;
+      for (const h of st.egress ?? []) egress.add(h);
+      sensMax = maxSensitivity(sensMax, st.sensitivity);
+    }
+    for (const st of this.planSteps) {
+      if (!st.compensate) continue;
+      const d = this.compCapOf.get(st.id)?.declaration;
+      if (d) effects[d.effect as EffectClass]++;
+      for (const h of st.compensate.egress) egress.add(h);
+    }
+    return sensMax;
   }
 
   private assemble(): Plan {
