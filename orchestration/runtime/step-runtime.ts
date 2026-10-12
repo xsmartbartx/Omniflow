@@ -247,25 +247,11 @@ export class StepRuntime implements StepExecutor {
 
   /** Run one item to completion: retry per the step's policy, wait out deferrals, record success or failure. */
   private async runMapItem(run: MapRun, index: number): Promise<void> {
-    const { a, cap, signal } = run;
-    const step = a.step;
-    const retry = step.retry;
+    const { a, signal } = run;
     let attempt = 0;
     for (;;) {
       attempt++;
-      const res = await this.invoke(
-        { ...a, signal, attempt },
-        {
-          cap,
-          withTemplate: step.with ?? {},
-          keyTemplate: step.idempotencyKey,
-          egress: step.egress ?? [],
-          timeoutMs: step.timeoutMs,
-          outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
-          extraScope: { item: run.items[index], index },
-          owner: `${a.runId}/${step.id}#${index}`,
-        },
-      );
+      const res = await this.invokeMapItem(run, index, attempt);
       if (res.kind === 'succeeded') {
         run.results[index] = res.output;
         run.cost += res.cost;
@@ -275,20 +261,40 @@ export class StepRuntime implements StepExecutor {
       if (res.kind === 'deferred') {
         attempt--;
         await sleep(res.retryAfterMs, signal);
-        if (signal.aborted) return;
-        continue;
+      } else if (!(await this.waitToRetry(run, res.error, attempt))) {
+        run.failures.push({ index, error: res.error });
+        this.emit(a, 'step.item.failed', { index, error: res.error });
+        if (run.failures.length > run.allowed) run.stop.abort();
+        return;
       }
-      const verdict = shouldRetry(retry, attempt, res.error);
-      if (verdict.retry && !signal.aborted) {
-        await sleep(backoffDelayMs(retry!, attempt, run.rng.next()), signal);
-        if (signal.aborted) return;
-        continue;
-      }
-      run.failures.push({ index, error: res.error });
-      this.emit(a, 'step.item.failed', { index, error: res.error });
-      if (run.failures.length > run.allowed) run.stop.abort();
-      return;
+      if (signal.aborted) return;
     }
+  }
+
+  private invokeMapItem(run: MapRun, index: number, attempt: number): Promise<StepResult> {
+    const { a, cap, signal } = run;
+    const step = a.step;
+    return this.invoke(
+      { ...a, signal, attempt },
+      {
+        cap,
+        withTemplate: step.with ?? {},
+        keyTemplate: step.idempotencyKey,
+        egress: step.egress ?? [],
+        timeoutMs: step.timeoutMs,
+        outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
+        extraScope: { item: run.items[index], index },
+        owner: `${a.runId}/${step.id}#${index}`,
+      },
+    );
+  }
+
+  /** When the retry policy allows another attempt, wait out the back-off and return true. */
+  private async waitToRetry(run: MapRun, error: ErrorInfo, attempt: number): Promise<boolean> {
+    const retry = run.a.step.retry;
+    if (!shouldRetry(retry, attempt, error).retry || run.signal.aborted) return false;
+    await sleep(backoffDelayMs(retry!, attempt, run.rng.next()), run.signal);
+    return true;
   }
 
   /** The step result once every item has been tried: cancelled, too many failures, or the collected results. */
