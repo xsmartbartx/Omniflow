@@ -19,7 +19,7 @@ const headers = {
 };
 
 createServer(async (req, res) => {
-  const path = new URL(req.url ?? '/', 'http://x').pathname;
+  const path = new URL(req.url ?? '/', 'file:///').pathname;
   const rel = normalize(path === '/' ? '/index.html' : path).replace(/^(\.\.[/\\])+/, '');
   try {
     const body = await readFile(join(root, rel));
@@ -29,4 +29,4 @@ createServer(async (req, res) => {
     res.writeHead(404, { ...headers, 'content-type': 'text/plain' });
     res.end('Not found');
   }
-}).listen(port, '127.0.0.1', () => console.log(`site on http://127.0.0.1:${port}`));
+}).listen(port, '127.0.0.1', () => console.log(`site on 127.0.0.1:${port}`));
