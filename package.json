@@ -23,6 +23,7 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch server/main.ts",
     "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json",
     "start": "node --disable-warning=ExperimentalWarning dist/server/main.js",
+    "site": "node --disable-warning=ExperimentalWarning scripts/serve-site.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
