@@ -22,6 +22,12 @@ export default defineConfig({
   },
   webServer: [
     {
+      command: 'node --disable-warning=ExperimentalWarning scripts/serve-site.ts',
+      url: 'http://127.0.0.1:18093/',
+      reuseExistingServer: false,
+      timeout: 15_000,
+    },
+    {
       command: `rm -rf .e2e-data/standalone && ${common} CONSTANS_DATA_DIR=.e2e-data/standalone CONSTANS_PORT=18091 CONSTANS_PUBLIC_URL=http://127.0.0.1:18091 node --disable-warning=ExperimentalWarning server/main.ts`,
       url: 'http://127.0.0.1:18091/healthz',
       reuseExistingServer: false,
