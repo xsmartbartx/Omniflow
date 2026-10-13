@@ -18,8 +18,10 @@ Plan allowances are a proposal; prices read "to be announced". The "not built ye
 ## Before this goes live (owner decisions)
 
 1. **Domain** for the product site (for example `constans.<yours>`); set `SITE_ADDRESS` and add `sitemap.xml` / canonical URLs.
-2. **Call to action:** every "Request early access" points at `https://onenexora.com` as a placeholder. Replace it with the
-   real early-access or sign-up URL.
+2. **Call to action:** every "Request early access" and "Contact NEXORA" button opens `https://onenexora.com/company#contact`,
+   the contact section NEXORA's own "Get started" button uses (it says to email for partnership or early access).
+   Replace it with a dedicated sign-up or form URL once there is one; it is the `EARLY` constant in the generator, and
+   the same link appears in the four `.html` pages.
 3. **Name:** the site uses *Constans* (the chosen name); run the trademark search first (see `replica/brand.md`).
 4. **Legal pages** (terms, privacy) are NEXORA drafts awaiting a lawyer and are not generated here.
 
