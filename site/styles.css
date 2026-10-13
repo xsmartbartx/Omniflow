@@ -70,9 +70,11 @@ html {
   html {
     scroll-behavior: auto;
   }
-  * {
-    animation: none !important;
-    transition: none !important;
+  .btn {
+    transition: none;
+  }
+  .btn:hover {
+    transform: none;
   }
 }
 body {
@@ -246,7 +248,9 @@ pre {
   font-size: 1rem;
   text-decoration: none;
   border: 1px solid transparent;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
 }
 .btn:hover {
   transform: translateY(-1px);
@@ -285,7 +289,8 @@ pre {
   position: absolute;
   inset: -20% -10% auto;
   height: 90%;
-  background: radial-gradient(ellipse 60% 55% at 50% 0%, var(--glow), transparent 70%),
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 0%, var(--glow), transparent 70%),
     radial-gradient(ellipse 40% 40% at 85% 20%, var(--glow-2), transparent 70%);
   z-index: -1;
 }
@@ -350,7 +355,9 @@ pre {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 1.25rem;
-  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.02) inset;
+  box-shadow:
+    0 30px 80px -20px rgb(0 0 0 / 0.55),
+    0 0 0 1px rgb(255 255 255 / 0.02) inset;
   overflow: hidden;
 }
 .light .window,
