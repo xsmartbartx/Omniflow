@@ -436,20 +436,7 @@ export class StepRuntime implements StepExecutor {
       const valid = prepared;
 
       const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
-      const ctx: CapabilityContext = {
-        tenant: a.tenant,
-        runId: a.runId,
-        stepId: a.step.id,
-        attempt: a.attempt,
-        dryRun: a.dryRun,
-        ...(key !== undefined ? { idempotencyKey: key } : {}),
-        egress: p.egress,
-        signal,
-        lease,
-        seed: a.seed,
-        now: a.now,
-        log: (msg, fields) => this.log.info(msg, { runId: a.runId, stepId: a.step.id, ...fields }),
-      };
+      const ctx = this.capabilityContext(a, p, key, signal, lease);
 
       // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
       if (a.dryRun && decl.dryRun === 'simulate') return await this.simulate(a, p, ctx, valid.value, elapsed);
@@ -462,15 +449,7 @@ export class StepRuntime implements StepExecutor {
       }
 
       // ---- Executing
-      const run = p.cap.adapter.execute(ctx, valid.value);
-      run.catch(() => {}); // never leave an unhandled rejection if the timeout wins the race
-      const output = await Promise.race([
-        run,
-        new Promise<never>((_, reject) => {
-          if (signal.aborted) reject(signal.reason);
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-        }),
-      ]);
+      const output = await raceWithAbort(p.cap.adapter.execute(ctx, valid.value), signal);
 
       // ---- The effect happened: record it before validating the response shape.
       if (claimed && key !== undefined) {
@@ -491,13 +470,40 @@ export class StepRuntime implements StepExecutor {
     } catch (e) {
       if (claimed && key !== undefined) this.d.idempotency.release(a.tenant, decl.name, key, p.owner);
       const err = this.classify(e, decl, secretValues, a.signal, p.timeoutMs);
-      if (a.signal.aborted) this.d.breakers.release(decl.name);
-      else if (err.class === 'transient' || err.class === 'systemic') this.d.breakers.failure(decl.name);
-      else this.d.breakers.release(decl.name);
+      this.recordBreakerOutcome(decl.name, err, a.signal.aborted);
       return this.failed('execute', elapsed(), err);
     } finally {
       if (lease) this.revokeLease(a, lease);
     }
+  }
+
+  private capabilityContext(
+    a: StepAttempt,
+    p: InvokeParams,
+    key: string | undefined,
+    signal: AbortSignal,
+    lease: ActiveLease,
+  ): CapabilityContext {
+    return {
+      tenant: a.tenant,
+      runId: a.runId,
+      stepId: a.step.id,
+      attempt: a.attempt,
+      dryRun: a.dryRun,
+      ...(key !== undefined ? { idempotencyKey: key } : {}),
+      egress: p.egress,
+      signal,
+      lease,
+      seed: a.seed,
+      now: a.now,
+      log: (msg, fields) => this.log.info(msg, { runId: a.runId, stepId: a.step.id, ...fields }),
+    };
+  }
+
+  /** Only transient and systemic failures count against the circuit breaker; a cancelled step or a caller's mistake does not. */
+  private recordBreakerOutcome(capability: string, err: ErrorInfo, cancelled: boolean): void {
+    if (!cancelled && (err.class === 'transient' || err.class === 'systemic')) this.d.breakers.failure(capability);
+    else this.d.breakers.release(capability);
   }
 
   /** A dry run of a `simulate` capability: its own simulation or an example of its output; never the real effect. */
@@ -718,4 +724,16 @@ function redactSecrets(value: unknown, secretValues: string[]): unknown {
       json,
     ),
   );
+}
+
+/** Wait for the capability, but give up when the signal fires (timeout or cancellation), whichever comes first. */
+function raceWithAbort<T>(run: Promise<T>, signal: AbortSignal): Promise<T> {
+  run.catch(() => {}); // never leave an unhandled rejection if the timeout wins the race
+  return Promise.race([
+    run,
+    new Promise<never>((_, reject) => {
+      if (signal.aborted) reject(signal.reason);
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }),
+  ]);
 }
