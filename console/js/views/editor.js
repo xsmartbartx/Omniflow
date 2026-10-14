@@ -425,9 +425,14 @@ export default async function editor(ctx) {
 }
 
 /** Bump the patch version so a copy of a published manifest can be published. */
+function blockedMessage(r) {
+  if (!r.errors.length) return 'Blocked by the risk review';
+  return `${r.errors.length} ${plural(r.errors.length, 'problem')} to fix`;
+}
+
 export function bump(text) {
   return text.replace(
-    /^(\s*version:\s*)["']?(\d+)\.(\d+)\.(\d+)["']?/m,
+    /^([ \t]*version:[ \t]*)["']?(\d+)\.(\d+)\.(\d+)["']?/m,
     (_m, pre, a, b, c) => `${pre}${a}.${b}.${Number(c) + 1}`,
   );
 }
@@ -466,16 +471,7 @@ function renderValidation(r, goto) {
           h('strong', {}, `${r.workflow.name} ${r.workflow.version} is valid. `),
           `${r.steps} ${plural(r.steps, 'step')}.`,
         )
-      : notice(
-          'bad',
-          h(
-            'strong',
-            {},
-            r.errors.length
-              ? `${r.errors.length} ${plural(r.errors.length, 'problem')} to fix`
-              : 'Blocked by the risk review',
-          ),
-        ),
+      : notice('bad', h('strong', {}, blockedMessage(r))),
   );
   for (const e of r.errors) parts.push(issue(e, 'error'));
   for (const w of r.warnings) parts.push(issue(w, 'warning'));

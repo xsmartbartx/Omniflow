@@ -74,8 +74,11 @@ const networkNote = (egress: { mode: string; hosts?: string[] }) => {
  */
 
 const esc = (s: string) => s.replaceAll('"', '#quot;').replaceAll(/[<>]/g, (c) => (c === '<' ? '#lt;' : '#gt;'));
-const cell = (s: unknown) =>
-  (typeof s === 'object' ? '' : String(s ?? '')).replaceAll('|', String.raw`\|`).replaceAll('\n', ' ');
+const cellText = (s: unknown): string => {
+  if (typeof s === 'string') return s;
+  return typeof s === 'number' || typeof s === 'boolean' ? String(s) : '';
+};
+const cell = (s: unknown) => cellText(s).replaceAll('|', String.raw`\|`).replaceAll('\n', ' ');
 
 /** Mermaid edges into one step: from `start` or its dependencies (dotted when conditional), plus its error route. */
 function edgeLines(s: PlanStep, node: ReadonlyMap<string, string>): string[] {

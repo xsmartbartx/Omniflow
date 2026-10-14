@@ -54,8 +54,8 @@ export function icon(name, { size = 18 } = {}) {
 }
 
 // -------------------------------------------------------------- primitives
-export const badge = (text, toneName = 'neutral', title) =>
-  h('span', { class: `badge badge-${toneName}`, title }, text);
+export const badge = (text, toneName, title) =>
+  h('span', { class: `badge badge-${toneName ?? 'neutral'}`, title }, text);
 export const statusBadge = (status, label) => badge(label ?? status, tone(status));
 export const mono = (text) => h('code', { class: 'mono' }, text);
 export const muted = (text) => h('span', { class: 'muted' }, text);

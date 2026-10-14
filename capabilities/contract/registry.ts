@@ -12,6 +12,7 @@ import { checkSchemaDefinition, isValidEgressHost, parseCapabilityRef } from '..
 import type { CapabilityAdapter, CapabilityRegistration, RegisteredCapability } from './types.ts';
 
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+const BUILTIN: CapabilityRegistration = { owner: 'constans', source: 'builtin' };
 
 type Err = (path: string, code: string, message: string) => void;
 
@@ -95,10 +96,7 @@ function checkFailureModes(d: CapabilityDeclaration, err: Err): void {
 export class CapabilityRegistry {
   private readonly byName = new Map<string, Map<string, RegisteredCapability>>();
 
-  register(
-    adapter: CapabilityAdapter,
-    registration: CapabilityRegistration = { owner: 'constans', source: 'builtin' },
-  ): RegisteredCapability {
+  register(adapter: CapabilityAdapter, registration: CapabilityRegistration = BUILTIN): RegisteredCapability {
     const declaration = adapter.declaration;
     const issues = validateDeclaration(declaration);
     if (!registration.owner?.trim()) {
