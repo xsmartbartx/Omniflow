@@ -452,31 +452,12 @@ export class StepRuntime implements StepExecutor {
       };
 
       // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
-      if (a.dryRun && decl.dryRun === 'simulate') {
-        const out = p.cap.adapter.simulate
-          ? await p.cap.adapter.simulate(ctx, valid.value)
-          : exampleFromSchema(decl.outputSchema);
-        this.emit(a, 'step.dry-run', { capability: decl.name, simulated: true });
-        this.d.breakers.release(decl.name);
-        return { kind: 'succeeded', output: out, cost: 0, durationMs: elapsed(), simulated: true };
-      }
+      if (a.dryRun && decl.dryRun === 'simulate') return await this.simulate(a, p, ctx, valid.value, elapsed);
 
       // ---- Idempotency: effective exactly-once for effectful capabilities
       if (key !== undefined && decl.effect !== 'pure') {
-        const claim = this.d.idempotency.claim(a.tenant, decl.name, key, p.owner, p.timeoutMs + grace);
-        if (claim.state === 'replay') {
-          this.emit(a, 'step.idempotent-replay', { idempotencyKey: key, capability: decl.name });
-          this.d.breakers.release(decl.name);
-          return { kind: 'succeeded', output: claim.output, cost: 0, durationMs: elapsed(), replayed: true };
-        }
-        if (claim.state === 'busy') {
-          this.d.breakers.release(decl.name);
-          return {
-            kind: 'deferred',
-            reason: `idempotency key '${key}' is being processed by ${claim.owner}`,
-            retryAfterMs: 1000,
-          };
-        }
+        const claim = this.claimKey(a, p, key, grace, elapsed);
+        if ('result' in claim) return claim.result;
         claimed = true;
       }
 
@@ -517,6 +498,51 @@ export class StepRuntime implements StepExecutor {
     } finally {
       if (lease) this.revokeLease(a, lease);
     }
+  }
+
+  /** A dry run of a `simulate` capability: its own simulation or an example of its output; never the real effect. */
+  private async simulate(
+    a: StepAttempt,
+    p: InvokeParams,
+    ctx: CapabilityContext,
+    input: unknown,
+    elapsed: () => number,
+  ): Promise<StepResult> {
+    const decl = p.cap.declaration;
+    const out = p.cap.adapter.simulate
+      ? await p.cap.adapter.simulate(ctx, input)
+      : exampleFromSchema(decl.outputSchema);
+    this.emit(a, 'step.dry-run', { capability: decl.name, simulated: true });
+    this.d.breakers.release(decl.name);
+    return { kind: 'succeeded', output: out, cost: 0, durationMs: elapsed(), simulated: true };
+  }
+
+  /** Claim the idempotency key: a replay returns the recorded result, a busy key defers, otherwise the caller owns it. */
+  private claimKey(
+    a: StepAttempt,
+    p: InvokeParams,
+    key: string,
+    grace: number,
+    elapsed: () => number,
+  ): { result: StepResult } | { owned: true } {
+    const decl = p.cap.declaration;
+    const claim = this.d.idempotency.claim(a.tenant, decl.name, key, p.owner, p.timeoutMs + grace);
+    if (claim.state === 'replay') {
+      this.emit(a, 'step.idempotent-replay', { idempotencyKey: key, capability: decl.name });
+      this.d.breakers.release(decl.name);
+      return { result: { kind: 'succeeded', output: claim.output, cost: 0, durationMs: elapsed(), replayed: true } };
+    }
+    if (claim.state === 'busy') {
+      this.d.breakers.release(decl.name);
+      return {
+        result: {
+          kind: 'deferred',
+          reason: `idempotency key '${key}' is being processed by ${claim.owner}`,
+          retryAfterMs: 1000,
+        },
+      };
+    }
+    return { owned: true };
   }
 
   /** Kill switch and circuit breaker: a failure result when the capability may not run now, otherwise undefined. */

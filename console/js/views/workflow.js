@@ -79,6 +79,7 @@ export default async function workflow(ctx) {
   };
   const stateBadge = statusBadge(stateName(s));
   const toggle = s.enabled ? 'disable' : 'enable';
+  const toggleLabel = s.enabled ? 'Disable' : 'Enable';
 
   const actions = [
     can('workflow.run') && stable && isRunnable(s)
@@ -87,7 +88,7 @@ export default async function workflow(ctx) {
     can('workflow.draft')
       ? button('New version', { icon: 'edit', onClick: () => (location.hash = `#/editor?from=${api.enc(name)}`) })
       : null,
-    manage && !s.killed ? control(s.enabled ? 'Disable' : 'Enable', {}, () => api.post(`${base}/${toggle}`)) : null,
+    manage && !s.killed ? control(toggleLabel, {}, () => api.post(`${base}/${toggle}`)) : null,
     manage && !s.killed ? button('Kill switch', { kind: 'danger', small: true, onClick: killWorkflow }) : null,
     manage && s.killed ? control('Lift kill switch', { kind: 'primary' }, () => api.post(`${base}/revive`)) : null,
   ];
