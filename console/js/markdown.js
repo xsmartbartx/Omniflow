@@ -6,6 +6,21 @@ import { h } from './dom.js';
 
 const SAFE_URL = /^(https?:|mailto:|#|\/(?!\/))/i;
 
+/** The inline element starting at text[i], if any: its node and how many characters it used. */
+function inlineElement(text, i) {
+  const rest = text.slice(i);
+  let m = /^`([^`]+)`/.exec(rest);
+  if (m) return { node: { t: 'code', v: m[1] }, length: m[0].length };
+  m = /^\*\*([^*]+)\*\*/.exec(rest);
+  if (m) return { node: { t: 'strong', c: parseInline(m[1]) }, length: m[0].length };
+  m = /^_([^_\s][^_]*)_/.exec(rest);
+  if (m && (i === 0 || /\W/.test(text[i - 1]))) return { node: { t: 'em', c: parseInline(m[1]) }, length: m[0].length };
+  m = /^\[([^\]]+)\]\(([^)\s]+)\)/.exec(rest);
+  if (!m) return undefined;
+  const node = SAFE_URL.test(m[2]) ? { t: 'link', href: m[2], c: parseInline(m[1]) } : { t: 'text', v: m[1] };
+  return { node, length: m[0].length };
+}
+
 export function parseInline(text) {
   const out = [];
   let i = 0;
@@ -15,24 +30,11 @@ export function parseInline(text) {
     buf = '';
   };
   while (i < text.length) {
-    const rest = text.slice(i);
-    let m;
-    if ((m = /^`([^`]+)`/.exec(rest))) {
+    const el = inlineElement(text, i);
+    if (el) {
       flush();
-      out.push({ t: 'code', v: m[1] });
-      i += m[0].length;
-    } else if ((m = /^\*\*([^*]+)\*\*/.exec(rest))) {
-      flush();
-      out.push({ t: 'strong', c: parseInline(m[1]) });
-      i += m[0].length;
-    } else if ((m = /^_([^_\s][^_]*)_/.exec(rest)) && (i === 0 || /\W/.test(text[i - 1]))) {
-      flush();
-      out.push({ t: 'em', c: parseInline(m[1]) });
-      i += m[0].length;
-    } else if ((m = /^\[([^\]]+)\]\(([^)\s]+)\)/.exec(rest))) {
-      flush();
-      out.push(SAFE_URL.test(m[2]) ? { t: 'link', href: m[2], c: parseInline(m[1]) } : { t: 'text', v: m[1] });
-      i += m[0].length;
+      out.push(el.node);
+      i += el.length;
     } else if (text[i] === '\\' && i + 1 < text.length) {
       buf += text[i + 1];
       i += 2;

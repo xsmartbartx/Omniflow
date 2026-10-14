@@ -399,7 +399,7 @@ function describeEvent(e: { data?: Record<string, unknown> }): string {
   const d = e.data ?? {};
   const parts: string[] = [];
   for (const k of ['attempt', 'reason', 'errorCode', 'message', 'decision', 'capability'])
-    if (d[k] !== undefined) parts.push(`${k}=${typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k]}`);
+    if (d[k] !== undefined) parts.push(`${k}=${typeof d[k] === 'object' ? JSON.stringify(d[k]) : String(d[k])}`);
   return parts.join(' ').slice(0, 100);
 }
 

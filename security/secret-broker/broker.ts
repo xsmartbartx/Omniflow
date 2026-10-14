@@ -281,7 +281,7 @@ export class SecretBroker {
   /** Issue a lease for exactly `req.names`. Revoke it as soon as the step ends. */
   lease(req: LeaseRequest): ActiveLease {
     const secrets = new Map<string, string>();
-    for (const name of [...new Set(req.names)]) {
+    for (const name of new Set(req.names)) {
       const rec = this.store.get(req.tenant, name);
       if (!rec) {
         throw new ConstansError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, {

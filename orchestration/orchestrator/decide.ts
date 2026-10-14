@@ -8,8 +8,8 @@ import type { StepRecord, StepStatus } from '../../state/run-store.ts';
  * and can be tested exhaustively.
  */
 
-const TERMINAL: readonly StepStatus[] = ['succeeded', 'failed', 'skipped', 'cancelled'];
-export const isTerminalStep = (s: StepStatus): boolean => TERMINAL.includes(s);
+const TERMINAL: ReadonlySet<StepStatus> = new Set(['succeeded', 'failed', 'skipped', 'cancelled']);
+export const isTerminalStep = (s: StepStatus): boolean => TERMINAL.has(s);
 
 export interface Classification {
   /** Pending steps whose dependencies are satisfied. `when` is still to be evaluated by the caller. */

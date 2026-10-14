@@ -82,7 +82,7 @@ interface Checked {
     findings: Array<{ ruleId: string; severity: string; blocking: boolean; message: string; stepId?: string }>;
   };
   source: string;
-  plan?: ReturnType<typeof compile>['plan'];
+  plan?: NonNullable<ReturnType<typeof compile>['plan']>;
 }
 
 function check(ctx: CliContext, file: string, source: string): Checked {

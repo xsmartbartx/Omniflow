@@ -203,7 +203,7 @@ export class AlertManager {
   /** Close every open alert of this tenant whose problem is no longer seen; returns how many. */
   private async resolveCleared(tenant: string, seen: ReadonlySet<string>, auditDue: boolean): Promise<number> {
     let resolved = 0;
-    for (const [id, alert] of [...this.open]) {
+    for (const [id, alert] of this.open) {
       if (alert.tenant !== tenant || seen.has(alert.key)) continue;
       // The audit check runs rarely; do not "resolve" an integrity alert just because we did not look this tick.
       if (alert.key === 'audit-integrity' && !auditDue) continue;

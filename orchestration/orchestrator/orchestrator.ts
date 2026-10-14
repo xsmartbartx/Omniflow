@@ -295,7 +295,7 @@ export class Orchestrator {
     if (!a || a.status === 'pending') return;
     const run = this.st.runs.getRun(a.runId);
     const step = run ? this.st.runs.getStep(a.runId, a.stepId) : undefined;
-    if (!run || !step || step.status !== 'waiting-approval' || isTerminalRun(run.status)) return;
+    if (!run || step?.status !== 'waiting-approval' || isTerminalRun(run.status)) return;
     const ps = this.plan(run).steps.find((x) => x.id === a.stepId);
     if (!ps) return;
     if (a.status === 'approved') {
@@ -768,7 +768,7 @@ export class Orchestrator {
     try {
       const run = this.st.runs.getRun(runId);
       const step = this.st.runs.getStep(runId, stepId);
-      if (run && step && step.status === 'running' && step.attempt === attempt && !isTerminalRun(run.status)) {
+      if (run && step?.status === 'running' && step.attempt === attempt && !isTerminalRun(run.status)) {
         this.applyStepResult(run, stepId, attempt, res);
       }
     } catch (e) {
@@ -1005,7 +1005,7 @@ export class Orchestrator {
     if (!child.parentRunId || !child.parentStepId) return;
     const parent = this.st.runs.getRun(child.parentRunId);
     const step = parent ? this.st.runs.getStep(child.parentRunId, child.parentStepId) : undefined;
-    if (!parent || !step || step.status !== 'waiting-child' || isTerminalRun(parent.status)) return;
+    if (!parent || step?.status !== 'waiting-child' || isTerminalRun(parent.status)) return;
     const ps = this.plan(parent).steps.find((x) => x.id === child.parentStepId)!;
     if (child.status === 'succeeded') {
       this.st.runs.patchStep(parent.id, ps.id, { status: 'running' });

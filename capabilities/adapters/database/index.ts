@@ -22,11 +22,7 @@ export interface CommandResult {
 /** Driver abstraction so PostgreSQL and SQLite share one capability surface (and tests can inject fakes). */
 export interface DbDriver {
   query(sql: string, params: SqlParam[], o: { maxRows: number; timeoutMs: number }): Promise<QueryResult>;
-  command(
-    sql: string,
-    params: SqlParam[],
-    o: { idempotencyKey?: string | undefined; timeoutMs: number },
-  ): Promise<CommandResult>;
+  command(sql: string, params: SqlParam[], o: { idempotencyKey?: string; timeoutMs: number }): Promise<CommandResult>;
   close(): Promise<void>;
 }
 export type SqlParam = string | number | boolean | null;

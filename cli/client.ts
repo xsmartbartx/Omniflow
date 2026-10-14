@@ -22,7 +22,7 @@ export class ConnectionError extends Error {
 
 export interface ClientOptions {
   baseUrl: string;
-  apiKey?: string | undefined;
+  apiKey?: string;
   timeoutMs?: number;
 }
 
