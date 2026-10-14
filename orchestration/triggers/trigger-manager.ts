@@ -41,7 +41,7 @@ export interface WebhookDelivery {
   workflow: string;
   trigger: string;
   rawBody: string;
-  headers: { timestamp: string | undefined; signature: string | undefined; delivery?: string | undefined };
+  headers: { timestamp: string | undefined; signature: string | undefined; delivery?: string };
 }
 
 export interface WebhookSecretInfo {
@@ -146,7 +146,7 @@ export class TriggerManager {
         let nextFireAt: string | undefined;
         if (t.type === 'schedule') {
           const prev = existing.get(name);
-          const same = prev && prev.config.cron === t.cron && prev.config.timezone === t.timezone;
+          const same = prev?.config.cron === t.cron && prev.config.timezone === t.timezone;
           nextFireAt =
             same && prev.nextFireAt && prev.nextFireAt > now.toISOString()
               ? prev.nextFireAt

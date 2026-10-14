@@ -138,13 +138,12 @@ export class Planner {
   }
 
   private brief(req: PlanRequest): string {
-    const parts: string[] = [];
-    parts.push(
+    const parts: string[] = [
       req.baseManifest
         ? 'Revise the existing workflow below according to the request. Keep everything that is not affected, and bump metadata.version (semver, patch or minor as appropriate).'
         : 'Create a new workflow for the request below.',
-    );
-    parts.push(`Request:\n${req.intent.slice(0, MAX_INTENT)}`);
+      `Request:\n${req.intent.slice(0, MAX_INTENT)}`,
+    ];
     if (req.baseManifest) parts.push(`Existing manifest:\n\`\`\`yaml\n${req.baseManifest}\n\`\`\``);
     let budget = MAX_UNTRUSTED;
     for (const u of req.untrusted ?? []) {

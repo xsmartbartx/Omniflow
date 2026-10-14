@@ -3,7 +3,7 @@ import type { NexoraPlan, NexoraRole } from '../state/index.ts';
 import { PLACEHOLDER_RUN_LIMITS } from './plans.ts';
 import type { CoreEvent, CorePorts, EntitlementAction, EntitlementDecision, VerifiedIdentity } from './types.ts';
 
-const ROLES: readonly NexoraRole[] = ['owner', 'admin', 'member', 'billing', 'viewer'];
+const ROLES: ReadonlySet<NexoraRole> = new Set(['owner', 'admin', 'member', 'billing', 'viewer']);
 
 /** Fake assertions are `fake.<base64url(json)>`: UNSIGNED, for development and tests only. */
 export function fakeAssertion(i: {
@@ -52,7 +52,7 @@ export class FakeCore implements CorePorts {
           typeof v.userId !== 'string' ||
           typeof v.email !== 'string' ||
           !v.role ||
-          !ROLES.includes(v.role)
+          !ROLES.has(v.role)
         )
           throw new Error('shape');
         return { orgId: v.orgId, userId: v.userId, email: v.email, name: v.name ?? v.email, role: v.role };

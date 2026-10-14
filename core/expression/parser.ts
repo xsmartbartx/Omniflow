@@ -12,7 +12,7 @@ type Token =
   | { type: 'punct'; value: string; pos: number; end: number }
   | { type: 'eof'; value: ''; pos: number; end: number };
 
-const PUNCT2 = ['&&', '||', '??', '==', '!=', '<=', '>='];
+const PUNCT2 = new Set(['&&', '||', '??', '==', '!=', '<=', '>=']);
 const PUNCT1 = '()[],.?:!-+*/%<>';
 
 const STRING_ESCAPES: Record<string, string> = {
@@ -94,7 +94,7 @@ function lexString(src: string, start: number): Token {
 function lexPunct(src: string, i: number): Token {
   const ch = src[i]!;
   const two = src.slice(i, i + 2);
-  if (PUNCT2.includes(two)) return { type: 'punct', value: two, pos: i, end: i + 2 };
+  if (PUNCT2.has(two)) return { type: 'punct', value: two, pos: i, end: i + 2 };
   if (PUNCT1.includes(ch)) return { type: 'punct', value: ch, pos: i, end: i + 1 };
   if (ch === '=' || ch === '&' || ch === '|') {
     throw new ExpressionSyntaxError(`Unexpected '${ch}' — did you mean '${ch}${ch}'? (assignment is not supported)`, i);

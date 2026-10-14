@@ -75,9 +75,7 @@ const networkNote = (egress: { mode: string; hosts?: string[] }) => {
 
 const esc = (s: string) => s.replaceAll('"', '#quot;').replaceAll(/[<>]/g, (c) => (c === '<' ? '#lt;' : '#gt;'));
 const cell = (s: unknown) =>
-  String(s ?? '')
-    .replaceAll('|', String.raw`\|`)
-    .replaceAll('\n', ' ');
+  (typeof s === 'object' ? '' : String(s ?? '')).replaceAll('|', String.raw`\|`).replaceAll('\n', ' ');
 
 /** Mermaid edges into one step: from `start` or its dependencies (dotted when conditional), plus its error route. */
 function edgeLines(s: PlanStep, node: ReadonlyMap<string, string>): string[] {
@@ -115,10 +113,12 @@ export function workflowMermaid(plan: Plan): string {
     lines.push(nodeLine(s.type, id, l));
   }
   for (const s of ordered) lines.push(...edgeLines(s, node));
-  lines.push('  classDef effectful fill:#fdecea,stroke:#c0392b,color:#7b241c');
-  lines.push('  classDef idempotent fill:#fef9e7,stroke:#b7950b,color:#7d6608');
-  lines.push('  classDef pure fill:#eafaf1,stroke:#1e8449,color:#145a32');
-  lines.push('  classDef gate fill:#ebf5fb,stroke:#2874a6,color:#1b4f72');
+  lines.push(
+    '  classDef effectful fill:#fdecea,stroke:#c0392b,color:#7b241c',
+    '  classDef idempotent fill:#fef9e7,stroke:#b7950b,color:#7d6608',
+    '  classDef pure fill:#eafaf1,stroke:#1e8449,color:#145a32',
+    '  classDef gate fill:#ebf5fb,stroke:#2874a6,color:#1b4f72',
+  );
   const group = (pred: (s: PlanStep) => boolean, cls: string) => {
     const ids = ordered.filter(pred).map((s) => node.get(s.id)!);
     if (ids.length) lines.push(`  class ${ids.join(',')} ${cls}`);
@@ -214,8 +214,10 @@ export function workflowMarkdown(plan: Plan, ctx: WorkflowDocContext = {}): stri
   }
   out.push(...inputsSection(plan), ...stepsSection(ordered), ...analysisSection(plan));
   if (ctx.risk) {
-    out.push('', `## Risk review — ${ctx.risk.level} (${ctx.risk.score}/100)`, '');
     out.push(
+      '',
+      `## Risk review — ${ctx.risk.level} (${ctx.risk.score}/100)`,
+      '',
       ...(ctx.risk.findings.length
         ? ctx.risk.findings.map((f) => `- **${f.severity}** ${f.message}${findingStep(f.stepId)}`)
         : ['_No findings._']),

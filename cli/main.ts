@@ -171,17 +171,14 @@ async function readAllStdin(): Promise<string> {
 }
 
 if (import.meta.main) {
-  runCli(
-    process.argv.slice(2),
-    { out: (t) => process.stdout.write(t), err: (t) => process.stderr.write(t), readStdin: readAllStdin },
-    { ...process.env, ...(process.stdout.isTTY ? { CONSTANS_COLOR_FORCE: '1' } : {}) },
-  ).then(
-    (code) => {
-      process.exitCode = code;
-    },
-    (e) => {
-      process.stderr.write(`Fatal: ${(e as Error).message}\n`);
-      process.exitCode = 1;
-    },
-  );
+  try {
+    process.exitCode = await runCli(
+      process.argv.slice(2),
+      { out: (t) => process.stdout.write(t), err: (t) => process.stderr.write(t), readStdin: readAllStdin },
+      { ...process.env, ...(process.stdout.isTTY ? { CONSTANS_COLOR_FORCE: '1' } : {}) },
+    );
+  } catch (e) {
+    process.stderr.write(`Fatal: ${(e as Error).message}\n`);
+    process.exitCode = 1;
+  }
 }

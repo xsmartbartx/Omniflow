@@ -41,7 +41,7 @@ export interface RuntimeDeps {
 interface InvokeParams {
   cap: RegisteredCapability;
   withTemplate: unknown;
-  keyTemplate?: string | undefined;
+  keyTemplate?: string;
   egress: string[];
   timeoutMs: number;
   outputSchema: object;

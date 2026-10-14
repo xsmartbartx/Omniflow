@@ -70,7 +70,7 @@ export interface HourBucket {
   other: number;
 }
 
-const FAILED = ['failed', 'rolled-back', 'compensation-failed'];
+const FAILED = new Set(['failed', 'rolled-back', 'compensation-failed']);
 const NOT_DRY = 'r.dry_run = 0';
 
 export class AnalyticsStore {
@@ -255,7 +255,7 @@ export class AnalyticsStore {
       const b = buckets.get(r.hour);
       if (!b) continue;
       if (r.status === 'succeeded') b.succeeded += r.n;
-      else if (FAILED.includes(r.status)) b.failed += r.n;
+      else if (FAILED.has(r.status)) b.failed += r.n;
       else b.other += r.n;
     }
     return [...buckets.values()];
