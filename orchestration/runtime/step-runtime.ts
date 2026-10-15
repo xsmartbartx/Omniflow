@@ -99,6 +99,15 @@ interface MapRun {
   rng: ReturnType<typeof createRng>;
 }
 
+/** What one capability call holds between its phases, so a failure in any phase can release it. */
+interface InvokeState {
+  started: number;
+  lease?: ActiveLease;
+  claimed: boolean;
+  key?: string;
+  secretValues: string[];
+}
+
 export class StepRuntime implements StepExecutor {
   private readonly d: RuntimeDeps;
   private readonly clock: Clock;
@@ -409,73 +418,81 @@ export class StepRuntime implements StepExecutor {
   }
 
   private async invoke(a: StepAttempt, p: InvokeParams): Promise<StepResult> {
-    const started = this.clock.now().getTime();
-    const decl = p.cap.declaration;
-    const elapsed = () => this.clock.now().getTime() - started;
-    const grace = this.d.graceMs ?? 30_000;
-    let lease: ActiveLease | undefined;
-    let claimed = false;
-    let key: string | undefined;
-    let secretValues: string[] = [];
-
+    const st: InvokeState = { started: this.clock.now().getTime(), claimed: false, secretValues: [] };
     try {
-      const early = this.authorise(a, decl, elapsed);
-      if (early) return early;
-
-      // ---- Prepared: lease secrets, resolve and validate the input
-      const names = secretNamesIn(p.withTemplate);
-      const leased = this.leaseSecrets(a, p, names, grace, elapsed);
-      if ('result' in leased) return leased.result;
-      lease = leased.lease;
-      secretValues = lease.values();
-      if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
-
-      const prepared = this.prepareInput(a, p, lease, secretValues, elapsed);
-      if ('result' in prepared) return prepared.result;
-      key = prepared.key;
-      const valid = prepared;
-
-      const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
-      const ctx = this.capabilityContext(a, p, key, signal, lease);
-
-      // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
-      if (a.dryRun && decl.dryRun === 'simulate') return await this.simulate(a, p, ctx, valid.value, elapsed);
-
-      // ---- Idempotency: effective exactly-once for effectful capabilities
-      if (key !== undefined && decl.effect !== 'pure') {
-        const claim = this.claimKey(a, p, key, grace, elapsed);
-        if ('result' in claim) return claim.result;
-        claimed = true;
-      }
-
-      // ---- Executing
-      const output = await raceWithAbort(p.cap.adapter.execute(ctx, valid.value), signal);
-
-      // ---- The effect happened: record it before validating the response shape.
-      if (claimed && key !== undefined) {
-        this.d.idempotency.complete(a.tenant, decl.name, key, p.owner, output);
-        claimed = false;
-      }
-
-      // ---- Validated
-      const checked = validateValue(p.outputSchema, output);
-      if (!checked.ok) return this.outputInvalid(decl, checked.issues, secretValues, elapsed());
-      this.d.breakers.success(decl.name);
-      return {
-        kind: 'succeeded',
-        output: redactSecrets(checked.value, secretValues),
-        cost: decl.costModel.unitsPerInvocation,
-        durationMs: elapsed(),
-      };
+      return await this.runInvocation(a, p, st);
     } catch (e) {
-      if (claimed && key !== undefined) this.d.idempotency.release(a.tenant, decl.name, key, p.owner);
-      const err = this.classify(e, decl, secretValues, a.signal, p.timeoutMs);
-      if (a.signal.aborted) this.d.breakers.release(decl.name);
-      else this.recordBreakerOutcome(decl.name, err);
-      return this.failed('execute', elapsed(), err);
+      return this.failInvocation(a, p, st, e);
     } finally {
-      if (lease) this.revokeLease(a, lease);
+      if (st.lease) this.revokeLease(a, st.lease);
     }
+  }
+
+  /** The happy path of one capability call; anything it throws is turned into a failure by `failInvocation`. */
+  private async runInvocation(a: StepAttempt, p: InvokeParams, st: InvokeState): Promise<StepResult> {
+    const decl = p.cap.declaration;
+    const elapsed = () => this.clock.now().getTime() - st.started;
+    const grace = this.d.graceMs ?? 30_000;
+
+    const early = this.authorise(a, decl, elapsed);
+    if (early) return early;
+
+    // ---- Prepared: lease secrets, resolve and validate the input
+    const names = secretNamesIn(p.withTemplate);
+    const leased = this.leaseSecrets(a, p, names, grace, elapsed);
+    if ('result' in leased) return leased.result;
+    const lease = leased.lease;
+    st.lease = lease;
+    st.secretValues = lease.values();
+    if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
+
+    const valid = this.prepareInput(a, p, lease, st.secretValues, elapsed);
+    if ('result' in valid) return valid.result;
+    const key = valid.key;
+    st.key = key;
+
+    const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
+    const ctx = this.capabilityContext(a, p, key, signal, lease);
+
+    // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
+    if (a.dryRun && decl.dryRun === 'simulate') return await this.simulate(a, p, ctx, valid.value, elapsed);
+
+    // ---- Idempotency: effective exactly-once for effectful capabilities
+    if (key !== undefined && decl.effect !== 'pure') {
+      const claim = this.claimKey(a, p, key, grace, elapsed);
+      if ('result' in claim) return claim.result;
+      st.claimed = true;
+    }
+
+    // ---- Executing
+    const output = await raceWithAbort(p.cap.adapter.execute(ctx, valid.value), signal);
+
+    // ---- The effect happened: record it before validating the response shape.
+    if (st.claimed && key !== undefined) {
+      this.d.idempotency.complete(a.tenant, decl.name, key, p.owner, output);
+      st.claimed = false;
+    }
+
+    // ---- Validated
+    const checked = validateValue(p.outputSchema, output);
+    if (!checked.ok) return this.outputInvalid(decl, checked.issues, st.secretValues, elapsed());
+    this.d.breakers.success(decl.name);
+    return {
+      kind: 'succeeded',
+      output: redactSecrets(checked.value, st.secretValues),
+      cost: decl.costModel.unitsPerInvocation,
+      durationMs: elapsed(),
+    };
+  }
+
+  /** Release what the call still held (an unfinished idempotency claim), count it against the breaker if due, and report it. */
+  private failInvocation(a: StepAttempt, p: InvokeParams, st: InvokeState, e: unknown): StepResult {
+    const decl = p.cap.declaration;
+    if (st.claimed && st.key !== undefined) this.d.idempotency.release(a.tenant, decl.name, st.key, p.owner);
+    const err = this.classify(e, decl, st.secretValues, a.signal, p.timeoutMs);
+    if (a.signal.aborted) this.d.breakers.release(decl.name);
+    else this.recordBreakerOutcome(decl.name, err);
+    return this.failed('execute', this.clock.now().getTime() - st.started, err);
   }
 
   private capabilityContext(
