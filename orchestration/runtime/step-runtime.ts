@@ -470,7 +470,8 @@ export class StepRuntime implements StepExecutor {
     } catch (e) {
       if (claimed && key !== undefined) this.d.idempotency.release(a.tenant, decl.name, key, p.owner);
       const err = this.classify(e, decl, secretValues, a.signal, p.timeoutMs);
-      this.recordBreakerOutcome(decl.name, err, a.signal.aborted);
+      if (a.signal.aborted) this.d.breakers.release(decl.name);
+      else this.recordBreakerOutcome(decl.name, err);
       return this.failed('execute', elapsed(), err);
     } finally {
       if (lease) this.revokeLease(a, lease);
@@ -500,9 +501,9 @@ export class StepRuntime implements StepExecutor {
     };
   }
 
-  /** Only transient and systemic failures count against the circuit breaker; a cancelled step or a caller's mistake does not. */
-  private recordBreakerOutcome(capability: string, err: ErrorInfo, cancelled: boolean): void {
-    if (!cancelled && (err.class === 'transient' || err.class === 'systemic')) this.d.breakers.failure(capability);
+  /** Only transient and systemic failures count against the circuit breaker; a caller's mistake does not. */
+  private recordBreakerOutcome(capability: string, err: ErrorInfo): void {
+    if (err.class === 'transient' || err.class === 'systemic') this.d.breakers.failure(capability);
     else this.d.breakers.release(capability);
   }
 
