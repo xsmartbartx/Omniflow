@@ -53,14 +53,21 @@ def ratio(fg, bg):
     return (hi + 0.05) / (lo + 0.05)
 
 
+def token_value(obj):
+    """The string under "value" or "$value", if the dict is a token leaf."""
+    for value_key in ("value", "$value"):
+        if isinstance(obj.get(value_key), str):
+            return obj[value_key]
+    return None
+
+
 def flatten(obj, prefix=""):
     """{"color": {"text": {"muted": "#..."}}} -> {"text-muted": "#..."}."""
     out = {}
     if isinstance(obj, dict):
-        for value_key in ("value", "$value"):
-            if isinstance(obj.get(value_key), str):
-                out[prefix] = obj[value_key]
-                return out
+        value = token_value(obj)
+        if value is not None:
+            return {prefix: value}
         for k, v in obj.items():
             if k.startswith(("$", "_")):
                 continue
