@@ -56,9 +56,15 @@ before any money goes into it. These are screening checks, not legal clearance.
   marks) and USPTO has 6 results, none in classes 9 or 42 (one live mark, a restaurant, class 43). Not searched: EUIPO's own
   search, Poland, Canada, and similar names such as Constance or Constant.
 - **Tenax: crowded.** WIPO shows 651 records, including 49 in class 9 and 8 in class 42 (most are chemicals, materials and machinery;
-  Tenax SpA is the largest owner). Who owns the class 9 and 42 records has not been read yet.
-- **Recommendation:** do not spend money on Constans until a trademark lawyer has looked at the UK registration. Screen
-  Tenax's class 9 and 42 owners before treating it as the fallback, and consider a third candidate from the pool.
+  Tenax SpA is the largest owner). USPTO (first 50 of 73 results) shows, in or near the classes that matter:
+  **TENAX SECUREOPS**, a live pending application in class 42 for computer and network security services (IP Pathways, LLC,
+  Iowa), which is close to NEXORA's security family; **TENAX**, live in classes 37 and 42 for oil and gas technical advice
+  (Tenax Energy Systems, LLC); and **TENAX**, live in class 9 among others for chromatography materials (Buchem B.V.) and
+  pending for hardware (Tenax Corporation, Maryland). A cancelled class 42 software mark (an individual) is also listed.
+- **Recommendation:** do not spend money on Constans until a trademark lawyer has looked at the UK registration. Tenax is not
+  a clean fallback either: the pending SECUREOPS class 42 application sits next to the security products NEXORA sells.
+  Screen a third candidate from the pool (the rest of the Latin-flavoured names: Fidus is weak; the metaphor names were mostly
+  cut) or send a new name; run the same WIPO and USPTO check before choosing.
 
 Decision needed: pick **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
 
