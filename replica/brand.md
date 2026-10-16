@@ -48,6 +48,18 @@ Per candidate, the full check matrix. "to run" means nobody has run it; nothing 
 the logo should carry the meaning ("steady"); a proper trademark search by a lawyer must happen before the rename and
 before any money goes into it. These are screening checks, not legal clearance.
 
+**Screening update, 2026-10-16** (WIPO Global Brand Database and USPTO, read-only; screening, not legal clearance):
+
+- **Constans: a direct conflict.** `CONSTANS` was registered in the **UK on 9 October 2026** by Constans Ltd (UK00004400791) in
+  Nice classes **9 and 42** (software and software-as-a-service), the classes this product sits in. WIPO shows 33 records
+  for the word; the rest are in unrelated fields (a Korean hotel, a Brazilian clinic, an EU machinery mark, expired French wine
+  marks) and USPTO has 6 results, none in classes 9 or 42 (one live mark, a restaurant, class 43). Not searched: EUIPO's own
+  search, Poland, Canada, and similar names such as Constance or Constant.
+- **Tenax: crowded.** WIPO shows 651 records, including 49 in class 9 and 8 in class 42 (most are chemicals, materials and machinery;
+  Tenax SpA is the largest owner). Who owns the class 9 and 42 records has not been read yet.
+- **Recommendation:** do not spend money on Constans until a trademark lawyer has looked at the UK registration. Screen
+  Tenax's class 9 and 42 owners before treating it as the fallback, and consider a third candidate from the pool.
+
 Decision needed: pick **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
 
 ## Palette

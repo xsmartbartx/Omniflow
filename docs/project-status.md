@@ -38,6 +38,7 @@ Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/R
 
 - The product-site domain, a dedicated sign-up or form URL, legal pages, and the redirect from
   `onenexora.com/products/constans` (done in the NEXORA repo).
-- The trademark search for the name "Constans".
+- **The name "Constans" has a screening conflict:** a UK registration (9 Oct 2026, classes 9 and 42, Constans Ltd). The
+  fallback "Tenax" is crowded (651 WIPO records, 49 in class 9). See `replica/brand.md`. A trademark lawyer should decide.
 - The real NEXORA Core contracts, the Pro-limit rule, prices and the Stripe objects.
 - Go-ahead before any deployment. Nothing is deployed.
