@@ -40,6 +40,7 @@ Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/R
   `onenexora.com/products/constans` (done in the NEXORA repo).
 - **The name "Constans" has a screening conflict:** a UK registration (9 Oct 2026, classes 9 and 42, Constans Ltd). The
   fallback "Tenax" is crowded (651 WIPO records) and has a pending class 42 security-services application (TENAX SECUREOPS)
-  next to NEXORA's security products. See `replica/brand.md`. A trademark lawyer should decide.
+  next to NEXORA's security products. A third round (2026-10-17) found conflicts for Anchora and Firmo; **Perdura** is the
+  clearest candidate so far. See `replica/brand.md`. A trademark lawyer should decide.
 - The real NEXORA Core contracts, the Pro-limit rule, prices and the Stripe objects.
 - Go-ahead before any deployment. Nothing is deployed.
