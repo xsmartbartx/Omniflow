@@ -42,6 +42,7 @@ Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/R
   fallback "Tenax" is crowded (651 WIPO records) and has a pending class 42 security-services application (TENAX SECUREOPS)
   next to NEXORA's security products. A third round (2026-10-17) found conflicts for Anchora and Firmo; **Perdura** is the
   clearest on trademarks, but its domains are mostly taken (several registered together in May 2026) and the GitHub
-  organisation and PyPI name are taken. See `replica/brand.md`. A trademark lawyer should decide.
+  organisation and PyPI name are taken. Perdura is also in live use: a managed SAP HANA hosting company at
+  `perdura.cloud` and `perdura.net` (class 42), a chess product and a memorials service. See `replica/brand.md`. A trademark lawyer should decide.
 - The real NEXORA Core contracts, the Pro-limit rule, prices and the Stripe objects.
 - Go-ahead before any deployment. Nothing is deployed.
