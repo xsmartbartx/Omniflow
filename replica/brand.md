@@ -81,6 +81,18 @@ marks included; USPTO for Perdura; screening, not legal clearance):
 Only the first ~25 of each result list were read (the page loads lazily), so a class 9 or 42 record deeper in a list can be
 missing. Not searched: EUIPO's own database, Poland, Canada, similar spellings, and domain or handle availability.
 
+**Perdura domains and handles, checked 2026-10-19** (RDAP and DNS lookups; GitHub, npm, PyPI, crates.io and Docker Hub public APIs):
+
+- **Domains:** `.com` is taken (registered 2001). `.dev`, `.ai` and `.net` were all registered on the same day, 2026-05-09, through
+  the same DNS provider, and `.app` (April), `.org` (June) and `.cloud` (July) were registered in 2026 as well: someone has
+  recently collected the name across many extensions, which suggests a product or a squatter. `.io` and `.co` show no RDAP record
+  but do have nameservers, so they are probably registered (parked). `.tech` has no registration or nameservers and looks free.
+- **Handles:** GitHub `perdura` is taken (an organisation created 2025-11-05, 1 repository); PyPI `perdura` is taken (a reliability
+  engineering and statistics suite, v0.8.3). Free: npm `perdura` and the `@perdura` scope, crates.io `perdura`, Docker Hub `perdura`.
+  X, Instagram and LinkedIn were not checked (those sites block automated lookups).
+- **Reading:** Perdura is clear in trademark classes 9 and 42 so far, but the name is largely taken online, and a same-day
+  multi-extension registration in May 2026 is a warning sign. Treat it as a leading candidate, not a safe choice.
+
 **Recommendation:** Perdura is the strongest candidate so far. Before any rename, read the remaining Perdura records, check
 domains and handles, and have a trademark lawyer look. Do not rename on this screening alone.
 
