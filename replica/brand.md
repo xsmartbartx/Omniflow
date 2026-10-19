@@ -66,7 +66,25 @@ before any money goes into it. These are screening checks, not legal clearance.
   Screen a third candidate from the pool (the rest of the Latin-flavoured names: Fidus is weak; the metaphor names were mostly
   cut) or send a new name; run the same WIPO and USPTO check before choosing.
 
-Decision needed: pick **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
+**Third-round candidates, screened 2026-10-17** (WIPO Global Brand Database, word contained in the mark, all offices, expired
+marks included; USPTO for Perdura; screening, not legal clearance):
+
+| name | WIPO records | class 9 | class 42 | what the class 9 and 42 records are |
+| --- | --- | --- | --- | --- |
+| **Perdura** | 316 | 8 | 8 | In the first 30 by relevance only one: PERDURA, EU, RWA Raiffeisen Ware Austria, classes 6, 19, 20, 37, 42, ended 2013. USPTO: 5 results, none in 9 or 42 (classes 16, 19, 30). **Clearest.** |
+| Anchora | 37 | 6 | 5 | **Conflict:** identical ANCHORA registered in the UK on 4 Sep 2026 in classes 9 and 42 (an individual). Out. |
+| Firmo | 66 | 4 | 10 | **Conflict:** identical FIRMO in class 42 (with 35, 36): a Swiss registration (DIMEA Digital M&A GmbH, 2023) and an Estonian application (Firmoportaal OÜ, pending); also a Japanese class 9 mark (2007). Out. |
+| Stabilis | 67 | 14 | 12 | Counts only; records not read. |
+| Serva | 152 | 14 | 20 | Counts only; records not read. |
+| Ballast | 347 | 81 | 23 | Counts only; too crowded. |
+
+Only the first ~25 of each result list were read (the page loads lazily), so a class 9 or 42 record deeper in a list can be
+missing. Not searched: EUIPO's own database, Poland, Canada, similar spellings, and domain or handle availability.
+
+**Recommendation:** Perdura is the strongest candidate so far. Before any rename, read the remaining Perdura records, check
+domains and handles, and have a trademark lawyer look. Do not rename on this screening alone.
+
+Decision needed: pick **Perdura**, **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
 
 ## Palette
 
