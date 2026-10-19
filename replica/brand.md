@@ -90,7 +90,13 @@ missing. Not searched: EUIPO's own database, Poland, Canada, similar spellings, 
 - **Handles:** GitHub `perdura` is taken (an organisation created 2025-11-05, 1 repository); PyPI `perdura` is taken (a reliability
   engineering and statistics suite, v0.8.3). Free: npm `perdura` and the `@perdura` scope, crates.io `perdura`, Docker Hub `perdura`.
   X, Instagram and LinkedIn were not checked (those sites block automated lookups).
-- **Reading:** Perdura is clear in trademark classes 9 and 42 so far, but the name is largely taken online, and a same-day
+- **Who is using it (2026-10-19, homepage titles):** `perdura.cloud` and `perdura.net` serve the same site, "Perdura — Managed
+  SAP HANA that endures" (EU data sovereignty, SLA-backed hosting: a class 42 service); `perdura.app` is a chess-opening preparation
+  product; `perdura.org` is a memorials service ("Memorials that endure"). `perdura.com`, `.dev` and `.ai` did not answer
+  (parked or inactive). Registrant names are not published (RDAP shows registrars only: GoDaddy, Key-Systems, 1&1, Dynadot).
+  The hosting business sits in the same class 42 and sells to the same enterprise buyers, and may hold unregistered
+  (common-law) rights even though no registered class 9 or 42 mark turned up.
+- **Reading:** Perdura is clear in registered trademark classes 9 and 42 so far, but the name is largely taken online, and a same-day
   multi-extension registration in May 2026 is a warning sign. Treat it as a leading candidate, not a safe choice.
 
 **Recommendation:** Perdura is the strongest candidate so far. Before any rename, read the remaining Perdura records, check
