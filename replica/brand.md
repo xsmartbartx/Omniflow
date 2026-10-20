@@ -102,7 +102,25 @@ missing. Not searched: EUIPO's own database, Poland, Canada, similar spellings, 
 **Recommendation:** Perdura is the strongest candidate so far. Before any rename, read the remaining Perdura records, check
 domains and handles, and have a trademark lawyer look. Do not rename on this screening alone.
 
-Decision needed: pick **Perdura**, **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
+**OmniFlow screened, 2026-10-20** (WIPO Global Brand Database, USPTO, RDAP/DNS and public package APIs; screening, not legal clearance):
+
+- **USPTO: a direct conflict.** `OMNIFLOW`, serial 50063002, **live and pending in class 42** for "providing online non-downloadable
+  workflow management" software and services, filed by **Synergy Folks Inc (California)**. Same mark, same kind of goods.
+  Also live: `OMNIFLOW` in class 42 (Baker Hughes Holdings, registered) and in classes 7 and 9 (Omniflow, Portugal, US reg. 86524073).
+- **WIPO:** 46 records, 15 in class 9 and 8 in class 42. Omniflow, S.A. (Portugal, a smart-lighting-pole maker) holds `Omniflow`
+  in classes 7, 9 and 42 as an EU registration (2014), an international registration (2022) and in Malaysia (2023); Baker Hughes
+  holds `OMNIFLOW` in class 42 in the US (2001).
+- **Domains:** `omniflow.com` is another business (OMNI Flow Computers, registered 1997); `.io` serves Omniflow Smart Poles; `.dev` is a
+  tools-and-calculators site (registered 2025); `.app` is for sale; `.ai`, `.net`, `.org`, `.tech` and `.cloud` are registered; `.co`
+  has no record.
+- **Handles:** the npm package `omniflow` belongs to someone else ("omniflow CLI" 1.0.0, 2022), and this repository's `package.json`
+  is named `omniflow` with `private: false`, so it must not be published under that name (use a scoped name). GitHub user `omniflow`
+  exists (2018, no repositories); PyPI `omniflow` exists (an OMOP data tool); crates.io is free; Docker Hub redirects (likely taken).
+- **Reading:** OmniFlow is the most conflicted name of all those screened, because of the pending class 42 workflow-management
+  application. The decision to stay with OmniFlow was made on 2026-10-20; a trademark lawyer should review this before any
+  public launch.
+
+Decision needed: confirm **OmniFlow**, or pick **Perdura**, **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
 
 ## Palette
 
