@@ -10,7 +10,7 @@ const echoStep = (id: string) => ({ id, type: 'capability', uses: 'util-echo@^1'
 let api: Api;
 beforeAll(async () => {
   api = await makeApi({
-    env: { CONSTANS_MODE: 'nexora', CONSTANS_NEXORA_CORE: 'fake', CONSTANS_ENV: 'development' },
+    env: { OMNIFLOW_MODE: 'nexora', OMNIFLOW_NEXORA_CORE: 'fake', OMNIFLOW_ENV: 'development' },
   });
 });
 afterAll(async () => {
@@ -21,7 +21,7 @@ const core = () => api.app.nexora!.fake!;
 const svc = () => api.app.nexora!.service;
 const st = () => api.app.state;
 
-/** Sign in through /app and return a client bound to the Constans session cookie. */
+/** Sign in through /app and return a client bound to the OmniFlow session cookie. */
 async function signIn(orgId: string, userId: string, role: NexoraRole, email = `${userId}@example.com`) {
   const res = await api.server.inject({
     method: 'GET',
@@ -36,7 +36,7 @@ async function signIn(orgId: string, userId: string, role: NexoraRole, email = `
       url,
       headers: {
         cookie,
-        ...(method !== 'GET' ? { 'x-requested-with': 'constans' } : {}),
+        ...(method !== 'GET' ? { 'x-requested-with': 'omniflow' } : {}),
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
       },
       ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
@@ -64,17 +64,17 @@ describe('mode and configuration', () => {
   });
 
   it('refuses the unsigned fake Core in production, and refuses nexora mode without choosing a Core', () => {
-    const base = { CONSTANS_ADMIN_PASSWORD: 'correct-horse-battery-staple', CONSTANS_MASTER_KEY: 'x'.repeat(43) + '=' };
-    expect(() => loadConfig({ ...base, CONSTANS_MODE: 'nexora', CONSTANS_NEXORA_CORE: 'fake' })).toThrow(/production/);
-    expect(() => loadConfig({ ...base, CONSTANS_MODE: 'nexora', CONSTANS_ENV: 'development' })).toThrow(
-      /CONSTANS_NEXORA_CORE/,
+    const base = { OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple', OMNIFLOW_MASTER_KEY: 'x'.repeat(43) + '=' };
+    expect(() => loadConfig({ ...base, OMNIFLOW_MODE: 'nexora', OMNIFLOW_NEXORA_CORE: 'fake' })).toThrow(/production/);
+    expect(() => loadConfig({ ...base, OMNIFLOW_MODE: 'nexora', OMNIFLOW_ENV: 'development' })).toThrow(
+      /OMNIFLOW_NEXORA_CORE/,
     );
-    expect(() => loadConfig({ ...base, CONSTANS_MODE: 'sideways' })).toThrow(/CONSTANS_MODE/);
+    expect(() => loadConfig({ ...base, OMNIFLOW_MODE: 'sideways' })).toThrow(/OMNIFLOW_MODE/);
   });
 
   it('reports the product on the health endpoint in nexora mode', async () => {
     const h = await api.anon.get('/healthz');
-    expect(h.body).toMatchObject({ status: 'ok', product: 'constans', mode: 'nexora' });
+    expect(h.body).toMatchObject({ status: 'ok', product: 'omniflow', mode: 'nexora' });
   });
 });
 
@@ -148,7 +148,7 @@ describe('metering', () => {
     const outbox = st().nexora.dueOutbox();
     const row = outbox.find((r) => r.orgId === 'org_M1')!;
     expect(row).toMatchObject({
-      name: 'constans.run.started',
+      name: 'omniflow.run.started',
       kind: 'usage',
       idempotencyKey: `run.started:${run.body.run.id}`,
     });
@@ -179,7 +179,7 @@ describe('metering', () => {
       tenant: o.tenant,
       orgId: o.orgId,
       kind: 'usage' as const,
-      name: 'constans.run.started',
+      name: 'omniflow.run.started',
       payload: {},
       idempotencyKey: 'dup-1',
       occurredAt: new Date().toISOString(),
@@ -195,7 +195,7 @@ describe('metering', () => {
       await core().events.send({
         id: `pre-${i}`,
         kind: 'usage',
-        name: 'constans.run.started',
+        name: 'omniflow.run.started',
         orgId: 'org_L1',
         occurredAt: new Date().toISOString(),
         payload: {},
@@ -218,7 +218,7 @@ describe('metering', () => {
       await core().events.send({
         id: `pre2-${i}`,
         kind: 'usage',
-        name: 'constans.run.started',
+        name: 'omniflow.run.started',
         orgId: 'org_L2',
         occurredAt: new Date().toISOString(),
         payload: {},

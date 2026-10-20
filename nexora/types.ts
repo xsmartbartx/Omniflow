@@ -1,8 +1,8 @@
 import type { NexoraPlan, NexoraRole, OutboxKind } from '../state/index.ts';
 
 /**
- * The three ways Constans talks to NEXORA Core (architecture D4). NEXORA has not published the wire
- * format of these contracts yet (its ADR-0010 is Proposed), so everything here is Constans's own port:
+ * The three ways OmniFlow talks to NEXORA Core (architecture D4). NEXORA has not published the wire
+ * format of these contracts yet (its ADR-0010 is Proposed), so everything here is OmniFlow's own port:
  * a real HTTP client can implement it later without touching callers.
  */
 

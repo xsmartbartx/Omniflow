@@ -51,9 +51,9 @@ export interface Config {
   /** How often alert conditions are evaluated. */
   alertIntervalSeconds: number;
   version: string;
-  /** Outbound run-lifecycle webhooks (CONSTANS_RUN_WEBHOOKS). */
+  /** Outbound run-lifecycle webhooks (OMNIFLOW_RUN_WEBHOOKS). */
   runWebhooks: Array<{ id: string; url: string; secret: string; events: string[]; tenant: string }>;
-  /** `standalone` is Constans as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
+  /** `standalone` is OmniFlow as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
   mode: 'standalone' | 'nexora';
   nexora: {
     /** Which Core implementation to use. Only `fake` exists until NEXORA publishes its contracts. */
@@ -65,7 +65,7 @@ export interface Config {
   };
 }
 
-export interface Constans {
+export interface OmniFlow {
   config: Config;
   log: Logger;
   clock: Clock;
@@ -85,7 +85,7 @@ export interface Constans {
   analysis: AnalysisAgent;
   alerts: AlertManager;
   authoring: AuthoringService;
-  /** Present only when CONSTANS_RUN_WEBHOOKS is set. */
+  /** Present only when OMNIFLOW_RUN_WEBHOOKS is set. */
   webhooks?: { tick(): Promise<number>; start(): void; stop(): void };
   /** Present only in `nexora` mode. */
   nexora?: { service: NexoraService; worker: OutboxWorker; fake?: import('../nexora/index.ts').FakeCore };

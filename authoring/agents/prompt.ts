@@ -2,12 +2,12 @@ import type { CapabilityDeclaration } from '../../schemas/index.ts';
 import { UNTRUSTED_DATA_NOTICE } from '../../security/pentest/index.ts';
 
 /**
- * What the Planner is told about Constans. The manifest reference below is deliberately terse and
+ * What the Planner is told about OmniFlow. The manifest reference below is deliberately terse and
  * written for a model; the worked example is compiled by the test suite, so it can never drift out of
  * step with the compiler.
  */
 
-export const EXAMPLE_MANIFEST = `apiVersion: constans/v1
+export const EXAMPLE_MANIFEST = `apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: order-alert
@@ -43,12 +43,12 @@ outputs:
   notified: "\${{ steps.notify.status == 'succeeded' }}"
 `;
 
-export const MANIFEST_REFERENCE = `# Constans workflow manifest (YAML)
+export const MANIFEST_REFERENCE = `# OmniFlow workflow manifest (YAML)
 
 A manifest is data, never code. Anything not described here is a validation error.
 
 Top level (all required unless marked optional):
-  apiVersion: constans/v1
+  apiVersion: omniflow.dev/v1
   kind: Workflow
   metadata: { name (kebab-case), version (semver), owner (email/team), description?, criticality?: low|medium|high|critical, labels?, team? }
   triggers: list of
@@ -133,7 +133,7 @@ Two to five sentences: what the workflow does and the main design choices (retri
 \`\`\``;
 
 export function plannerSystemPrompt(catalogue: string): string {
-  return `You are the Planner Agent of Constans, a workflow engine. You turn a person's intent into a DRAFT workflow manifest.
+  return `You are the Planner Agent of OmniFlow, a workflow engine. You turn a person's intent into a DRAFT workflow manifest.
 
 Your output is only a draft. You cannot publish, run, approve or change anything; a validator will check your manifest, and a human will review it before it can ever run. Be honest: when something is unknown, ask in <questions> instead of guessing.
 

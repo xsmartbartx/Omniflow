@@ -1,7 +1,7 @@
 import { NotFoundError } from '../../core/index.ts';
 import type { Plan, PlanStep, Principal } from '../../schemas/index.ts';
 import type { RunRecord, StepRecord } from '../../state/index.ts';
-import type { Constans } from '../context.ts';
+import type { OmniFlow } from '../context.ts';
 
 export const name = { type: 'string', pattern: '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', maxLength: 64 } as const;
 export const id = { type: 'string', minLength: 1, maxLength: 128 } as const;
@@ -82,13 +82,13 @@ function previewOutput(v: unknown): unknown {
   return json.length > 20_000 ? { truncated: true, size: json.length } : v;
 }
 
-export function mustRun(app: Constans, principal: Principal, runId: string): RunRecord {
+export function mustRun(app: OmniFlow, principal: Principal, runId: string): RunRecord {
   const run = app.state.runs.getRun(runId, principal.tenant);
   if (!run) throw new NotFoundError('Run', runId);
   return run;
 }
 
-export function planOf(app: Constans, run: RunRecord): Plan | undefined {
+export function planOf(app: OmniFlow, run: RunRecord): Plan | undefined {
   return app.state.registry.getPlan(run.tenant, run.planHash);
 }
 

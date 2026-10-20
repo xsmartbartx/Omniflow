@@ -85,7 +85,7 @@ export default async function audit() {
     pageHeader('Audit log', 'An append-only, hash-chained record of everything that happened.', [
       verify,
       can('audit.read')
-        ? h('a', { class: 'btn', href: '/v1/audit/export', download: 'constans-audit.ndjson' }, 'Export')
+        ? h('a', { class: 'btn', href: '/v1/audit/export', download: 'omniflow-audit.ndjson' }, 'Export')
         : null,
     ]),
     h(

@@ -1,6 +1,6 @@
 # The model classifies; the workflow decides. The ticket text is untrusted, so it goes in `data`
 # (framed as data, never as instructions) and the answer is validated against a schema.
-apiVersion: constans/v1
+apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: llm-ticket-triage

@@ -424,9 +424,9 @@ CREATE TABLE channels (
 -- TEXT ids, ISO-8601 UTC TEXT timestamps, tenant_id on every tenant-owned row).
 -- Access rule: data-layer checks only (no RLS in SQLite). Every query takes the tenant and filters on it;
 -- tests must prove a second tenant cannot read these rows (same pattern as the existing isolation suite).
--- These tables are only written when CONSTANS_MODE=nexora. In standalone mode they stay empty.
+-- These tables are only written when OMNIFLOW_MODE=nexora. In standalone mode they stay empty.
 
--- NEXORA organisation <-> Constans tenant. One row per org that has used the product.
+-- NEXORA organisation <-> OmniFlow tenant. One row per org that has used the product.
 CREATE TABLE nexora_orgs (
   org_id TEXT PRIMARY KEY,                         -- NEXORA/Clerk organisation id
   tenant_id TEXT NOT NULL UNIQUE REFERENCES tenants(id) ON DELETE RESTRICT,
@@ -443,7 +443,7 @@ CREATE TABLE nexora_orgs (
 -- Parent key so child rows can prove a user belongs to the same tenant (SQLite needs a unique index here).
 CREATE UNIQUE INDEX users_id_tenant ON users (id, tenant_id);
 
--- NEXORA user in an org <-> Constans user. Created on first sign-in; password_hash stays NULL.
+-- NEXORA user in an org <-> OmniFlow user. Created on first sign-in; password_hash stays NULL.
 CREATE TABLE nexora_identities (
   org_id TEXT NOT NULL,
   external_user_id TEXT NOT NULL,                  -- Clerk user id
@@ -486,15 +486,15 @@ CREATE TABLE nexora_key_cache (
 CREATE INDEX nexora_key_cache_org ON nexora_key_cache (org_id);
 
 -- Transactional outbox for C-EVENT (usage, audit, health). Written in the same transaction as the
--- Constans event it mirrors; a worker delivers it. idempotency_key makes redelivery safe.
+-- OmniFlow event it mirrors; a worker delivers it. idempotency_key makes redelivery safe.
 CREATE TABLE nexora_outbox (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   org_id TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('usage','audit','health')),
-  name TEXT NOT NULL,                              -- <domain>.<object>.<action>, e.g. constans.run.started
+  name TEXT NOT NULL,                              -- <domain>.<object>.<action>, e.g. omniflow.run.started
   payload TEXT NOT NULL,                           -- JSON
-  idempotency_key TEXT NOT NULL UNIQUE,            -- = id of the source Constans event, assigned once and reused on retries
+  idempotency_key TEXT NOT NULL UNIQUE,            -- = id of the source OmniFlow event, assigned once and reused on retries
   correlation_id TEXT,
   occurred_at TEXT NOT NULL,
   attempts INTEGER NOT NULL DEFAULT 0,

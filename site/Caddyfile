@@ -1,4 +1,4 @@
-# Serves the static site. Set SITE_ADDRESS to the product domain (for example constans.example.com).
+# Serves the static site. Set SITE_ADDRESS to the product domain (for example omniflow.example.com).
 {$SITE_ADDRESS:localhost} {
 	root * /srv
 	file_server

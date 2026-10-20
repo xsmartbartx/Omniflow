@@ -256,18 +256,18 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
       dryRun: 'simulate',
     } as CapabilityDeclaration,
     simulate: (_ctx, input: { to: string[] }) => ({
-      messageId: '<dry-run@constans.local>',
+      messageId: '<dry-run@omniflow.local>',
       accepted: input.to,
       rejected: [],
     }),
     async execute(ctx, input: { to: string[]; subject: string; text?: string; html?: string; replyTo?: string }) {
       // A stable Message-ID derived from the idempotency key lets receiving systems collapse duplicates.
       const messageId = ctx.idempotencyKey
-        ? `<${createHash('sha256').update(ctx.idempotencyKey).digest('hex').slice(0, 32)}@constans.local>`
+        ? `<${createHash('sha256').update(ctx.idempotencyKey).digest('hex').slice(0, 32)}@omniflow.local>`
         : undefined;
       try {
         const info = await transport.sendMail({
-          from: config.email.from ?? 'constans@localhost',
+          from: config.email.from ?? 'omniflow@localhost',
           to: input.to,
           subject: input.subject,
           ...(input.text ? { text: input.text } : {}),
@@ -275,8 +275,8 @@ export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] 
           ...(input.replyTo ? { replyTo: input.replyTo } : {}),
           ...(messageId ? { messageId } : {}),
           headers: {
-            'X-Constans-Run': ctx.runId,
-            ...(ctx.idempotencyKey ? { 'X-Constans-Idempotency-Key': ctx.idempotencyKey } : {}),
+            'X-OmniFlow-Run': ctx.runId,
+            ...(ctx.idempotencyKey ? { 'X-OmniFlow-Idempotency-Key': ctx.idempotencyKey } : {}),
           },
         });
         return {

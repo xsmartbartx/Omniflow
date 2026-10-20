@@ -8,13 +8,13 @@ import { systemClock } from '../../core/index.ts';
 import { buildServer } from '../../gateway/server.ts';
 import type { Role } from '../../schemas/index.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createConstans, type Constans } from '../../server/platform.ts';
+import { createOmniflow, type OmniFlow } from '../../server/platform.ts';
 import { makeState } from './state.ts';
 
 export const ADMIN = { email: 'admin@example.com', password: 'correct-horse-battery-staple' };
 
 export interface Api {
-  app: Constans;
+  app: OmniFlow;
   server: FastifyInstance;
   dir: string;
   /** Sign in and return a client bound to the session cookie. */
@@ -41,22 +41,22 @@ export interface Client {
 }
 
 export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmClient } = {}): Promise<Api> {
-  const dir = mkdtempSync(join(tmpdir(), 'constans-api-'));
+  const dir = mkdtempSync(join(tmpdir(), 'omniflow-api-'));
   const config = loadConfig(
     {
-      CONSTANS_DATA_DIR: dir,
-      CONSTANS_ADMIN_EMAIL: ADMIN.email,
-      CONSTANS_ADMIN_PASSWORD: ADMIN.password,
-      CONSTANS_LOG_LEVEL: 'silent',
-      CONSTANS_ENV: 'production',
-      CONSTANS_STORAGE_DIR: join(dir, 'files'),
-      CONSTANS_METRICS_TOKEN: 'metrics-token-123',
+      OMNIFLOW_DATA_DIR: dir,
+      OMNIFLOW_ADMIN_EMAIL: ADMIN.email,
+      OMNIFLOW_ADMIN_PASSWORD: ADMIN.password,
+      OMNIFLOW_LOG_LEVEL: 'silent',
+      OMNIFLOW_ENV: 'production',
+      OMNIFLOW_STORAGE_DIR: join(dir, 'files'),
+      OMNIFLOW_METRICS_TOKEN: 'metrics-token-123',
       ...opts.env,
     },
     { cwd: dir },
   );
   const state = makeState({ clock: systemClock });
-  const app = createConstans(config, { state, llm: opts.llm ?? null });
+  const app = createOmniflow(config, { state, llm: opts.llm ?? null });
   await app.start();
   const { server } = await buildServer(app);
   await server.ready();
@@ -66,7 +66,7 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
       const headers: Record<string, string> = { ...o.headers };
       if (auth.cookie) {
         headers.cookie = auth.cookie;
-        if (method !== 'GET' && !o.noCsrf) headers['x-requested-with'] = 'constans';
+        if (method !== 'GET' && !o.noCsrf) headers['x-requested-with'] = 'omniflow';
       }
       if (auth.apiKey) headers.authorization = `Bearer ${auth.apiKey}`;
       let payload: string | undefined;
@@ -131,7 +131,7 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
 /** Workflow manifests for API tests, as YAML text. */
 export const yamlWf = (name: string, steps: unknown[], extra: Record<string, unknown> = {}, version = '1.0.0') =>
   stringify({
-    apiVersion: 'constans/v1',
+    apiVersion: 'omniflow.dev/v1',
     kind: 'Workflow',
     metadata: { name, version, owner: 'ops@example.com', description: 'API test workflow', criticality: 'low' },
     triggers: [{ type: 'manual' }],

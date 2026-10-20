@@ -52,9 +52,9 @@ async function setup(hooks: unknown[] = [{}]) {
   const cfg = hooks.map((h) => ({ url: rx!.url, secret: SECRET, ...(h as object) }));
   api = await makeApi({
     env: {
-      CONSTANS_ENV: 'development',
-      CONSTANS_ALLOW_PRIVATE_EGRESS: 'true',
-      CONSTANS_RUN_WEBHOOKS: JSON.stringify(cfg),
+      OMNIFLOW_ENV: 'development',
+      OMNIFLOW_ALLOW_PRIVATE_EGRESS: 'true',
+      OMNIFLOW_RUN_WEBHOOKS: JSON.stringify(cfg),
     },
   });
   const admin = await api.login();
@@ -77,12 +77,12 @@ describe('outbound run webhooks', () => {
     expect(await hooks.tick()).toBe(1);
     expect(rx!.hits).toHaveLength(1);
     const { headers, body } = rx!.hits[0]!;
-    expect(headers['x-constans-event']).toBe('run.succeeded');
-    expect(headers['x-constans-delivery']).toMatch(/^evt_/);
+    expect(headers['x-omniflow-event']).toBe('run.succeeded');
+    expect(headers['x-omniflow-delivery']).toMatch(/^evt_/);
     const verdict = verifyWebhook({
       secret: SECRET,
-      timestamp: String(headers['x-constans-timestamp']),
-      signature: String(headers['x-constans-signature']),
+      timestamp: String(headers['x-omniflow-timestamp']),
+      signature: String(headers['x-omniflow-signature']),
       rawBody: body,
       nowMs: Date.now(),
     });
@@ -122,7 +122,7 @@ describe('outbound run webhooks', () => {
     api!.app.state.db.run("UPDATE webhook_deliveries SET next_attempt_at = '2000-01-01T00:00:00.000Z'");
     expect(await hooks.tick()).toBe(1);
     expect(rx!.hits).toHaveLength(2);
-    expect(rx!.hits[1]!.headers['x-constans-delivery']).toBe(rx!.hits[0]!.headers['x-constans-delivery']);
+    expect(rx!.hits[1]!.headers['x-omniflow-delivery']).toBe(rx!.hits[0]!.headers['x-omniflow-delivery']);
     expect(api!.app.state.webhooks.list('default')[0]).toMatchObject({ status: 'delivered', attempts: 2 });
   });
 
@@ -188,7 +188,7 @@ describe('outbound run webhooks', () => {
   });
 });
 
-describe('CONSTANS_RUN_WEBHOOKS configuration', () => {
+describe('OMNIFLOW_RUN_WEBHOOKS configuration', () => {
   const ok = { url: 'https://ops.example.com/h', secret: SECRET };
   const parse = (v: unknown, production = true) => parseRunWebhooks(JSON.stringify(v), { production });
 
@@ -224,9 +224,9 @@ describe('CONSTANS_RUN_WEBHOOKS configuration', () => {
   });
 
   it('stops the server at start-up with the variable named', () => {
-    const base = { CONSTANS_ADMIN_PASSWORD: ADMIN.password, CONSTANS_MASTER_KEY: `${'x'.repeat(43)}=` };
+    const base = { OMNIFLOW_ADMIN_PASSWORD: ADMIN.password, OMNIFLOW_MASTER_KEY: `${'x'.repeat(43)}=` };
     expect(() =>
-      loadConfig({ ...base, CONSTANS_RUN_WEBHOOKS: '[{"url":"http://x.example.com","secret":"short"}]' }),
-    ).toThrow(/CONSTANS_RUN_WEBHOOKS/);
+      loadConfig({ ...base, OMNIFLOW_RUN_WEBHOOKS: '[{"url":"http://x.example.com","secret":"short"}]' }),
+    ).toThrow(/OMNIFLOW_RUN_WEBHOOKS/);
   });
 });

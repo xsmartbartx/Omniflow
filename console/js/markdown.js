@@ -1,6 +1,6 @@
 import { h } from './dom.js';
 
-// A deliberately small Markdown subset (what Constans's own docs generator emits): headings, paragraphs,
+// A deliberately small Markdown subset (what OmniFlow's own docs generator emits): headings, paragraphs,
 // lists, tables, fenced code, quotes, rules, and inline code/bold/italic/links. Parsing produces a plain
 // AST (unit-tested); rendering builds DOM nodes with textContent, so nothing in the input can inject markup.
 

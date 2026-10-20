@@ -1,5 +1,5 @@
 /**
- * A custom Constans distribution: the stock platform plus one capability of your own.
+ * A custom OmniFlow distribution: the stock platform plus one capability of your own.
  *
  * A capability is the ONLY way a workflow touches the outside world, so adding one means declaring — up
  * front, in data — what it does, what it needs and how it fails. The compiler, policy engine, pentest
@@ -15,7 +15,7 @@ import {
 } from '../../capabilities/index.ts';
 import { buildServer } from '../../gateway/server.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createConstans } from '../../server/platform.ts';
+import { createOmniflow } from '../../server/platform.ts';
 
 interface Input {
   customerId: string;
@@ -82,9 +82,9 @@ export function createRegistry(config: ReturnType<typeof loadConfig>): Capabilit
 
 if (import.meta.main) {
   const config = loadConfig();
-  const app = createConstans(config, { capabilities: createRegistry(config) });
+  const app = createOmniflow(config, { capabilities: createRegistry(config) });
   await app.start();
   const { server } = await buildServer(app);
   await server.listen({ host: config.host, port: config.port });
-  app.log.info('custom Constans listening', { url: config.publicUrl });
+  app.log.info('custom OmniFlow listening', { url: config.publicUrl });
 }

@@ -1,7 +1,7 @@
 # Writing workflows
 
 A workflow is a YAML **manifest**: data, not code. It says *when* to run, *what it needs*, and *which steps
-to take in which order* — and nothing about how the engine does it. Because it is data, Constans can prove a
+to take in which order* — and nothing about how the engine does it. Because it is data, OmniFlow can prove a
 lot about it before it runs.
 
 Every complete manifest in this guide is checked by the test suite, so they compile as written.
@@ -17,7 +17,7 @@ Every complete manifest in this guide is checked by the test suite, so they comp
 ## Anatomy
 
 ```yaml
-apiVersion: constans/v1
+apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: order-router            # kebab-case, unique per workspace
@@ -233,7 +233,7 @@ compensation; `continue` records it and carries on; `{ routeTo: <step> }` divert
 must depend on the failing one); `compensate` starts rollback explicitly.
 
 **Effectful steps must be idempotent.** A capability that changes the world (`effect: effectful`) requires
-an `idempotencyKey`. Constans records the key *before* it acts and passes it downstream, so a retry, a
+an `idempotencyKey`. OmniFlow records the key *before* it acts and passes it downstream, so a retry, a
 crash-recovery or a duplicate delivery never repeats the effect. Make keys meaningful and stable:
 
 ```yaml
@@ -251,7 +251,7 @@ order**; a compensation that itself fails ends the run as `compensation-failed` 
 pretends everything is fine.
 
 ```yaml
-apiVersion: constans/v1
+apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: order-fulfilment
@@ -319,7 +319,7 @@ step-declared hosts, because rollback must not fail on configuration).
 
 The run pauses at zero cost. **Whoever started the run cannot approve it** (four-eyes) unless the step
 opts in with `allowSelfApproval: true` and policy allows it. Decisions, comments and timeouts are audited.
-Approvals show up in the console inbox and in `constans approvals`, and approvals that wait too long raise an alert.
+Approvals show up in the console inbox and in `omniflow approvals`, and approvals that wait too long raise an alert.
 
 ## Guards and limits
 
@@ -347,14 +347,14 @@ more than an echo).
 You can check a workflow at five levels, cheapest first:
 
 ```bash
-constans validate wf.yaml            # syntax, schema, references, capabilities, policy-relevant risk — no server
-constans compile wf.yaml             # the exact immutable plan and its hash (what the engine will run)
-constans dev wf.yaml --input k=v     # run it end to end on a throw-away platform; add --secret NAME=value
-constans dev wf.yaml --dry-run       # effectful steps are simulated, not performed
-constans run <name> --dry-run --wait # the same, on a real server (the audit log records it as a dry run)
+omniflow validate wf.yaml            # syntax, schema, references, capabilities, policy-relevant risk — no server
+omniflow compile wf.yaml             # the exact immutable plan and its hash (what the engine will run)
+omniflow dev wf.yaml --input k=v     # run it end to end on a throw-away platform; add --secret NAME=value
+omniflow dev wf.yaml --dry-run       # effectful steps are simulated, not performed
+omniflow run <name> --dry-run --wait # the same, on a real server (the audit log records it as a dry run)
 ```
 
-`validate` exits non-zero on errors, so it belongs in CI: `constans validate workflows/`. Dry runs never
+`validate` exits non-zero on errors, so it belongs in CI: `omniflow validate workflows/`. Dry runs never
 touch the outside world — effectful capabilities return synthetic output shaped by their declared schema —
 and they are excluded from every rate, cost and alert.
 
@@ -365,27 +365,27 @@ policy flags (effectful steps, shell steps, high criticality, high risk) open a 
 second person approves, shown as a diff against the active version.
 
 ```bash
-constans publish wf.yaml --canary 10             # send 10% of runs to the new version
-constans workflows promote my-workflow           # happy? make it the stable version
-constans workflows rollback-canary my-workflow   # not happy? drop it
-constans workflows activate my-workflow 1.0.0    # or pin any published version — instant rollback
-constans workflows kill my-workflow --reason "duplicate charges"   # refuse new runs, cancel queued ones
+omniflow publish wf.yaml --canary 10             # send 10% of runs to the new version
+omniflow workflows promote my-workflow           # happy? make it the stable version
+omniflow workflows rollback-canary my-workflow   # not happy? drop it
+omniflow workflows activate my-workflow 1.0.0    # or pin any published version — instant rollback
+omniflow workflows kill my-workflow --reason "duplicate charges"   # refuse new runs, cancel queued ones
 ```
 
 ## Migrating what you already have
 
-`constans import crontab /etc/crontab` turns each cron job into a draft workflow that wraps the command,
+`omniflow import crontab /etc/crontab` turns each cron job into a draft workflow that wraps the command,
 unchanged, in a supervised `shell-exec` step with a **sunset date** — the *Lift* strategy. It gains
 retries, timeouts, an audit trail and alerts on day one; the sunset date stops the bridge becoming
 permanent, and the Analysis Agent reports any that outlive it. Then replace steps with typed capabilities
 one at a time. Commands that need shell syntax (pipes, redirects) are written to a script file rather than
-run as `sh -c` strings, because Constans will not run those.
+run as `sh -c` strings, because OmniFlow will not run those.
 
-`constans import script legacy.sh` asks the AI Planner to propose a *decomposed* workflow instead.
+`omniflow import script legacy.sh` asks the AI Planner to propose a *decomposed* workflow instead.
 
 ## AI-assisted authoring
 
-With `CONSTANS_LLM_API_KEY` set, the console's **Editor & AI** tab and `constans plan "<what you want>"`
+With `OMNIFLOW_LLM_API_KEY` set, the console's **Editor & AI** tab and `omniflow plan "<what you want>"`
 turn a description into a draft manifest. The Planner sees the capability catalogue and the validator,
 repairs its own mistakes, and lists what it had to assume as open questions.
 
@@ -393,4 +393,4 @@ It can only produce a **draft**. There is no route from a model's answer to a pu
 validation, the pentest-style risk review, policy, and — for anything that matters — a human. Workflows
 carry an *autonomy tier*: `T0` advisory only · `T1` draft (default) · `T2` opens a change request ·
 `T3` may publish inside a declared blast radius (no confidential data, only reversible effects, bounded
-cost, no shell). Set it per workflow (`constans workflows autonomy <name> T2`, admins only).
+cost, no shell). Set it per workflow (`omniflow workflows autonomy <name> T2`, admins only).

@@ -1,28 +1,28 @@
-# Constans on one host.
+# OmniFlow on one host.
 #
-#   cp .env.example .env        # then edit it (at minimum: CONSTANS_ADMIN_PASSWORD, CONSTANS_MASTER_KEY)
+#   cp .env.example .env        # then edit it (at minimum: OMNIFLOW_ADMIN_PASSWORD, OMNIFLOW_MASTER_KEY)
 #   docker compose up -d
 #   open http://localhost:8080
 #
-# HTTPS: docker compose --profile tls up -d   (Caddy obtains certificates; set CONSTANS_DOMAIN in .env)
-name: constans
+# HTTPS: docker compose --profile tls up -d   (Caddy obtains certificates; set OMNIFLOW_DOMAIN in .env)
+name: omniflow
 
 services:
-  constans:
+  omniflow:
     build: .
-    image: ${CONSTANS_IMAGE:-constans:latest}
+    image: ${OMNIFLOW_IMAGE:-omniflow:latest}
     restart: unless-stopped
     env_file:
-      - path: ${CONSTANS_ENV_FILE:-.env}
+      - path: ${OMNIFLOW_ENV_FILE:-.env}
         required: false
     environment:
-      CONSTANS_ENV: ${CONSTANS_ENV:-production}
+      OMNIFLOW_ENV: ${OMNIFLOW_ENV:-production}
     # Bound to loopback: put a TLS-terminating proxy (the `tls` profile, or your own) in front of it.
     ports:
-      - "${CONSTANS_BIND:-127.0.0.1}:${CONSTANS_PORT:-8080}:8080"
+      - "${OMNIFLOW_BIND:-127.0.0.1}:${OMNIFLOW_PORT:-8080}:8080"
     volumes:
-      - constans-data:/data
-      - ./policies:/etc/constans/policies:ro
+      - omniflow-data:/data
+      - ./policies:/etc/omniflow/policies:ro
     # Hardening: nothing here needs to write outside /data and /tmp, or hold any privilege.
     read_only: true
     tmpfs:
@@ -41,20 +41,20 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      constans:
+      omniflow:
         condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
     environment:
-      # Set CONSTANS_DOMAIN in .env to your public hostname; "localhost" gets a local, self-signed certificate.
-      CONSTANS_DOMAIN: ${CONSTANS_DOMAIN:-localhost}
+      # Set OMNIFLOW_DOMAIN in .env to your public hostname; "localhost" gets a local, self-signed certificate.
+      OMNIFLOW_DOMAIN: ${OMNIFLOW_DOMAIN:-localhost}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
 
 volumes:
-  constans-data:
+  omniflow-data:
   caddy-data:
   caddy-config:

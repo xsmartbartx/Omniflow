@@ -9,7 +9,7 @@ Node.js 24+.
 ```bash
 npm ci
 npm run verify        # typecheck + lint + architecture layers + all tests — must pass before a PR
-npm run dev           # server with reload on :8080 (set CONSTANS_ADMIN_PASSWORD)
+npm run dev           # server with reload on :8080 (set OMNIFLOW_ADMIN_PASSWORD)
 npm run test:coverage # the coverage floor CI enforces
 npm run format        # Biome formatter/fixer
 ```

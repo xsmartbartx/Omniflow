@@ -33,7 +33,7 @@ const outFile = (ctx: CliContext, text: string): boolean => {
 
 export async function planCommand(ctx: CliContext): Promise<number> {
   const intent = ctx.args.positionals.slice(1).join(' ').trim();
-  if (!intent) throw new UsageError('Usage: constans plan "<what you want>" [--workflow <name>] [--out draft.yaml]');
+  if (!intent) throw new UsageError('Usage: omniflow plan "<what you want>" [--workflow <name>] [--out draft.yaml]');
   const s = ctx.style;
   const r = await client(ctx).post('/v1/authoring/plan', {
     intent,
@@ -61,7 +61,7 @@ export async function planCommand(ctx: CliContext): Promise<number> {
       out.push(
         ...summarise(ctx, r.draft),
         '',
-        `Review it with: constans drafts show ${r.draft.id}   ·   publish with: constans drafts submit ${r.draft.id}`,
+        `Review it with: omniflow drafts show ${r.draft.id}   ·   publish with: omniflow drafts submit ${r.draft.id}`,
       );
     else out.push(s.red('The model did not produce a usable manifest.'));
     return out.join('\n');
@@ -183,7 +183,7 @@ export async function importCommand(ctx: CliContext): Promise<number> {
   const file = ctx.args.positionals[2];
   if ((kind !== 'crontab' && kind !== 'script') || !file)
     throw new UsageError(
-      'Usage: constans import crontab <file|-> [--owner e] [--timezone tz] [--out-dir dir]\n       constans import script <file> [--name n]',
+      'Usage: omniflow import crontab <file|-> [--owner e] [--timezone tz] [--out-dir dir]\n       omniflow import script <file> [--name n]',
     );
   const text = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
   return kind === 'script' ? importScript(ctx, text) : importCrontab(ctx, text);
@@ -245,7 +245,7 @@ export async function explainCommand(ctx: CliContext): Promise<number> {
   const kind = ctx.args.positionals[1];
   const target = ctx.args.positionals[2];
   if ((kind !== 'workflow' && kind !== 'run') || !target)
-    throw new UsageError('Usage: constans explain workflow <name> [--version v]\n       constans explain run <run-id>');
+    throw new UsageError('Usage: omniflow explain workflow <name> [--version v]\n       omniflow explain run <run-id>');
   const api = client(ctx);
   if (kind === 'workflow') {
     const e = await api.get(`/v1/workflows/${encodeURIComponent(target)}/explain${queryFlag(ctx.args, 'version')}`);
@@ -271,7 +271,7 @@ export async function docsCommand(ctx: CliContext): Promise<number> {
     text = await api.getText(`/v1/workflows/${encodeURIComponent(ctx.args.positionals[2])}/docs?${q}`);
   } else
     throw new UsageError(
-      'Usage: constans docs workflow <name> [--format markdown|mermaid] [--out file]\n       constans docs capabilities|index [--out file]',
+      'Usage: omniflow docs workflow <name> [--format markdown|mermaid] [--out file]\n       omniflow docs capabilities|index [--out file]',
     );
   if (!outFile(ctx, text)) ctx.out(text.endsWith('\n') ? text : `${text}\n`);
   return 0;

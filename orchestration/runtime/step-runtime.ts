@@ -2,7 +2,7 @@ import type { RegisteredCapability } from '../../capabilities/contract/types.ts'
 import { type CapabilityRegistry, exampleFromSchema } from '../../capabilities/index.ts';
 import {
   type Clock,
-  ConstansError,
+  OmniflowError,
   collectReferences,
   compareStrings,
   createRng,
@@ -705,7 +705,7 @@ export class StepRuntime implements StepExecutor {
         class: 'transient',
         retryable: true,
       };
-    } else if (e instanceof ConstansError) {
+    } else if (e instanceof OmniflowError) {
       info = e.toInfo();
     } else {
       const code = (e as { code?: unknown } | undefined)?.code;
@@ -727,7 +727,7 @@ export class StepRuntime implements StepExecutor {
 }
 
 function toInfo(e: unknown): ErrorInfo {
-  if (e instanceof ConstansError) return e.toInfo();
+  if (e instanceof OmniflowError) return e.toInfo();
   return { code: 'INTERNAL', message: e instanceof Error ? e.message : String(e), class: 'systemic', retryable: true };
 }
 

@@ -15,7 +15,7 @@ export interface ImportedWorkflow {
   manifest: string;
   /** Things the person should know or decide, in plain language. */
   notes: string[];
-  /** Set when the command needs shell syntax: Constans refuses `sh -c` strings, so the command must live in a script file. */
+  /** Set when the command needs shell syntax: OmniFlow refuses `sh -c` strings, so the command must live in a script file. */
   script?: { path: string; content: string };
 }
 
@@ -34,7 +34,7 @@ export interface ImportOptions {
   sunsetDays?: number;
   team?: string;
   timezone?: string;
-  /** Where operator-installed scripts live (default /opt/constans/scripts). */
+  /** Where operator-installed scripts live (default /opt/omniflow/scripts). */
   scriptDir?: string;
 }
 
@@ -147,7 +147,7 @@ function parseCronLine(line: string): CronLine {
   if (first.startsWith('@')) {
     if (first === '@reboot') {
       return {
-        skip: '@reboot jobs run at machine start; Constans has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.',
+        skip: '@reboot jobs run at machine start; OmniFlow has no equivalent trigger. Run it as a service, or trigger the workflow manually on deploy.',
       };
     }
     const expanded = MACROS[first.toLowerCase()];
@@ -186,9 +186,9 @@ function commandArgv(
   notes: string[],
 ): { argv: string[]; script?: NonNullable<ImportedWorkflow['script']> } | undefined {
   if (needsShell(command)) {
-    const path = `${(opts.scriptDir ?? '/opt/constans/scripts').replace(/\/$/, '')}/${name}.sh`;
+    const path = `${(opts.scriptDir ?? '/opt/omniflow/scripts').replace(/\/$/, '')}/${name}.sh`;
     notes.push(
-      `The command uses shell syntax (pipes, redirects, globs or substitutions). Constans refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to CONSTANS_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`,
+      `The command uses shell syntax (pipes, redirects, globs or substitutions). OmniFlow refuses \`sh -c\` strings because they reintroduce shell injection, so the step runs a script file instead. Save the command as ${path} (mode 0755) and add that path to OMNIFLOW_SHELL_ALLOWED_COMMANDS. The script's content is provided with this draft.`,
     );
     return { argv: [path], script: { path, content: `#!/bin/sh\nset -eu\n${command}\n` } };
   }
@@ -196,11 +196,11 @@ function commandArgv(
   if (!argv || argv.length === 0) return undefined;
   const exe = argv[0]!;
   if (exe.startsWith('/')) {
-    notes.push(`Add ${exe} to CONSTANS_SHELL_ALLOWED_COMMANDS or the shell capability will refuse to run it.`);
+    notes.push(`Add ${exe} to OMNIFLOW_SHELL_ALLOWED_COMMANDS or the shell capability will refuse to run it.`);
   } else {
     argv[0] = KNOWN_PATHS[exe] ?? `/usr/bin/${exe}`;
     notes.push(
-      `'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to CONSTANS_SHELL_ALLOWED_COMMANDS.`,
+      `'${exe}' has no absolute path in the crontab; assumed ${argv[0]}. Check it, and add it to OMNIFLOW_SHELL_ALLOWED_COMMANDS.`,
     );
   }
   return { argv };
@@ -221,7 +221,7 @@ function riskNotes(command: string, environment: Record<string, string>, timezon
   }
   if (environment.MAILTO)
     notes.push(
-      `The crontab mailed output to ${environment.MAILTO}. Configure an alert channel (CONSTANS_ALERT_CHANNELS) so failures are reported the same way.`,
+      `The crontab mailed output to ${environment.MAILTO}. Configure an alert channel (OMNIFLOW_ALERT_CHANNELS) so failures are reported the same way.`,
     );
   if (Object.keys(environment).some((k) => k !== 'MAILTO'))
     notes.push(
@@ -241,7 +241,7 @@ function cronManifest(
   const shortCommand = command.length > 120 ? `${command.slice(0, 117)}...` : command;
   return stringify(
     {
-      apiVersion: 'constans/v1',
+      apiVersion: 'omniflow.dev/v1',
       kind: 'Workflow',
       metadata: {
         name,

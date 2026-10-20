@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Enforces the dependency rule of docs/constans-architecture-and-vision.md §4.1 and the
+ * Enforces the dependency rule of docs/omniflow-architecture-and-vision.md §4.1 and the
  * structural conformance items of ADR-0002:
  *
  *  - Core depends on nothing.
@@ -30,7 +30,7 @@ const ALLOWED: Record<string, string[]> = {
   nexora: ['core', 'schemas', 'security', 'state', 'orchestration'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
   gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'nexora'],
-  // The CLI is an entry point like `server`, and its embedded mode (`constans dev`) uses the composition root.
+  // The CLI is an entry point like `server`, and its embedded mode (`omniflow dev`) uses the composition root.
   cli: [
     'core',
     'schemas',

@@ -182,7 +182,7 @@ function analysisSection(plan: Plan): string[] {
       .map(([k, v]) => `${v} ${k}`)
       .join(', ')}`,
     `- Scopes required: ${a.scopes.length ? a.scopes.map(code).join(', ') : 'none'}`,
-    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside Constans'}`,
+    `- Can reach: ${a.egress.length ? a.egress.join(', ') : 'nothing outside OmniFlow'}`,
     `- Data sensitivity: ${a.maxSensitivity}`,
     `- Approval gates: ${a.hasApproval ? 'yes' : 'no'} · compensation: ${a.hasCompensation ? 'yes' : 'no'}`,
   ];

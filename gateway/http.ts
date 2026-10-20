@@ -5,7 +5,7 @@ import {
   ForbiddenError,
   type Issue,
   NotFoundError,
-  ConstansError,
+  OmniflowError,
   PolicyDeniedError,
   RateLimitedError,
   redact,
@@ -13,7 +13,7 @@ import {
 } from '../core/index.ts';
 import type { Action, Principal } from '../schemas/index.ts';
 import { SESSION_COOKIE } from './auth.ts';
-import type { Constans } from './context.ts';
+import type { OmniFlow } from './context.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
 declare module 'fastify' {
@@ -27,7 +27,7 @@ declare module 'fastify' {
 export interface Ctx<B = any, Q = any, P = any> {
   req: FastifyRequest;
   reply: FastifyReply;
-  app: Constans;
+  app: OmniFlow;
   principal: Principal;
   body: B;
   query: Q;
@@ -65,7 +65,7 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
-  if (e instanceof ConstansError) {
+  if (e instanceof OmniflowError) {
     if (Object.hasOwn(CODE_STATUS, e.code)) return CODE_STATUS[e.code]!;
     return e.code.startsWith('LLM_') ? 502 : (CLASS_STATUS[e.errorClass] ?? 500);
   }
@@ -98,7 +98,7 @@ export function problem(
   requestId: string,
 ): { status: number; body: ProblemBody; headers?: Record<string, string> } {
   const status = statusFor(e);
-  if (e instanceof ConstansError && (status < 500 || USER_FACING_5XX.has(e.code))) {
+  if (e instanceof OmniflowError && (status < 500 || USER_FACING_5XX.has(e.code))) {
     const info = e.toInfo();
     return {
       status,
@@ -166,7 +166,7 @@ export const clearSessionCookie = (secure: boolean) =>
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function authenticate(app: Constans, req: FastifyRequest): Principal {
+export function authenticate(app: OmniFlow, req: FastifyRequest): Principal {
   const header = req.headers.authorization;
   if (header?.startsWith('Bearer ')) {
     const principal = app.auth.authenticateApiKey(header.slice(7).trim());
@@ -178,7 +178,7 @@ export function authenticate(app: Constans, req: FastifyRequest): Principal {
     const res = app.auth.authenticateSession(token);
     if (!res) throw new AuthenticationError('Your session has expired; sign in again');
     // Cookie-authenticated writes must carry a header a cross-site form cannot set (CSRF).
-    if (MUTATING.has(req.method) && req.headers['x-requested-with'] !== 'constans') {
+    if (MUTATING.has(req.method) && req.headers['x-requested-with'] !== 'omniflow') {
       throw new ForbiddenError('Missing X-Requested-With header', { code: 'CSRF' });
     }
     req.sessionToken = token;
@@ -195,7 +195,7 @@ export interface Registered {
 
 export function registerRoutes(
   fastify: FastifyInstance,
-  app: Constans,
+  app: OmniFlow,
   defs: RouteDef[],
   limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter; sso: RateLimiter },
 ): void {
@@ -317,7 +317,7 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Constans API',
+      title: 'OmniFlow API',
       version: info.version,
       description:
         'Declarative workflow substrate: publish validated workflows, run them deterministically, audit everything.',
@@ -330,13 +330,13 @@ export function buildOpenApi(defs: RouteDef[], info: { version: string }): objec
         bearerApiKey: {
           type: 'http',
           scheme: 'bearer',
-          description: 'API key: `Authorization: Bearer cns_<prefix>_<secret>`',
+          description: 'API key: `Authorization: Bearer omf_<prefix>_<secret>`',
         },
         sessionCookie: {
           type: 'apiKey',
           in: 'cookie',
           name: SESSION_COOKIE,
-          description: 'Console session. Mutating requests also need `X-Requested-With: constans`.',
+          description: 'Console session. Mutating requests also need `X-Requested-With: omniflow`.',
         },
       },
       schemas: {

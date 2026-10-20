@@ -3,7 +3,7 @@
 ## Gates (nothing public until these are true)
 
 1. **Real NEXORA Core.** Today only a fake, unsigned Core exists and nexora mode is refused in production. Needs real identity verification, `nx_live_` keys, and the entitlement and event contracts (milestone M1).
-2. **Name chosen and cleared** (Constans or Tenax): trademark search by a lawyer, then the rename.
+2. **Name chosen and cleared** (OmniFlow or Tenax): trademark search by a lawyer, then the rename.
 3. **Prices and the "stop at limit" rule decided** (`pricing.md`), Stripe objects created in test mode, then live by you.
 4. **Legal pages:** NEXORA's Terms, Privacy and Security statement are drafts awaiting a lawyer.
 5. **No S1/S2 bugs; must-haves done** (`parity.md`: 8 of 17 today).

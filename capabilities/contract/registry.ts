@@ -12,7 +12,7 @@ import { checkSchemaDefinition, isValidEgressHost, parseCapabilityRef } from '..
 import type { CapabilityAdapter, CapabilityRegistration, RegisteredCapability } from './types.ts';
 
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
-const BUILTIN: CapabilityRegistration = { owner: 'constans', source: 'builtin' };
+const BUILTIN: CapabilityRegistration = { owner: 'omniflow', source: 'builtin' };
 
 type Err = (path: string, code: string, message: string) => void;
 

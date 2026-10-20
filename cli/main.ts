@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ConstansError } from '../core/index.ts';
+import { OmniflowError } from '../core/index.ts';
 import { has, parseArgs, UsageError } from './args.ts';
 import { ApiError, ConnectionError } from './client.ts';
 import { adminCommand } from './commands/admin.ts';
@@ -90,9 +90,9 @@ export async function runCli(
   cwd: string = process.cwd(),
 ): Promise<number> {
   const args = parseArgs(argv);
-  // Colour only when the entry point saw a terminal (it sets CONSTANS_COLOR_FORCE) and nobody opted out.
+  // Colour only when the entry point saw a terminal (it sets OMNIFLOW_COLOR_FORCE) and nobody opted out.
   const color =
-    env.CONSTANS_COLOR_FORCE !== undefined &&
+    env.OMNIFLOW_COLOR_FORCE !== undefined &&
     !has(args, 'no-color') &&
     env.NO_COLOR === undefined &&
     env.TERM !== 'dumb';
@@ -134,13 +134,13 @@ export async function runCli(
 /** Print a failure for the user and return the exit code: 2 for usage errors, 1 for everything else. */
 function reportFailure(e: unknown, io: CliIo, style: CliContext['style']): number {
   if (e instanceof UsageError) {
-    io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'constans --help' for usage.")}\n`);
+    io.err(`${style.red('error')}: ${e.message}\n${style.dim("Run 'omniflow --help' for usage.")}\n`);
     return 2;
   }
   if (e instanceof ApiError) {
     const hint =
       e.status === 401
-        ? `\n${style.dim('Check CONSTANS_API_KEY. Create a key with: constans admin create-api-key --name cli')}`
+        ? `\n${style.dim('Check OMNIFLOW_API_KEY. Create a key with: omniflow admin create-api-key --name cli')}`
         : '';
     const apiCode = style.dim(`[${e.code}]`);
     io.err(`${style.red('error')}${apiCode}: ${e.message}${hint}\n`);
@@ -155,7 +155,7 @@ function reportFailure(e: unknown, io: CliIo, style: CliContext['style']): numbe
     io.err(`${style.red('error')}: ${e.message}\n`);
     return 1;
   }
-  if (e instanceof ConstansError) {
+  if (e instanceof OmniflowError) {
     const appCode = style.dim(`[${e.code}]`);
     io.err(`${style.red('error')}${appCode}: ${e.message}\n`);
     return 1;
@@ -175,7 +175,7 @@ if (import.meta.main) {
     process.exitCode = await runCli(
       process.argv.slice(2),
       { out: (t) => process.stdout.write(t), err: (t) => process.stderr.write(t), readStdin: readAllStdin },
-      { ...process.env, ...(process.stdout.isTTY ? { CONSTANS_COLOR_FORCE: '1' } : {}) },
+      { ...process.env, ...(process.stdout.isTTY ? { OMNIFLOW_COLOR_FORCE: '1' } : {}) },
     );
   } catch (e) {
     process.stderr.write(`Fatal: ${(e as Error).message}\n`);

@@ -18,7 +18,7 @@ import {
   toast,
 } from '../ui.js';
 
-const STARTER = `apiVersion: constans/v1
+const STARTER = `apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: my-first-workflow
@@ -193,7 +193,7 @@ export default async function editor(ctx) {
       return notice(
         'info',
         h('strong', {}, 'AI drafting is off. '),
-        'Set CONSTANS_LLM_API_KEY on the server and restart to let the assistant draft workflows from a description. Everything else here works without it.',
+        'Set OMNIFLOW_LLM_API_KEY on the server and restart to let the assistant draft workflows from a description. Everything else here works without it.',
       );
     const intent = h('textarea', {
       class: 'input',

@@ -386,7 +386,7 @@ export const timing: Rule = (input, t) => {
       key: `schedule-drift:${workflow}`,
       title: `'${workflow}' starts ${humanMs(p95)} late (p95)`,
       summary: `Across ${lags.length} scheduled runs, the slowest 5% started ${humanMs(p95)} or more after their scheduled time.`,
-      recommendation: `The scheduler is saturated or the workflow is starved by higher-priority work. Raise CONSTANS_MAX_CONCURRENT_RUNS, stagger competing schedules, or give this workflow a higher priority.`,
+      recommendation: `The scheduler is saturated or the workflow is starved by higher-priority work. Raise OMNIFLOW_MAX_CONCURRENT_RUNS, stagger competing schedules, or give this workflow a higher priority.`,
       evidence: { samples: lags.length, p50Ms: percentile(lags, 50), p95Ms: p95 },
     });
   }
@@ -402,7 +402,7 @@ export const timing: Rule = (input, t) => {
       key: 'queue-starvation',
       title: `Runs wait ${humanMs(p95)} for a slot (p95)`,
       summary: `Across ${waits.length} runs the slowest 5% waited ${humanMs(p95)} or more in the queue before starting.`,
-      recommendation: `Capacity is the bottleneck. Raise CONSTANS_MAX_CONCURRENT_RUNS if the host has headroom, or cap concurrency on the workflows that flood the queue.`,
+      recommendation: `Capacity is the bottleneck. Raise OMNIFLOW_MAX_CONCURRENT_RUNS if the host has headroom, or cap concurrency on the workflows that flood the queue.`,
       evidence: { samples: waits.length, p50Ms: percentile(waits, 50), p95Ms: p95, worst },
     });
   }
