@@ -1,6 +1,6 @@
 // Theme: follow the OS by default; the toggle stores an explicit choice. Storage may be blocked, so every access is guarded.
 (() => {
-  const KEY = 'constans-site-theme';
+  const KEY = 'omniflow-site-theme';
   const root = document.documentElement;
   const read = () => {
     try {

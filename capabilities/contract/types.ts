@@ -1,5 +1,5 @@
 import type { ErrorOptions } from '../../core/index.ts';
-import { ConstansError } from '../../core/index.ts';
+import { OmniflowError } from '../../core/index.ts';
 import type { CapabilityContext, CapabilityDeclaration } from '../../schemas/index.ts';
 
 /**
@@ -18,7 +18,7 @@ export interface CapabilityAdapter<I = any, O = any> {
 }
 
 /** Failure raised by an adapter. Classified so the Orchestrator never has to guess (§12.2). */
-export class CapabilityError extends ConstansError {
+export class CapabilityError extends OmniflowError {
   constructor(code: string, message: string, options: ErrorOptions = {}) {
     super(code, message, options);
   }

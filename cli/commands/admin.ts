@@ -18,7 +18,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createLogger, ConstansError, randomToken } from '../../core/index.ts';
+import { createLogger, OmniflowError, randomToken } from '../../core/index.ts';
 import { Authenticator } from '../../gateway/auth.ts';
 import type { Principal, Role } from '../../schemas/index.ts';
 import { ROLES } from '../../schemas/index.ts';
@@ -30,7 +30,7 @@ import { type CliContext, emit } from '../context.ts';
 import { table } from '../format.ts';
 
 /**
- * Operator commands that act directly on a data directory (`CONSTANS_DATA_DIR`) — the break-glass
+ * Operator commands that act directly on a data directory (`OMNIFLOW_DATA_DIR`) — the break-glass
  * path for when there is no API key yet (first install) or the server is down (backup, integrity
  * check). They run on the machine that holds the data; SQLite's WAL makes them safe alongside a
  * running server.
@@ -39,20 +39,20 @@ import { table } from '../format.ts';
 const SYSTEM: Principal = {
   id: 'system:cli',
   type: 'system',
-  name: 'constans-cli',
+  name: 'omniflow-cli',
   tenant: 'default',
   roles: ['admin'],
 };
 
 function open(ctx: CliContext) {
-  const dataDir = resolve(ctx.cwd, flag(ctx.args, 'data-dir') ?? ctx.env.CONSTANS_DATA_DIR ?? './data');
-  if (!existsSync(join(dataDir, 'constans.db'))) {
+  const dataDir = resolve(ctx.cwd, flag(ctx.args, 'data-dir') ?? ctx.env.OMNIFLOW_DATA_DIR ?? './data');
+  if (!existsSync(join(dataDir, 'omniflow.db'))) {
     throw new UsageError(
-      `No Constans database in ${dataDir}. Set CONSTANS_DATA_DIR (or --data-dir) to the directory the server uses.`,
+      `No OmniFlow database in ${dataDir}. Set OMNIFLOW_DATA_DIR (or --data-dir) to the directory the server uses.`,
     );
   }
   const config = loadConfig(
-    { ...ctx.env, CONSTANS_DATA_DIR: dataDir, CONSTANS_LOG_LEVEL: 'silent' },
+    { ...ctx.env, OMNIFLOW_DATA_DIR: dataDir, OMNIFLOW_LOG_LEVEL: 'silent' },
     { cwd: ctx.cwd, persistMasterKey: false },
   );
   const state = openState(stateOptionsFor(dataDir));
@@ -76,7 +76,7 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1];
   if (!sub)
     throw new UsageError(
-      'Usage: constans admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|doctor|rotate-master-key>',
+      'Usage: omniflow admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|doctor|rotate-master-key>',
     );
 
   // Restore may target a fresh, empty data directory, so it cannot require an existing database.
@@ -105,7 +105,7 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         throw new UsageError(`Unknown admin subcommand '${sub}'`);
     }
   } catch (e) {
-    if (e instanceof ConstansError && !(e instanceof UsageError)) {
+    if (e instanceof OmniflowError && !(e instanceof UsageError)) {
       ctx.err(`${ctx.style.red('error')}: ${e.message}\n`);
       return 1;
     }
@@ -122,9 +122,9 @@ async function createUser(ctx: CliContext, env: AdminEnv): Promise<number> {
   const s = ctx.style;
   const email = flag(ctx.args, 'email');
   if (!email)
-    throw new UsageError('Usage: constans admin create-user --email <email> [--name <name>] [--role admin|operator|…]');
+    throw new UsageError('Usage: omniflow admin create-user --email <email> [--name <name>] [--role admin|operator|…]');
   const generated = `${randomToken(12)}Aa1`;
-  const password = ctx.env.CONSTANS_NEW_PASSWORD ?? generated;
+  const password = ctx.env.OMNIFLOW_NEW_PASSWORD ?? generated;
   const user = await auth.createUser(SYSTEM, {
     email,
     ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name')! } : {}),
@@ -150,7 +150,7 @@ async function resetPassword(ctx: CliContext, env: AdminEnv): Promise<number> {
   const { state, auth } = env;
   const s = ctx.style;
   const email = flag(ctx.args, 'email');
-  if (!email) throw new UsageError('Usage: constans admin reset-password --email <email>');
+  if (!email) throw new UsageError('Usage: omniflow admin reset-password --email <email>');
   const user = state.identity.findUsersByEmail(email)[0];
   if (!user) throw new UsageError(`No user with email ${email}`);
   const password = `${randomToken(12)}Aa1`;
@@ -169,7 +169,7 @@ function createApiKey(ctx: CliContext, env: AdminEnv): number {
   const s = ctx.style;
   const name = flag(ctx.args, 'name');
   if (!name)
-    throw new UsageError('Usage: constans admin create-api-key --name <label> [--role operator] [--tenant default]');
+    throw new UsageError('Usage: omniflow admin create-api-key --name <label> [--role operator] [--tenant default]');
   const tenant = flag(ctx.args, 'tenant') ?? 'default';
   if (!state.identity.getTenant(tenant)) throw new UsageError(`No such tenant '${tenant}'`);
   const { key, record } = auth.createApiKey({ ...SYSTEM, tenant }, { name, roles: rolesOf(ctx, 'operator') });
@@ -177,7 +177,7 @@ function createApiKey(ctx: CliContext, env: AdminEnv): number {
     ctx,
     { id: record.id, key, roles: record.roles },
     () =>
-      `${s.green('✓')} API key created (${record.roles.join(', ')})\n  ${s.bold(key)}\n  Store it now — it cannot be shown again.\n  export CONSTANS_API_KEY=${key}`,
+      `${s.green('✓')} API key created (${record.roles.join(', ')})\n  ${s.bold(key)}\n  Store it now — it cannot be shown again.\n  export OMNIFLOW_API_KEY=${key}`,
   );
   return 0;
 }
@@ -233,7 +233,7 @@ function backupDb(ctx: CliContext, env: AdminEnv): number {
   const { state, dataDir } = env;
   const s = ctx.style;
   const dest = ctx.args.positionals[2];
-  if (!dest) throw new UsageError('Usage: constans admin backup <destination-file>');
+  if (!dest) throw new UsageError('Usage: omniflow admin backup <destination-file>');
   const abs = resolve(ctx.cwd, dest);
   if (existsSync(abs)) throw new UsageError(`${dest} already exists; refusing to overwrite a backup`);
   mkdirSync(dirname(abs), { recursive: true });
@@ -247,7 +247,7 @@ function backupDb(ctx: CliContext, env: AdminEnv): number {
     ctx,
     { ok: true, file: abs, bytes },
     () =>
-      `${s.green('✓')} backed up ${dataDir} to ${abs} (${(bytes / 1024).toFixed(0)} KiB)\n  ${s.dim('The master key is NOT in the backup. Keep CONSTANS_MASTER_KEY (or data/master.key) safely elsewhere — without it stored secrets cannot be decrypted.')}`,
+      `${s.green('✓')} backed up ${dataDir} to ${abs} (${(bytes / 1024).toFixed(0)} KiB)\n  ${s.dim('The master key is NOT in the backup. Keep OMNIFLOW_MASTER_KEY (or data/master.key) safely elsewhere — without it stored secrets cannot be decrypted.')}`,
   );
   return 0;
 }
@@ -257,7 +257,7 @@ function rotateMasterKey(ctx: CliContext, env: AdminEnv): number {
   const s = ctx.style;
   if (config.masterKeySource === 'ephemeral')
     throw new UsageError(
-      'No master key is available. Provide the new key in CONSTANS_MASTER_KEY and the old one(s) in CONSTANS_PREVIOUS_MASTER_KEYS.',
+      'No master key is available. Provide the new key in OMNIFLOW_MASTER_KEY and the old one(s) in OMNIFLOW_PREVIOUS_MASTER_KEYS.',
     );
   const keyring = createKeyring(config.masterKey, config.previousMasterKeys);
   const broker = new SecretBroker(state.secrets, keyring);
@@ -266,7 +266,7 @@ function rotateMasterKey(ctx: CliContext, env: AdminEnv): number {
     ctx,
     { ok: true, rewritten },
     () =>
-      `${s.green('✓')} ${rewritten} secret${rewritten === 1 ? '' : 's'} re-encrypted under the current master key\n  ${s.dim('Once every instance runs the new CONSTANS_MASTER_KEY you can drop CONSTANS_PREVIOUS_MASTER_KEYS.')}`,
+      `${s.green('✓')} ${rewritten} secret${rewritten === 1 ? '' : 's'} re-encrypted under the current master key\n  ${s.dim('Once every instance runs the new OMNIFLOW_MASTER_KEY you can drop OMNIFLOW_PREVIOUS_MASTER_KEYS.')}`,
   );
   return 0;
 }
@@ -363,7 +363,7 @@ function checkSecrets(add: Add, config: DoctorEnv['config'], state: State, dataD
     add(
       n ? 'fail' : 'warn',
       'master key',
-      `not available to this command (no CONSTANS_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${stored}`,
+      `not available to this command (no OMNIFLOW_MASTER_KEY and no ${join(dataDir, 'master.key')}); ${stored}`,
     );
   }
   let unreadable = 0;
@@ -380,10 +380,10 @@ function checkSecrets(add: Add, config: DoctorEnv['config'], state: State, dataD
     add(
       'fail',
       'secrets',
-      `${unreadable} of ${secrets.length} cannot be decrypted with the configured master key(s) — is CONSTANS_MASTER_KEY the one they were written with?`,
+      `${unreadable} of ${secrets.length} cannot be decrypted with the configured master key(s) — is OMNIFLOW_MASTER_KEY the one they were written with?`,
     );
   else if (old)
-    add('warn', 'secrets', `${old} secret(s) still use an older master key; run 'constans admin rotate-master-key'`);
+    add('warn', 'secrets', `${old} secret(s) still use an older master key; run 'omniflow admin rotate-master-key'`);
   else if (config.masterKeySource !== 'ephemeral')
     add('ok', 'secrets', `${secrets.length} stored, all readable with the current master key`);
 }
@@ -392,14 +392,14 @@ function checkMasterKeyFile(add: Add, ctx: CliContext, config: DoctorEnv['config
   const keyFile = join(dataDir, 'master.key');
   if (config.masterKeySource === 'ephemeral') {
     /* reported above */
-  } else if (ctx.env.CONSTANS_MASTER_KEY) add('ok', 'master key', 'supplied through CONSTANS_MASTER_KEY');
+  } else if (ctx.env.OMNIFLOW_MASTER_KEY) add('ok', 'master key', 'supplied through OMNIFLOW_MASTER_KEY');
   else if (existsSync(keyFile)) {
     const loose = (statSync(keyFile).mode & 0o077) !== 0;
     const production = config.environment === 'production';
     if (loose) add('fail', 'master key', `${keyFile} is readable by other users (chmod 600)`);
     else {
       const advice = production
-        ? ' — in production, supply CONSTANS_MASTER_KEY from a secret manager and keep a copy off this host'
+        ? ' — in production, supply OMNIFLOW_MASTER_KEY from a secret manager and keep a copy off this host'
         : '';
       add(production ? 'warn' : 'ok', 'master key', `generated key in ${keyFile}${advice}`);
     }
@@ -409,7 +409,7 @@ function checkMasterKeyFile(add: Add, ctx: CliContext, config: DoctorEnv['config
 function checkAdministrators(add: Add, state: State): void {
   const admins = state.identity.listUsers('default').filter((u) => u.roles.includes('admin') && !u.disabled);
   if (admins.length) add('ok', 'administrators', `${admins.length} active admin${plural(admins.length)}`);
-  else add('fail', 'administrators', 'no active administrator — run: constans admin create-user --role admin');
+  else add('fail', 'administrators', 'no active administrator — run: omniflow admin create-user --role admin');
 }
 
 function checkProduction(add: Add, config: DoctorEnv['config']): void {
@@ -417,28 +417,28 @@ function checkProduction(add: Add, config: DoctorEnv['config']): void {
     add(
       'warn',
       'HTTPS',
-      `CONSTANS_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`,
+      `OMNIFLOW_PUBLIC_URL is ${config.publicUrl}: session cookies will not be marked Secure. Put a TLS-terminating proxy in front and set an https:// URL.`,
     );
   else if (!config.trustProxy)
     add(
       'warn',
       'reverse proxy',
-      "CONSTANS_PUBLIC_URL is https but CONSTANS_TRUST_PROXY is off: rate limits and audit will see the proxy's address, not the client's",
+      "OMNIFLOW_PUBLIC_URL is https but OMNIFLOW_TRUST_PROXY is off: rate limits and audit will see the proxy's address, not the client's",
     );
   else add('ok', 'HTTPS', 'public URL is https and the proxy is trusted');
   add(
     'ok',
     'metrics',
     config.metricsToken
-      ? '/metrics accepts the CONSTANS_METRICS_TOKEN bearer token'
-      : '/metrics needs an API key with audit access (set CONSTANS_METRICS_TOKEN for a dedicated scrape token)',
+      ? '/metrics accepts the OMNIFLOW_METRICS_TOKEN bearer token'
+      : '/metrics needs an API key with audit access (set OMNIFLOW_METRICS_TOKEN for a dedicated scrape token)',
   );
   add(
     config.alertChannels.length ? 'ok' : 'warn',
     'alerting',
     config.alertChannels.length
       ? `alerts go to: ${config.alertChannels.join(', ')}`
-      : 'no CONSTANS_ALERT_CHANNELS: alerts are only visible in the console',
+      : 'no OMNIFLOW_ALERT_CHANNELS: alerts are only visible in the console',
   );
 }
 
@@ -447,13 +447,13 @@ function checkRiskyAdapters(add: Add, config: DoctorEnv['config']): void {
     add(
       'warn',
       'shell capability',
-      `enabled for ${config.adapters.shell.allowedCommands.length} executable(s); run Constans in a network-restricted container`,
+      `enabled for ${config.adapters.shell.allowedCommands.length} executable(s); run OmniFlow in a network-restricted container`,
     );
   if (config.adapters.allowPrivateNetworks)
     add(
       'warn',
       'private network egress',
-      'CONSTANS_ALLOW_PRIVATE_EGRESS is on: allow-listed hosts may resolve to private addresses',
+      'OMNIFLOW_ALLOW_PRIVATE_EGRESS is on: allow-listed hosts may resolve to private addresses',
     );
 }
 
@@ -481,14 +481,14 @@ function reportDoctor(ctx: CliContext, checks: Check[]): number {
 function restore(ctx: CliContext): number {
   const s = ctx.style;
   const src = ctx.args.positionals[2];
-  if (!src) throw new UsageError('Usage: constans admin restore <backup-file> [--yes]   (stop the server first)');
+  if (!src) throw new UsageError('Usage: omniflow admin restore <backup-file> [--yes]   (stop the server first)');
   const from = resolve(ctx.cwd, src);
   if (!existsSync(from)) throw new UsageError(`No such backup: ${src}`);
-  const dataDir = resolve(ctx.cwd, flag(ctx.args, 'data-dir') ?? ctx.env.CONSTANS_DATA_DIR ?? './data');
-  const target = join(dataDir, 'constans.db');
+  const dataDir = resolve(ctx.cwd, flag(ctx.args, 'data-dir') ?? ctx.env.OMNIFLOW_DATA_DIR ?? './data');
+  const target = join(dataDir, 'omniflow.db');
 
   // 1. verify the snapshot on a scratch copy, so the original is never modified (opening migrates)
-  const scratch = mkdtempSync(join(tmpdir(), 'constans-restore-'));
+  const scratch = mkdtempSync(join(tmpdir(), 'omniflow-restore-'));
   try {
     const copy = join(scratch, 'snapshot.db');
     copyFileSync(from, copy);
@@ -516,7 +516,7 @@ function restore(ctx: CliContext): number {
   if (existsSync(target)) {
     if (!has(ctx.args, 'yes'))
       throw new UsageError(
-        `${target} already exists. Re-run with --yes to replace it (the old database is kept as constans.db.pre-restore-*).`,
+        `${target} already exists. Re-run with --yes to replace it (the old database is kept as omniflow.db.pre-restore-*).`,
       );
     const live = new DatabaseSync(target);
     try {
@@ -525,7 +525,7 @@ function restore(ctx: CliContext): number {
       live.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     } catch {
       live.close();
-      throw new UsageError('The database is in use. Stop the Constans server before restoring.');
+      throw new UsageError('The database is in use. Stop the OmniFlow server before restoring.');
     }
     live.close();
     previous = `${target}.pre-restore-${new Date().toISOString().replace(/[:.]/g, '-')}`;
@@ -543,7 +543,7 @@ function restore(ctx: CliContext): number {
     [
       `${s.green('✓')} restored ${from} → ${target}`,
       previous ? `  previous database kept at ${previous}` : '',
-      '  Start the server, then run: constans admin doctor',
+      '  Start the server, then run: omniflow admin doctor',
       s.dim('  Secrets in the snapshot can only be read with the master key they were written with.'),
     ]
       .filter(Boolean)

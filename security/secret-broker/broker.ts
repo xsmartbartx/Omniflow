@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { type Clock, ConstansError, compareStrings, newId, systemClock, ValidationError } from '../../core/index.ts';
+import { type Clock, OmniflowError, compareStrings, newId, systemClock, ValidationError } from '../../core/index.ts';
 import type { Lease } from '../../schemas/capability.ts';
 
 /**
@@ -45,7 +45,7 @@ function decodeKey(material: string): Buffer {
   if (/^[0-9a-fA-F]{64}$/.test(trimmed)) buf = Buffer.from(trimmed, 'hex');
   else buf = Buffer.from(trimmed, 'base64');
   if (buf.length !== 32) {
-    throw new ConstansError(
+    throw new OmniflowError(
       'INVALID_MASTER_KEY',
       'The master key must be exactly 32 bytes (64 hex characters or base64).',
       {
@@ -101,7 +101,7 @@ export function encryptSecret(
 export function decryptSecret(keyring: Keyring, tenant: string, name: string, cipher: string): string {
   const parts = cipher.split(':');
   if (parts.length !== 5 || parts[0] !== 'v1') {
-    throw new ConstansError('SECRET_CORRUPT', `Secret '${name}' has an unrecognised format`, {
+    throw new OmniflowError('SECRET_CORRUPT', `Secret '${name}' has an unrecognised format`, {
       errorClass: 'catastrophic',
       retryable: false,
     });
@@ -109,7 +109,7 @@ export function decryptSecret(keyring: Keyring, tenant: string, name: string, ci
   const [, keyId, iv, tag, ct] = parts as [string, string, string, string, string];
   const key = keyring.keys.get(keyId);
   if (!key) {
-    throw new ConstansError(
+    throw new OmniflowError(
       'SECRET_KEY_MISSING',
       `Secret '${name}' was encrypted with key ${keyId}, which is not in the keyring`,
       {
@@ -124,7 +124,7 @@ export function decryptSecret(keyring: Keyring, tenant: string, name: string, ci
     d.setAuthTag(Buffer.from(tag, 'base64'));
     return Buffer.concat([d.update(Buffer.from(ct, 'base64')), d.final()]).toString('utf8');
   } catch {
-    throw new ConstansError('SECRET_TAMPERED', `Secret '${name}' failed authentication — it was modified or moved`, {
+    throw new OmniflowError('SECRET_TAMPERED', `Secret '${name}' failed authentication — it was modified or moved`, {
       errorClass: 'catastrophic',
       retryable: false,
     });
@@ -183,14 +183,14 @@ class LeaseImpl implements ActiveLease {
 
   private live(): Map<string, string> {
     if (this.secrets === null) {
-      throw new ConstansError('LEASE_REVOKED', 'Secret lease has been revoked', {
+      throw new OmniflowError('LEASE_REVOKED', 'Secret lease has been revoked', {
         errorClass: 'authorisation',
         retryable: false,
       });
     }
     if (this.clock.now().getTime() > this.expiresMs) {
       this.revoke();
-      throw new ConstansError('LEASE_EXPIRED', 'Secret lease has expired', {
+      throw new OmniflowError('LEASE_EXPIRED', 'Secret lease has expired', {
         errorClass: 'authorisation',
         retryable: false,
       });
@@ -206,7 +206,7 @@ class LeaseImpl implements ActiveLease {
     const s = this.live();
     const v = s.get(name);
     if (v === undefined) {
-      throw new ConstansError('SECRET_NOT_GRANTED', `Secret '${name}' was not granted to this step`, {
+      throw new OmniflowError('SECRET_NOT_GRANTED', `Secret '${name}' was not granted to this step`, {
         errorClass: 'authorisation',
         retryable: false,
       });
@@ -284,7 +284,7 @@ export class SecretBroker {
     for (const name of new Set(req.names)) {
       const rec = this.store.get(req.tenant, name);
       if (!rec) {
-        throw new ConstansError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, {
+        throw new OmniflowError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, {
           errorClass: 'contract',
           retryable: false,
           details: { name },

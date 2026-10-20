@@ -26,12 +26,12 @@ async function request(method, path, body, accept = 'application/json') {
       headers: {
         accept,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        ...(method !== 'GET' ? { 'x-requested-with': 'constans' } : {}),
+        ...(method !== 'GET' ? { 'x-requested-with': 'omniflow' } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
-    throw new ApiError(0, 'NETWORK', 'Cannot reach the Constans server. Check your connection.');
+    throw new ApiError(0, 'NETWORK', 'Cannot reach the OmniFlow server. Check your connection.');
   }
   const text = await res.text();
   if (!res.ok) {

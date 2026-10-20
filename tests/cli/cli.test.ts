@@ -7,7 +7,7 @@ import { runCli } from '../../cli/main.ts';
 import { createLogger } from '../../core/index.ts';
 import { buildServer } from '../../gateway/server.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createConstans } from '../../server/platform.ts';
+import { createOmniflow } from '../../server/platform.ts';
 import { openState, stateOptionsFor } from '../../state/index.ts';
 import { type Api, echoStep, makeApi, until, yamlWf } from '../helpers/api.ts';
 
@@ -26,13 +26,13 @@ async function cli(
   const code = await runCli(
     argv,
     { out: (t) => (out += t), err: (t) => (err += t), readStdin: async () => opts.stdin ?? '' },
-    { CONSTANS_LOG_LEVEL: 'silent', ...opts.env },
+    { OMNIFLOW_LOG_LEVEL: 'silent', ...opts.env },
     opts.cwd ?? tmpdir(),
   );
   return { code, out, err };
 }
 
-const tmp = () => mkdtempSync(join(tmpdir(), 'constans-cli-'));
+const tmp = () => mkdtempSync(join(tmpdir(), 'omniflow-cli-'));
 const HELLO = yamlWf(
   'hello',
   [
@@ -89,7 +89,7 @@ describe('argument parsing', () => {
 
 describe('help and errors', () => {
   it('prints help and version; unknown commands are a usage error', async () => {
-    expect((await cli(['--help'])).out).toContain('Usage: constans');
+    expect((await cli(['--help'])).out).toContain('Usage: omniflow');
     expect((await cli([])).code).toBe(2);
     expect((await cli(['--version'])).out).toMatch(/^\d+\.\d+\.\d+/);
     const bad = await cli(['frobnicate']);
@@ -100,11 +100,11 @@ describe('help and errors', () => {
   it('asks for an API key instead of calling the server without one', async () => {
     const r = await cli(['workflows']);
     expect(r.code).toBe(2);
-    expect(r.err).toContain('CONSTANS_API_KEY');
+    expect(r.err).toContain('OMNIFLOW_API_KEY');
   });
 
   it('reports an unreachable server clearly', async () => {
-    const r = await cli(['workflows', '--key', 'cns_x'], { env: { CONSTANS_URL: 'http://127.0.0.1:1' } });
+    const r = await cli(['workflows', '--key', 'omf_x'], { env: { OMNIFLOW_URL: 'http://127.0.0.1:1' } });
     expect(r.code).toBe(1);
     expect(r.err).toContain('Could not reach');
   });
@@ -195,7 +195,7 @@ describe('dev (embedded run)', () => {
     expect(r.out).toContain('hello Ada!');
     expect(r.out).toMatch(/greet[\s\S]*again/);
     // no data directory was created in the working directory
-    expect(() => readFileSync(join(cwd, 'data', 'constans.db'))).toThrow();
+    expect(() => readFileSync(join(cwd, 'data', 'omniflow.db'))).toThrow();
   });
 
   it('exits 1 when the run fails and shows why', async () => {
@@ -236,7 +236,7 @@ describe('remote commands against a live server', () => {
   let api: Api;
   let url = '';
   let key = '';
-  const env = () => ({ CONSTANS_URL: url, CONSTANS_API_KEY: key });
+  const env = () => ({ OMNIFLOW_URL: url, OMNIFLOW_API_KEY: key });
 
   beforeAll(async () => {
     api = await makeApi();
@@ -250,16 +250,16 @@ describe('remote commands against a live server', () => {
   });
 
   it('reports server status without needing a key', async () => {
-    const r = await cli(['status'], { env: { CONSTANS_URL: url } });
+    const r = await cli(['status'], { env: { OMNIFLOW_URL: url } });
     expect(r.code).toBe(0);
-    expect(r.out).toContain('Constans');
+    expect(r.out).toContain('OmniFlow');
     expect(r.out).toContain('ready: yes');
   });
 
   it('rejects a bad key with a hint', async () => {
-    const r = await cli(['workflows'], { env: { CONSTANS_URL: url, CONSTANS_API_KEY: 'cns_000000000000_wrong' } });
+    const r = await cli(['workflows'], { env: { OMNIFLOW_URL: url, OMNIFLOW_API_KEY: 'omf_000000000000_wrong' } });
     expect(r.code).toBe(1);
-    expect(r.err).toContain('Check CONSTANS_API_KEY');
+    expect(r.err).toContain('Check OMNIFLOW_API_KEY');
   });
 
   it('publishes, lists, runs, follows, inspects and audits a workflow', async () => {
@@ -373,7 +373,7 @@ describe('remote commands against a live server', () => {
     // … a different person may.
     const other = (await api.key(['admin'])).apiKey!;
     const ok = await cli(['approvals', 'approve', id, '--comment', 'lgtm'], {
-      env: { CONSTANS_URL: url, CONSTANS_API_KEY: other },
+      env: { OMNIFLOW_URL: url, OMNIFLOW_API_KEY: other },
     });
     expect(ok.code).toBe(0);
     await until(() => api.app.state.runs.getRun(runId)?.status === 'succeeded');
@@ -409,14 +409,14 @@ describe('admin commands on a data directory', () => {
   beforeAll(async () => {
     const config = loadConfig(
       {
-        CONSTANS_DATA_DIR: dataDir,
-        CONSTANS_LOG_LEVEL: 'silent',
-        CONSTANS_ADMIN_PASSWORD: 'correct-horse-battery-staple',
-        CONSTANS_ENV: 'production',
+        OMNIFLOW_DATA_DIR: dataDir,
+        OMNIFLOW_LOG_LEVEL: 'silent',
+        OMNIFLOW_ADMIN_PASSWORD: 'correct-horse-battery-staple',
+        OMNIFLOW_ENV: 'production',
       },
       { cwd: dataDir },
     );
-    const app = createConstans(config, { log: createLogger({ level: 'silent' }) });
+    const app = createOmniflow(config, { log: createLogger({ level: 'silent' }) });
     await app.start();
     const { server } = await buildServer(app);
     await server.listen({ host: '127.0.0.1', port: 0 });
@@ -432,15 +432,15 @@ describe('admin commands on a data directory', () => {
   });
 
   const admin = (argv: string[], stdin?: string) =>
-    cli(['admin', ...argv], { env: { CONSTANS_DATA_DIR: dataDir }, cwd: dataDir, ...(stdin ? { stdin } : {}) });
+    cli(['admin', ...argv], { env: { OMNIFLOW_DATA_DIR: dataDir }, cwd: dataDir, ...(stdin ? { stdin } : {}) });
 
   it('bootstraps API access with no login: create-api-key, then use it against the server', async () => {
     const created = await admin(['create-api-key', '--name', 'ci', '--role', 'operator', '--json']);
     expect(created.code).toBe(0);
     const { key, roles } = JSON.parse(created.out);
-    expect(key).toMatch(/^cns_[0-9a-f]{12}_/);
+    expect(key).toMatch(/^omf_[0-9a-f]{12}_/);
     expect(roles).toEqual(['operator']);
-    const status = await cli(['workflows'], { env: { CONSTANS_URL: url, CONSTANS_API_KEY: key } });
+    const status = await cli(['workflows'], { env: { OMNIFLOW_URL: url, OMNIFLOW_API_KEY: key } });
     expect(status.code).toBe(0);
   });
 
@@ -468,7 +468,7 @@ describe('admin commands on a data directory', () => {
 
     const users = await admin(['list-users']);
     expect(users.out).toContain('ops@example.com');
-    expect(users.out).toContain('admin@constans.local');
+    expect(users.out).toContain('admin@omniflow.local');
     expect((await admin(['create-user', '--email', 'x@example.com', '--role', 'overlord'])).code).toBe(2);
     expect((await admin(['create-user'])).code).toBe(2);
     expect((await admin(['reset-password', '--email', 'ghost@example.com'])).code).toBe(2);
@@ -495,9 +495,9 @@ describe('admin commands on a data directory', () => {
   });
 
   it('refuses to run without a database', async () => {
-    const r = await cli(['admin', 'list-users'], { env: { CONSTANS_DATA_DIR: join(tmp(), 'empty') } });
+    const r = await cli(['admin', 'list-users'], { env: { OMNIFLOW_DATA_DIR: join(tmp(), 'empty') } });
     expect(r.code).toBe(2);
-    expect(r.err).toContain('No Constans database');
+    expect(r.err).toContain('No OmniFlow database');
   });
 });
 
@@ -508,8 +508,8 @@ describe('insight commands', () => {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
       const env = {
-        CONSTANS_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
-        CONSTANS_API_KEY: (await api.key(['admin'])).apiKey!,
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
       };
       const wf = yamlWf('swallow', [
         echoStep('a', 1),
@@ -562,13 +562,13 @@ describe('authoring commands', () => {
         questions: ['Which language?'],
       }),
     );
-    const api = await makeApi({ llm, env: { CONSTANS_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl' } });
+    const api = await makeApi({ llm, env: { OMNIFLOW_SHELL_ALLOWED_COMMANDS: '/usr/bin/curl' } });
     try {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
       const env = {
-        CONSTANS_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
-        CONSTANS_API_KEY: (await api.key(['admin'])).apiKey!,
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
       };
       const dir = tmp();
 
@@ -584,7 +584,7 @@ describe('authoring commands', () => {
       expect((await cli(['drafts'], { env })).out).toContain(draftId);
       const shown = await cli(['drafts', 'show', draftId], { env });
       expect(shown.out).toContain('Says hello.');
-      expect(shown.out).toContain('apiVersion: constans/v1');
+      expect(shown.out).toContain('apiVersion: omniflow.dev/v1');
       expect((await cli(['drafts', 'show', draftId, '--manifest'], { env })).out).toMatch(/^apiVersion:/);
       expect((await cli(['drafts', 'validate', draftId], { env })).code).toBe(0);
       const apply = await cli(['drafts', 'apply', draftId], { env });
@@ -640,13 +640,13 @@ describe('authoring commands', () => {
       await api.server.listen({ host: '127.0.0.1', port: 0 });
       const addr = api.server.server.address();
       const env = {
-        CONSTANS_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
-        CONSTANS_API_KEY: (await api.key(['admin'])).apiKey!,
+        OMNIFLOW_URL: `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`,
+        OMNIFLOW_API_KEY: (await api.key(['admin'])).apiKey!,
       };
       const r = await cli(['plan', 'do', 'something'], { env });
       expect(r.code).toBe(1);
       expect(r.err).toContain('AI_NOT_CONFIGURED');
-      expect(r.err).toContain('CONSTANS_LLM_API_KEY');
+      expect(r.err).toContain('OMNIFLOW_LLM_API_KEY');
     } finally {
       await api.stop();
     }

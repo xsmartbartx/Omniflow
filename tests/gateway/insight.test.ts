@@ -118,26 +118,26 @@ describe('insight endpoints', () => {
 });
 
 describe('alert configuration', () => {
-  const base = { CONSTANS_DATA_DIR: '', CONSTANS_LOG_LEVEL: 'silent' };
+  const base = { OMNIFLOW_DATA_DIR: '', OMNIFLOW_LOG_LEVEL: 'silent' };
   it('accepts alert channels that are defined, and rejects ones that are not', () => {
     const dir = api.dir;
     const ok = loadConfig(
       {
         ...base,
-        CONSTANS_DATA_DIR: dir,
-        CONSTANS_CHANNELS: '{"ops":"slack:https://hooks.slack.com/x"}',
-        CONSTANS_ALERT_CHANNELS: 'ops',
+        OMNIFLOW_DATA_DIR: dir,
+        OMNIFLOW_CHANNELS: '{"ops":"slack:https://hooks.slack.com/x"}',
+        OMNIFLOW_ALERT_CHANNELS: 'ops',
       },
       { cwd: dir },
     );
     expect(ok.alertChannels).toEqual(['ops']);
     expect(() =>
-      loadConfig({ ...base, CONSTANS_DATA_DIR: dir, CONSTANS_ALERT_CHANNELS: 'nowhere' }, { cwd: dir }),
-    ).toThrow(/not defined in CONSTANS_CHANNELS/);
-    const defaults = loadConfig({ ...base, CONSTANS_DATA_DIR: dir }, { cwd: dir });
+      loadConfig({ ...base, OMNIFLOW_DATA_DIR: dir, OMNIFLOW_ALERT_CHANNELS: 'nowhere' }, { cwd: dir }),
+    ).toThrow(/not defined in OMNIFLOW_CHANNELS/);
+    const defaults = loadConfig({ ...base, OMNIFLOW_DATA_DIR: dir }, { cwd: dir });
     expect(defaults).toMatchObject({ alertChannels: [], analysisIntervalHours: 24, alertIntervalSeconds: 60 });
     expect(() =>
-      loadConfig({ ...base, CONSTANS_DATA_DIR: dir, CONSTANS_ALERT_INTERVAL_SECONDS: '1' }, { cwd: dir }),
+      loadConfig({ ...base, OMNIFLOW_DATA_DIR: dir, OMNIFLOW_ALERT_INTERVAL_SECONDS: '1' }, { cwd: dir }),
     ).toThrow(/between 5 and 3600/);
   });
 });
@@ -157,9 +157,9 @@ describe("alerts reach the operator's chat channel", () => {
     const port = (hook.address() as { port: number }).port;
     const wired = await makeApi({
       env: {
-        CONSTANS_CHANNELS: JSON.stringify({ ops: `generic:http://127.0.0.1:${port}/hook` }),
-        CONSTANS_ALERT_CHANNELS: 'ops',
-        CONSTANS_ALLOW_PRIVATE_EGRESS: 'true',
+        OMNIFLOW_CHANNELS: JSON.stringify({ ops: `generic:http://127.0.0.1:${port}/hook` }),
+        OMNIFLOW_ALERT_CHANNELS: 'ops',
+        OMNIFLOW_ALLOW_PRIVATE_EGRESS: 'true',
       },
     });
     try {
@@ -194,9 +194,9 @@ describe("alerts reach the operator's chat channel", () => {
   it('keeps working when the channel is unreachable', async () => {
     const wired = await makeApi({
       env: {
-        CONSTANS_CHANNELS: JSON.stringify({ ops: 'generic:http://127.0.0.1:1/hook' }),
-        CONSTANS_ALERT_CHANNELS: 'ops',
-        CONSTANS_ALLOW_PRIVATE_EGRESS: 'true',
+        OMNIFLOW_CHANNELS: JSON.stringify({ ops: 'generic:http://127.0.0.1:1/hook' }),
+        OMNIFLOW_ALERT_CHANNELS: 'ops',
+        OMNIFLOW_ALLOW_PRIVATE_EGRESS: 'true',
       },
     });
     try {

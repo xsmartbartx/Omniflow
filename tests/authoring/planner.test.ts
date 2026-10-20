@@ -61,7 +61,7 @@ describe('parsing model replies', () => {
     );
     expect(r.rationale).toBe('Because.');
     expect(r.openQuestions).toEqual(['Which channel?', 'What threshold?']);
-    expect(r.manifest).toContain('apiVersion: constans/v1');
+    expect(r.manifest).toContain('apiVersion: omniflow.dev/v1');
   });
 
   it('tolerates missing tags, prose, and several code blocks — the manifest is the one that looks like one', () => {

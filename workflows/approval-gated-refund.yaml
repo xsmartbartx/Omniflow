@@ -1,7 +1,7 @@
 # Human-in-the-loop: the run pauses at "sign-off" until a *different* person approves it
 # (four-eyes: whoever started the run cannot approve it). Approve in the console or with:
-#   constans approvals approve <id>
-apiVersion: constans/v1
+#   omniflow approvals approve <id>
+apiVersion: omniflow.dev/v1
 kind: Workflow
 metadata:
   name: approval-gated-refund

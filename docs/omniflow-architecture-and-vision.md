@@ -1,10 +1,10 @@
-# Constans — AI Workflow Substrate
+# OmniFlow — AI Workflow Substrate
 
 **Architecture & Vision**
 
 | Field | Value |
 |---|---|
-| Document ID | `constans-architecture-and-vision` |
+| Document ID | `omniflow-architecture-and-vision` |
 | Status | Draft for review |
 | Version | 1.0 |
 | Date | 2026-09-06 |
@@ -44,7 +44,7 @@
 
 ## 1. Purpose
 
-This document defines the architecture and product vision for **Constans**, an AI system template intended to replace the heterogeneous collection of workflows that accumulate inside a company: cron jobs, PowerShell and Python scripts, low-code automations, CI pipelines used as schedulers, and manual runbooks executed by people.
+This document defines the architecture and product vision for **OmniFlow**, an AI system template intended to replace the heterogeneous collection of workflows that accumulate inside a company: cron jobs, PowerShell and Python scripts, low-code automations, CI pipelines used as schedulers, and manual runbooks executed by people.
 
 It is written to be **directly buildable**. Every section either constrains a design decision, names a component with a defined responsibility and boundary, or specifies an increment of work. It contains no implementation code by design — code is the developer's output, not the architect's.
 
@@ -85,7 +85,7 @@ If a workflow is a versioned, validated, immutable **artifact** — a declarativ
 - it can be **executed deterministically** by a single engine, so behaviour does not depend on which server it landed on,
 - and critically, it can be **generated, explained and improved by an AI agent** — because generating a constrained data structure that a validator can reject is a vastly safer problem than generating arbitrary code that a machine will execute.
 
-This last point is the hinge of the whole design. Constans is not "an LLM that runs your business". It is a **deterministic execution engine with an AI front-end**. The AI proposes; the engine disposes.
+This last point is the hinge of the whole design. OmniFlow is not "an LLM that runs your business". It is a **deterministic execution engine with an AI front-end**. The AI proposes; the engine disposes.
 
 ### 2.3 What "replace any workflow" means
 
@@ -109,10 +109,10 @@ This last point is the hinge of the whole design. Constans is not "an LLM that r
 
 ### 2.5 Non-goals
 
-- Constans is **not** a general-purpose programming runtime. If a step needs arbitrary logic, that logic belongs in a capability adapter with a typed contract, not inline in the manifest.
-- Constans is **not** a data warehouse or ETL platform, though it can orchestrate one.
-- Constans does **not** aim for exactly-once delivery across all external systems — an impossible guarantee. It aims for **at-least-once execution with idempotency keys**, which is achievable and honest.
-- Constans does **not** replace CI/CD for building software. It may be *triggered* by CI/CD and may *trigger* it.
+- OmniFlow is **not** a general-purpose programming runtime. If a step needs arbitrary logic, that logic belongs in a capability adapter with a typed contract, not inline in the manifest.
+- OmniFlow is **not** a data warehouse or ETL platform, though it can orchestrate one.
+- OmniFlow does **not** aim for exactly-once delivery across all external systems — an impossible guarantee. It aims for **at-least-once execution with idempotency keys**, which is achievable and honest.
+- OmniFlow does **not** replace CI/CD for building software. It may be *triggered* by CI/CD and may *trigger* it.
 
 ---
 
@@ -189,9 +189,9 @@ The system separates into four planes, and this separation is the single most im
 
 ## 4. Architecture Layers
 
-Constans keeps the five layers defined in `ADR-0001` and adds one. The addition is deliberate and is the subject of `ADR-0002`.
+OmniFlow keeps the five layers defined in `ADR-0001` and adds one. The addition is deliberate and is the subject of `ADR-0002`.
 
-| Layer | Inherited from ADR-0001 | Responsibility in Constans |
+| Layer | Inherited from ADR-0001 | Responsibility in OmniFlow |
 |---|---|---|
 | **Core** | Yes | Models, typed value objects, error taxonomy, logging and validation primitives. No business logic, no external calls. |
 | **Modules** | Yes | Isolated functional units: registry, compiler, scheduler, orchestrator, analysis. |
@@ -399,7 +399,7 @@ Running workflows always complete against the plan they started with. Version pi
 
 ## 7. Capability Model — How the System Touches the World
 
-A **capability** is the unit of integration. It is the only path from Constans to anything external, and it is what makes the system genuinely able to absorb arbitrary workflows: replacing a new class of workflow means writing an adapter, not changing the engine.
+A **capability** is the unit of integration. It is the only path from OmniFlow to anything external, and it is what makes the system genuinely able to absorb arbitrary workflows: replacing a new class of workflow means writing an adapter, not changing the engine.
 
 ### 7.1 Capability declaration
 
@@ -437,13 +437,13 @@ The **shell executor** deserves emphasis: it is the migration bridge. It lets an
 
 An `llm-inference` capability is an ordinary step: typed input, typed output, schema-validated response, bounded cost, declared as `effectful` when it can act. Model non-determinism is contained by validating the output against a schema and by treating a schema violation as a normal, retryable failure.
 
-This is the difference between "AI in the workflow" and "AI as the workflow". Constans allows the former everywhere and permits the latter only in the Authoring plane, where a human or a validator reviews the result before it can run.
+This is the difference between "AI in the workflow" and "AI as the workflow". OmniFlow allows the former everywhere and permits the latter only in the Authoring plane, where a human or a validator reviews the result before it can run.
 
 ---
 
 ## 8. AI Agent Model
 
-Constans inherits the multi-agent model of `docs/agent-workflow.md` and extends it from repository maintenance into runtime operation. Agents obey the safety rules of `docs/agent-safety.md` without exception.
+OmniFlow inherits the multi-agent model of `docs/agent-workflow.md` and extends it from repository maintenance into runtime operation. Agents obey the safety rules of `docs/agent-safety.md` without exception.
 
 ### 8.1 Agent roster
 
@@ -799,10 +799,10 @@ Most workflows should travel **Lift → Wrap → Decompose**, and it is legitima
 
 ```mermaid
 flowchart LR
-    A[Legacy runs alone] --> B[Shadow: Constans runs in parallel, effects disabled]
+    A[Legacy runs alone] --> B[Shadow: OmniFlow runs in parallel, effects disabled]
     B --> C[Compare outputs and timings]
-    C --> D[Canary: Constans takes a percentage of real runs]
-    D --> E[Constans primary, legacy on standby]
+    C --> D[Canary: OmniFlow takes a percentage of real runs]
+    D --> E[OmniFlow primary, legacy on standby]
     E --> F[Legacy decommissioned and documented]
 ```
 
@@ -812,7 +812,7 @@ Shadow mode requires capability adapters to honour a **dry-run flag** that suppr
 
 ## 15. CI/CD and Testing Strategy
 
-Per `docs/ci-cd.md`: deterministic builds, fail-fast, security-first, immutable artifacts. Constans extends the pipeline to treat **workflow manifests as first-class build artifacts**.
+Per `docs/ci-cd.md`: deterministic builds, fail-fast, security-first, immutable artifacts. OmniFlow extends the pipeline to treat **workflow manifests as first-class build artifacts**.
 
 ### 15.1 Pipeline
 

@@ -54,7 +54,7 @@ export default async function triggers() {
                           kv([['URL', h('code', {}, r.url)]]),
                           h('p', { class: 'muted' }, r.signing),
                           codeBlock(
-                            `ts=$(date +%s)\nbody='{"hello":"world"}'\nsig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')\ncurl -X POST '${r.url}' \\\n  -H "X-Constans-Timestamp: $ts" -H "X-Constans-Signature: v1=$sig" \\\n  -H 'content-type: application/json' -d "$body"`,
+                            `ts=$(date +%s)\nbody='{"hello":"world"}'\nsig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SECRET" -hex | sed 's/^.* //')\ncurl -X POST '${r.url}' \\\n  -H "X-OmniFlow-Timestamp: $ts" -H "X-OmniFlow-Signature: v1=$sig" \\\n  -H 'content-type: application/json' -d "$body"`,
                             { label: 'Example delivery' },
                           ),
                         ),

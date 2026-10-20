@@ -143,7 +143,7 @@ export function adminRoutes(): RouteDef[] {
           secret: r.secret,
           url: `${app.config.publicUrl}/v1/hooks/${principal.tenant}/${params.name}/${params.trigger}`,
           signing:
-            'Send X-Constans-Timestamp (unix seconds) and X-Constans-Signature: v1=HMAC_SHA256(secret, "<timestamp>.<raw body>") as hex. Optionally send X-Constans-Delivery with a unique id.',
+            'Send X-OmniFlow-Timestamp (unix seconds) and X-OmniFlow-Signature: v1=HMAC_SHA256(secret, "<timestamp>.<raw body>") as hex. Optionally send X-OmniFlow-Delivery with a unique id.',
         };
       },
     },
@@ -359,7 +359,7 @@ export function adminRoutes(): RouteDef[] {
         reply.hijack();
         reply.raw.writeHead(200, {
           'content-type': 'application/x-ndjson; charset=utf-8',
-          'content-disposition': `attachment; filename="constans-audit-${principal.tenant}.ndjson"`,
+          'content-disposition': `attachment; filename="omniflow-audit-${principal.tenant}.ndjson"`,
           'cache-control': 'no-store',
         });
         reply.raw.write(

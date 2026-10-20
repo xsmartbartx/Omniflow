@@ -84,7 +84,7 @@ test('F12-E: forged or missing identity is refused', async ({ request }) => {
   const forged = await request.get(`${BASE}/app`, { maxRedirects: 0, headers: { cookie: '__session=fake.AAAA' } });
   expect(forged.status()).toBe(401);
   // a forged application session cookie is refused too
-  const forgedSession = await request.get(`${BASE}/v1/auth/me`, { headers: { cookie: 'cns_session=fake.AAAA' } });
+  const forgedSession = await request.get(`${BASE}/v1/auth/me`, { headers: { cookie: 'omf_session=fake.AAAA' } });
   expect(forgedSession.status()).toBe(401);
 });
 
@@ -105,7 +105,7 @@ test('F12-E: when the short NEXORA session ends the user is sent to NEXORA sign-
   context,
 }) => {
   await enter(page, ident('org_e2e1', 'e2e_owner', 'owner'));
-  await context.clearCookies({ name: 'cns_session' });
+  await context.clearCookies({ name: 'omf_session' });
   await page.reload();
   await expect(page.getByRole('link', { name: 'Continue with NEXORA' })).toBeVisible();
   // the NEXORA identity cookie is still there, so Continue signs straight back in

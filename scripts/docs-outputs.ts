@@ -12,7 +12,7 @@ function allCapabilities() {
     shell: { ...base.shell, allowedCommands: ['/bin/true'] },
     datasources: { example: 'sqlite:///:memory:' },
     channels: { example: 'https://example.invalid/hook' },
-    email: { smtpUrl: 'smtps://example.invalid', from: 'constans@example.invalid' },
+    email: { smtpUrl: 'smtps://example.invalid', from: 'omniflow@example.invalid' },
     llm: { ...base.llm, apiKey: 'docs-only' },
   })
     .list()

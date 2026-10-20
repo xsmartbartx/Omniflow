@@ -8,7 +8,7 @@ import { compile } from '../../orchestration/compiler/index.ts';
 import type { Manifest } from '../../schemas/index.ts';
 import { analyzeWorkflow } from '../../security/pentest/index.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createConstans } from '../../server/platform.ts';
+import { createOmniflow } from '../../server/platform.ts';
 import { flag, flagAll, has, parseInputs, UsageError } from '../args.ts';
 import { type CliContext, emit } from '../context.ts';
 import { humanDuration, renderIssue, statusColour, table } from '../format.ts';
@@ -26,13 +26,13 @@ function offlineCapabilities() {
     shell: { ...base.shell, allowedCommands: ['/bin/true'] },
     datasources: { offline: 'sqlite:///:memory:' },
     channels: { offline: 'https://example.invalid/hook' },
-    email: { smtpUrl: 'smtps://offline.invalid', from: 'constans@offline.invalid' },
+    email: { smtpUrl: 'smtps://offline.invalid', from: 'omniflow@offline.invalid' },
     llm: { ...base.llm, apiKey: 'offline-validation-only' },
   });
 }
 
 function environmentOf(ctx: CliContext): 'development' | 'staging' | 'production' {
-  const env = flag(ctx.args, 'env') ?? ctx.env.CONSTANS_ENV ?? 'production';
+  const env = flag(ctx.args, 'env') ?? ctx.env.OMNIFLOW_ENV ?? 'production';
   if (env !== 'development' && env !== 'staging' && env !== 'production') {
     throw new UsageError(`--env must be development, staging or production (got '${env}')`);
   }
@@ -128,7 +128,7 @@ function printChecked(ctx: CliContext, r: Checked): void {
 
 export async function validateCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
-  if (paths.length === 0) throw new UsageError('Usage: constans validate <file|dir|-> [...]');
+  if (paths.length === 0) throw new UsageError('Usage: omniflow validate <file|dir|-> [...]');
   const strict = has(ctx.args, 'strict');
   const results: Checked[] = [];
   for (const file of expandFiles(ctx, paths)) results.push(check(ctx, file, await readManifest(ctx, file)));
@@ -154,7 +154,7 @@ export async function validateCommand(ctx: CliContext): Promise<number> {
 
 export async function compileCommand(ctx: CliContext): Promise<number> {
   const file = ctx.args.positionals[1];
-  if (!file) throw new UsageError('Usage: constans compile <file> [--out plan.json] [--json]');
+  if (!file) throw new UsageError('Usage: omniflow compile <file> [--out plan.json] [--json]');
   const r = check(ctx, file, await readManifest(ctx, file));
   if (!r.plan || !r.planHash) {
     for (const i of r.errors) ctx.err(`${renderIssue(ctx.style, file, r.source, i)}\n\n`);
@@ -188,34 +188,34 @@ export async function compileCommand(ctx: CliContext): Promise<number> {
 }
 
 /**
- * `constans dev <file>` — run a workflow end to end on a throw-away, in-process platform. Nothing
+ * `omniflow dev <file>` — run a workflow end to end on a throw-away, in-process platform. Nothing
  * is written outside a temporary directory, which is deleted afterwards. Ideal for authoring:
  * publish is auto-approved for the ephemeral admin, approval gates can be auto-answered.
  */
 export async function devCommand(ctx: CliContext): Promise<number> {
   const file = ctx.args.positionals[1];
   if (!file)
-    throw new UsageError('Usage: constans dev <file> [--input k=v] [--secret NAME=value] [--dry-run] [--auto-approve]');
+    throw new UsageError('Usage: omniflow dev <file> [--input k=v] [--secret NAME=value] [--dry-run] [--auto-approve]');
   const source = await readManifest(ctx, file);
   const inputs = parseInputs(flagAll(ctx.args, 'input'));
   const secrets = parseSecrets(flagAll(ctx.args, 'secret'));
   const s = ctx.style;
 
-  const dir = mkdtempSync(join(tmpdir(), 'constans-dev-'));
+  const dir = mkdtempSync(join(tmpdir(), 'omniflow-dev-'));
   const password = `${randomToken(12)}Aa1`;
   const config = loadConfig(
     {
       ...ctx.env,
-      CONSTANS_DATA_DIR: dir,
-      CONSTANS_ENV: 'development',
-      CONSTANS_LOG_LEVEL: 'silent',
-      CONSTANS_ADMIN_PASSWORD: password,
-      CONSTANS_SEED_EXAMPLES: 'false',
-      CONSTANS_POLICY_DIR: join(dir, 'no-policies'),
+      OMNIFLOW_DATA_DIR: dir,
+      OMNIFLOW_ENV: 'development',
+      OMNIFLOW_LOG_LEVEL: 'silent',
+      OMNIFLOW_ADMIN_PASSWORD: password,
+      OMNIFLOW_SEED_EXAMPLES: 'false',
+      OMNIFLOW_POLICY_DIR: join(dir, 'no-policies'),
     },
     { cwd: ctx.cwd },
   );
-  const app = createConstans(config);
+  const app = createOmniflow(config);
   try {
     await app.start();
     const admin = {
@@ -270,7 +270,7 @@ export async function devCommand(ctx: CliContext): Promise<number> {
   }
 }
 
-type DevApp = ReturnType<typeof createConstans>;
+type DevApp = ReturnType<typeof createOmniflow>;
 
 const DONE_STATUSES = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled']);
 
@@ -292,7 +292,7 @@ function watchApprovals(ctx: CliContext, app: DevApp, runId: string): () => void
       return;
     }
     try {
-      app.approvals.decide(approver, id, 'approved', 'auto-approved by constans dev');
+      app.approvals.decide(approver, id, 'approved', 'auto-approved by omniflow dev');
       ctx.err(`${s.yellow('approval')} ${id} auto-approved\n`);
     } catch (error_) {
       ctx.err(`${s.red('could not auto-approve')}: ${(error_ as Error).message}\n`);

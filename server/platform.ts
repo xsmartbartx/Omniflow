@@ -5,7 +5,7 @@ import { AuthoringService } from '../authoring/index.ts';
 import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
-import type { Constans } from '../gateway/context.ts';
+import type { OmniFlow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { FakeCore, NexoraService, OutboxWorker } from '../nexora/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
@@ -21,7 +21,7 @@ import type { Config } from './config.ts';
 import { createAnthropicClient } from './llm-client.ts';
 import { WebhookDispatcher } from './webhooks.ts';
 
-export type { Constans };
+export type { OmniFlow };
 
 /**
  * The composition root: every component of architecture §5, wired together. Layers below never
@@ -29,7 +29,7 @@ export type { Constans };
  * them.
  */
 
-export interface ConstansOverrides {
+export interface OmniflowOverrides {
   state?: State;
   /** Replace the model client (tests). */
   llm?: LlmClient | null;
@@ -40,7 +40,7 @@ export interface ConstansOverrides {
   core?: FakeCore;
 }
 
-export function createConstans(config: Config, overrides: ConstansOverrides = {}): Constans {
+export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}): OmniFlow {
   const clock = overrides.clock ?? systemClock;
   const log = overrides.log ?? createLogger({ level: config.logLevel });
   const state = overrides.state ?? openState(stateOptionsFor(config.dataDir, clock));
@@ -136,7 +136,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
   const authoring = new AuthoringService({ state, registry, policy, capabilities, clock, ...(llm ? { llm } : {}) });
   let analysisTimer: NodeJS.Timeout | undefined;
 
-  const app: Constans = {
+  const app: OmniFlow = {
     config,
     log,
     clock,
@@ -197,7 +197,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
         type: 'system.started',
         data: { version: config.version, environment: config.environment, recovered },
       });
-      log.info('constans started', {
+      log.info('omniflow started', {
         version: config.version,
         environment: config.environment,
         recovered,
@@ -223,7 +223,7 @@ export function createConstans(config: Config, overrides: ConstansOverrides = {}
 }
 
 /** Load operator policy documents. A broken governance rule must stop the platform, not be skipped. */
-function loadPolicies(app: Constans): void {
+function loadPolicies(app: OmniFlow): void {
   const { policyDir } = app.config;
   if (!existsSync(policyDir)) return;
   const docs = [];
@@ -243,7 +243,7 @@ function loadPolicies(app: Constans): void {
 }
 
 /** First start: create the initial admin so the platform is never left without a way in. */
-async function bootstrapAdmin(app: Constans): Promise<{ email: string; password: string } | undefined> {
+async function bootstrapAdmin(app: OmniFlow): Promise<{ email: string; password: string } | undefined> {
   if (app.state.identity.countUsers() > 0) return undefined;
   const password = app.config.admin.password ?? `${randomToken(12)}Aa1`;
   const generated = app.config.admin.password === undefined;
@@ -255,11 +255,11 @@ async function bootstrapAdmin(app: Constans): Promise<{ email: string; password:
     email: app.config.admin.email,
     ...(generated ? { generatedPassword: 'see the value returned by start(); change it at first sign-in' } : {}),
   });
-  return { email: app.config.admin.email, password: generated ? password : '(set by CONSTANS_ADMIN_PASSWORD)' };
+  return { email: app.config.admin.email, password: generated ? password : '(set by OMNIFLOW_ADMIN_PASSWORD)' };
 }
 
 /** Publish the shipped example workflows (opt-in). Anything that needs review is left as a change request. */
-function seedExamples(app: Constans): void {
+function seedExamples(app: OmniFlow): void {
   const dir = app.config.workflowsDir;
   if (!existsSync(dir)) return;
   const admin: Principal = { id: 'system:seed', type: 'system', name: 'Seed', tenant: 'default', roles: ['admin'] };

@@ -34,6 +34,12 @@ never reopen:
 family strip. It has a strict CSP, a preview server (`npm run site`), an e2e spec and hosting files. **It is not deployed.**
 Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/README.md`](../site/README.md).
 
+## Name
+
+On 2026-10-20 the owner decided to **stay with OmniFlow**, and the earlier rename to "Constans" was reverted everywhere (CLI, package,
+`OMNIFLOW_*` variables, `omf_` keys, `omniflow.dev/v1`, docs, console and the product site). The trademark screening of Constans,
+Tenax and six more candidates is kept below and in `replica/brand.md`; **OmniFlow itself has not been screened yet.**
+
 ## Open decisions (owner)
 
 - The product-site domain, a dedicated sign-up or form URL, legal pages, and the redirect from

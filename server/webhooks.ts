@@ -34,7 +34,7 @@ export interface RunWebhook {
 export const MAX_ATTEMPTS = 8;
 const CURSOR_KEY = 'webhooks.cursor';
 
-/** Parse `CONSTANS_RUN_WEBHOOKS`: a JSON array of `{ url, secret, events?, tenant? }`. Throws a message naming the problem. */
+/** Parse `OMNIFLOW_RUN_WEBHOOKS`: a JSON array of `{ url, secret, events?, tenant? }`. Throws a message naming the problem. */
 export function parseRunWebhooks(raw: string | undefined, opts: { production: boolean }): RunWebhook[] {
   if (!raw?.trim()) return [];
   let data: unknown;
@@ -121,7 +121,7 @@ function webhookPayload(e: EventRow, run: RunRow): Record<string, unknown> {
  * Delivers run-lifecycle events to operator-configured URLs. Durable and at-least-once: new events are
  * found by reading the event log past a persisted cursor (so a crash loses nothing), turned into delivery
  * rows (idempotent per hook and event), then sent with retries and exponential backoff. Receivers should
- * dedupe on `X-Constans-Delivery`, which is the event id and does not change between attempts.
+ * dedupe on `X-OmniFlow-Delivery`, which is the event id and does not change between attempts.
  */
 export class WebhookDispatcher {
   private readonly st: State;
@@ -191,10 +191,10 @@ export class WebhookDispatcher {
         headers: {
           'content-type': 'application/json',
           'user-agent': this.adapters.http.userAgent,
-          'x-constans-event': d.eventType,
-          'x-constans-delivery': String((d.payload as { id?: string }).id ?? d.id),
-          'x-constans-timestamp': String(ts),
-          'x-constans-signature': signWebhook(hook.secret, ts, body),
+          'x-omniflow-event': d.eventType,
+          'x-omniflow-delivery': String((d.payload as { id?: string }).id ?? d.id),
+          'x-omniflow-timestamp': String(ts),
+          'x-omniflow-signature': signWebhook(hook.secret, ts, body),
         },
         body,
         signal: AbortSignal.timeout(10_000),

@@ -1,4 +1,4 @@
-import { type Clock, newId, ConstansError, systemClock } from '../core/index.ts';
+import { type Clock, newId, OmniflowError, systemClock } from '../core/index.ts';
 import { type Db, fromJson } from './database.ts';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'timed-out';
@@ -142,9 +142,9 @@ export class ApprovalStore {
   decide(id: string, status: 'approved' | 'denied' | 'timed-out', by: string, comment?: string): ApprovalRecord {
     return this.db.transaction(() => {
       const cur = this.get(id);
-      if (!cur) throw new ConstansError('APPROVAL_NOT_FOUND', `Approval '${id}' not found`, { errorClass: 'business' });
+      if (!cur) throw new OmniflowError('APPROVAL_NOT_FOUND', `Approval '${id}' not found`, { errorClass: 'business' });
       if (cur.status !== 'pending') {
-        throw new ConstansError('APPROVAL_ALREADY_DECIDED', `Approval '${id}' was already ${cur.status}`, {
+        throw new OmniflowError('APPROVAL_ALREADY_DECIDED', `Approval '${id}' was already ${cur.status}`, {
           errorClass: 'business',
           retryable: false,
         });

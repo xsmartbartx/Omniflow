@@ -10,7 +10,7 @@ import { principal } from './state.ts';
 const caps = createDefaultRegistry(defaultAdapterConfig());
 
 export const manifestOf = (name: string, steps: unknown[], extra: Record<string, unknown> = {}, version = '1.0.0') => ({
-  apiVersion: 'constans/v1',
+  apiVersion: 'omniflow.dev/v1',
   kind: 'Workflow',
   metadata: { name, version, owner: 'ops@example.com', description: 'history fixture', criticality: 'low' },
   triggers: [{ type: 'manual' }],

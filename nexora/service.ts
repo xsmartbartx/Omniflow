@@ -2,7 +2,7 @@ import { ConflictError, EntitlementError, type Logger, nullLogger, ValidationErr
 import type { AdmissionGate } from '../orchestration/scheduler/index.ts';
 import type { Principal } from '../schemas/index.ts';
 import type { NexoraOrg, RunRecord, State, UserRecord } from '../state/index.ts';
-import { constansRoles } from './roles.ts';
+import { omniflowRoles } from './roles.ts';
 import type { CorePorts, EntitlementDecision, VerifiedIdentity } from './types.ts';
 
 export const RUN_START = 'run.start' as const;
@@ -52,7 +52,7 @@ export class NexoraService {
     const identity = await this.core.identity.verifyAssertion(assertion);
     const org = this.provisionOrg(identity.orgId);
     if (org.status !== 'active') {
-      throw new EntitlementError('ENTITLEMENT_DENIED', 'This organisation is not active for Constans');
+      throw new EntitlementError('ENTITLEMENT_DENIED', 'This organisation is not active for OmniFlow');
     }
     const user = this.provisionUser(org, identity);
     await this.refreshEntitlement(org.orgId).catch((e) => {
@@ -79,7 +79,7 @@ export class NexoraService {
   }
 
   private provisionUser(org: NexoraOrg, id: VerifiedIdentity): UserRecord {
-    const roles = constansRoles(id.role);
+    const roles = omniflowRoles(id.role);
     return this.st.db.transaction(() => {
       const link = this.st.nexora.getIdentity(org.orgId, id.userId);
       if (link) {
@@ -175,7 +175,7 @@ export class NexoraService {
         tenant: run.tenant,
         orgId: org.orgId,
         kind: 'usage',
-        name: 'constans.run.started',
+        name: 'omniflow.run.started',
         payload: { runId: run.id, workflow: run.workflowName, version: run.workflowVersion },
         idempotencyKey: `run.started:${run.id}`,
         ...(run.correlationId ? { correlationId: run.correlationId } : {}),

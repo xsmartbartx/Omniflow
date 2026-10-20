@@ -84,7 +84,7 @@ export class FakeCore implements CorePorts {
       if (this.seen.has(e.id)) return; // a duplicate delivery is harmless, by contract
       this.seen.add(e.id);
       this.received.push(e);
-      if (e.kind === 'usage' && e.name === 'constans.run.started') this.usage.set(e.orgId, this.usageOf(e.orgId) + 1);
+      if (e.kind === 'usage' && e.name === 'omniflow.run.started') this.usage.set(e.orgId, this.usageOf(e.orgId) + 1);
     },
   };
 }

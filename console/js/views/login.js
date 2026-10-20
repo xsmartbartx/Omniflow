@@ -44,7 +44,7 @@ export default function login({ onSignedIn }) {
         h(
           'div',
           { class: 'stack' },
-          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'Constans'),
+          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
           h('p', { class: 'muted' }, 'Sign in to run workflows you can explain.'),
           form,
         ),
@@ -66,11 +66,11 @@ export function nexoraSignIn() {
         h(
           'div',
           { class: 'stack' },
-          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'Constans'),
+          h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
           h(
             'p',
             { class: 'muted' },
-            'Constans uses your NEXORA account. Your session lasts a few minutes and renews when you continue.',
+            'OmniFlow uses your NEXORA account. Your session lasts a few minutes and renews when you continue.',
           ),
           h('a', { class: 'btn btn-primary', href: '/app' }, 'Continue with NEXORA'),
         ),

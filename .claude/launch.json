@@ -2,11 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "constans-console-demo",
+      "name": "omniflow-console-demo",
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "rm -rf /tmp/constans-console-demo && CONSTANS_DATA_DIR=/tmp/constans-console-demo CONSTANS_PORT=18080 CONSTANS_HOST=127.0.0.1 CONSTANS_PUBLIC_URL=http://127.0.0.1:18080 CONSTANS_ENV=development CONSTANS_ADMIN_EMAIL=admin@example.com CONSTANS_ADMIN_PASSWORD=correct-horse-battery-staple CONSTANS_LOG_LEVEL=warn CONSTANS_SHELL_ALLOWED_COMMANDS=/usr/bin/curl exec node --disable-warning=ExperimentalWarning server/main.ts"
+        "rm -rf /tmp/omniflow-console-demo && OMNIFLOW_DATA_DIR=/tmp/omniflow-console-demo OMNIFLOW_PORT=18080 OMNIFLOW_HOST=127.0.0.1 OMNIFLOW_PUBLIC_URL=http://127.0.0.1:18080 OMNIFLOW_ENV=development OMNIFLOW_ADMIN_EMAIL=admin@example.com OMNIFLOW_ADMIN_PASSWORD=correct-horse-battery-staple OMNIFLOW_LOG_LEVEL=warn OMNIFLOW_SHELL_ALLOWED_COMMANDS=/usr/bin/curl exec node --disable-warning=ExperimentalWarning server/main.ts"
       ],
       "port": 18080
     },
@@ -20,11 +20,11 @@
       "port": 18081
     },
     {
-      "name": "constans-nexora-demo",
+      "name": "omniflow-nexora-demo",
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "rm -rf /tmp/constans-nexora-demo && CONSTANS_MODE=nexora CONSTANS_NEXORA_CORE=fake CONSTANS_DATA_DIR=/tmp/constans-nexora-demo CONSTANS_PORT=18082 CONSTANS_HOST=127.0.0.1 CONSTANS_PUBLIC_URL=http://127.0.0.1:18082 CONSTANS_ENV=development CONSTANS_ADMIN_EMAIL=admin@example.com CONSTANS_ADMIN_PASSWORD=correct-horse-battery-staple CONSTANS_LOG_LEVEL=warn exec node --disable-warning=ExperimentalWarning server/main.ts"
+        "rm -rf /tmp/omniflow-nexora-demo && OMNIFLOW_MODE=nexora OMNIFLOW_NEXORA_CORE=fake OMNIFLOW_DATA_DIR=/tmp/omniflow-nexora-demo OMNIFLOW_PORT=18082 OMNIFLOW_HOST=127.0.0.1 OMNIFLOW_PUBLIC_URL=http://127.0.0.1:18082 OMNIFLOW_ENV=development OMNIFLOW_ADMIN_EMAIL=admin@example.com OMNIFLOW_ADMIN_PASSWORD=correct-horse-battery-staple OMNIFLOW_LOG_LEVEL=warn exec node --disable-warning=ExperimentalWarning server/main.ts"
       ],
       "port": 18082
     }

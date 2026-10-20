@@ -1,6 +1,6 @@
 # Product page draft
 
-For `onenexora.com/products/<slug>`, following the layout of the existing Gateway page (breadcrumb, hero with status badge, overview that states scope plainly, capabilities, plans, docs, one button). **Draft only: not published, and it cannot go live until the real NEXORA Core exists** (today only a fake, unsigned one does). Name is a placeholder, `{{name}}`, until the owner chooses (recommended: Constans).
+For `onenexora.com/products/<slug>`, following the layout of the existing Gateway page (breadcrumb, hero with status badge, overview that states scope plainly, capabilities, plans, docs, one button). **Draft only: not published, and it cannot go live until the real NEXORA Core exists** (today only a fake, unsigned one does). Name is a placeholder, `{{name}}`, until the owner chooses (recommended: OmniFlow).
 
 Voice: plain, exact, calm (`brand.md`). No testimonials, no user counts, no logos: the proof section stays empty until there are real beta users who agree to be quoted.
 

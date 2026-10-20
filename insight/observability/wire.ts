@@ -15,28 +15,28 @@ export function createMetrics(
   opts: { version: string; environment: string; breakers?: () => Record<string, { state: string }> },
 ): MetricsRegistry {
   const m = new MetricsRegistry();
-  const runs = m.counter('constans_runs_total', 'Runs that reached a terminal state.');
-  const runSeconds = m.histogram('constans_run_duration_seconds', 'Run wall-clock duration.');
-  const steps = m.counter('constans_steps_total', 'Step attempts by outcome.');
-  const stepSeconds = m.histogram('constans_step_duration_seconds', 'Step attempt duration.');
-  const retries = m.counter('constans_step_retries_total', 'Step retries scheduled.');
+  const runs = m.counter('omniflow_runs_total', 'Runs that reached a terminal state.');
+  const runSeconds = m.histogram('omniflow_run_duration_seconds', 'Run wall-clock duration.');
+  const steps = m.counter('omniflow_steps_total', 'Step attempts by outcome.');
+  const stepSeconds = m.histogram('omniflow_step_duration_seconds', 'Step attempt duration.');
+  const retries = m.counter('omniflow_step_retries_total', 'Step retries scheduled.');
   const replays = m.counter(
-    'constans_idempotent_replays_total',
+    'omniflow_idempotent_replays_total',
     'Effects avoided because an idempotency key had already been applied.',
   );
-  const denials = m.counter('constans_policy_denials_total', 'Policy decisions that denied or required approval.');
-  const triggers = m.counter('constans_trigger_events_total', 'Trigger firings and rejections.');
-  m.counter('constans_build_info', 'Build information.').inc(
+  const denials = m.counter('omniflow_policy_denials_total', 'Policy decisions that denied or required approval.');
+  const triggers = m.counter('omniflow_trigger_events_total', 'Trigger firings and rejections.');
+  m.counter('omniflow_build_info', 'Build information.').inc(
     { version: opts.version, environment: opts.environment },
     1,
   );
 
-  const active = m.gauge('constans_active_runs', 'Runs currently executing (running, waiting or compensating).');
-  const queue = m.gauge('constans_queue_depth', 'Runs waiting to be admitted.');
-  const approvals = m.gauge('constans_approvals_pending', 'Approval requests awaiting a decision.');
-  const events = m.gauge('constans_event_log_events', 'Events in the audit log.');
-  const circuits = m.gauge('constans_circuit_open', '1 when a capability circuit is open or half-open.');
-  const uptime = m.gauge('constans_uptime_seconds', 'Process uptime.');
+  const active = m.gauge('omniflow_active_runs', 'Runs currently executing (running, waiting or compensating).');
+  const queue = m.gauge('omniflow_queue_depth', 'Runs waiting to be admitted.');
+  const approvals = m.gauge('omniflow_approvals_pending', 'Approval requests awaiting a decision.');
+  const events = m.gauge('omniflow_event_log_events', 'Events in the audit log.');
+  const circuits = m.gauge('omniflow_circuit_open', '1 when a capability circuit is open or half-open.');
+  const uptime = m.gauge('omniflow_uptime_seconds', 'Process uptime.');
   const mem = m.gauge('process_resident_memory_bytes', 'Resident memory.');
 
   state.events.onAppend((e) => {

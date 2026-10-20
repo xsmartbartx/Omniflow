@@ -1,7 +1,7 @@
 import type { RouteDef } from '../http.ts';
 import { obj } from './util.ts';
 
-/** Visibility into outbound run webhooks. Hooks themselves are operator configuration (CONSTANS_RUN_WEBHOOKS). */
+/** Visibility into outbound run webhooks. Hooks themselves are operator configuration (OMNIFLOW_RUN_WEBHOOKS). */
 export function webhookRoutes(): RouteDef[] {
   return [
     {

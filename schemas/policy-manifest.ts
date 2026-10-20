@@ -20,7 +20,7 @@ export interface PolicyRuleDoc {
 }
 
 export interface PolicyDocument {
-  apiVersion: 'constans/v1';
+  apiVersion: 'omniflow.dev/v1';
   kind: 'Policy';
   metadata: { name: string; description?: string };
   rules: PolicyRuleDoc[];
@@ -42,13 +42,13 @@ const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 export function buildPolicySchema(): Record<string, unknown> {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: 'https://constans.onenexora.com/schemas/policy.v1.json',
-    title: 'Constans Policy',
+    $id: 'https://omniflow.onenexora.com/schemas/policy.v1.json',
+    title: 'OmniFlow Policy',
     type: 'object',
     required: ['apiVersion', 'kind', 'metadata', 'rules'],
     additionalProperties: false,
     properties: {
-      apiVersion: { const: 'constans/v1' },
+      apiVersion: { const: 'omniflow.dev/v1' },
       kind: { const: 'Policy' },
       metadata: {
         type: 'object',

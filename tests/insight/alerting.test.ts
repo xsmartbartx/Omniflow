@@ -222,9 +222,9 @@ describe('robustness', () => {
       lastNotifiedAt: '',
     };
     expect(formatAlert(alert, 'raised')).toBe(
-      '[CRITICAL] pay is failing\n4 of 6 runs failed.\n(Constans, tenant default)',
+      '[CRITICAL] pay is failing\n4 of 6 runs failed.\n(OmniFlow, tenant default)',
     );
-    expect(formatAlert(alert, 'resolved')).toBe('[RESOLVED] pay is failing\n(Constans, tenant default)');
+    expect(formatAlert(alert, 'resolved')).toBe('[RESOLVED] pay is failing\n(OmniFlow, tenant default)');
     expect(formatAlert(alert, 'reminder')).toContain('[STILL CRITICAL]');
   });
 });

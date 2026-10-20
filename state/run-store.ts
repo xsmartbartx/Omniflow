@@ -1,4 +1,4 @@
-import { type Clock, type ErrorInfo, newId, ConstansError, systemClock } from '../core/index.ts';
+import { type Clock, type ErrorInfo, newId, OmniflowError, systemClock } from '../core/index.ts';
 import type { Principal } from '../schemas/index.ts';
 import { type Db, fromJson, toBit, toJson } from './database.ts';
 
@@ -407,9 +407,9 @@ export class RunStore {
   transition(runId: string, to: RunStatus, patch: RunPatch = {}): RunRecord {
     return this.db.transaction(() => {
       const run = this.getRun(runId);
-      if (!run) throw new ConstansError('RUN_NOT_FOUND', `Run '${runId}' not found`, { errorClass: 'business' });
+      if (!run) throw new OmniflowError('RUN_NOT_FOUND', `Run '${runId}' not found`, { errorClass: 'business' });
       if (run.status !== to && !TRANSITIONS[run.status].includes(to)) {
-        throw new ConstansError('ILLEGAL_RUN_TRANSITION', `Run ${runId} cannot move from '${run.status}' to '${to}'`, {
+        throw new OmniflowError('ILLEGAL_RUN_TRANSITION', `Run ${runId} cannot move from '${run.status}' to '${to}'`, {
           errorClass: 'catastrophic',
           retryable: false,
         });
@@ -513,7 +513,7 @@ export class RunStore {
     params.push(runId, stepId);
     const res = this.db.run(`UPDATE step_states SET ${sets.join(', ')} WHERE run_id = ? AND step_id = ?`, params);
     if (res.changes === 0) {
-      throw new ConstansError('STEP_NOT_FOUND', `Step '${stepId}' of run '${runId}' not found`, {
+      throw new OmniflowError('STEP_NOT_FOUND', `Step '${stepId}' of run '${runId}' not found`, {
         errorClass: 'catastrophic',
       });
     }

@@ -75,7 +75,7 @@ describe('crontab import (Lift)', () => {
     expect(c.errors).toEqual([]);
     expect(c.ok).toBe(true);
     expect(c.risk!.blocking).toBe(false);
-    expect(w!.notes.join(' ')).toContain('CONSTANS_SHELL_ALLOWED_COMMANDS');
+    expect(w!.notes.join(' ')).toContain('OMNIFLOW_SHELL_ALLOWED_COMMANDS');
   });
 
   it('understands macros, comments, blank lines, environment lines and MAILTO', () => {
@@ -92,7 +92,7 @@ describe('crontab import (Lift)', () => {
     );
     expect(r.environment).toEqual({ MAILTO: 'ops@example.com', PATH: '/usr/bin:/bin' });
     expect(r.workflows.map((w) => parse(w.manifest).triggers[0].cron)).toEqual(['0 0 * * *', '0 * * * *']);
-    expect(r.workflows[0]!.notes.join(' ')).toContain('CONSTANS_ALERT_CHANNELS');
+    expect(r.workflows[0]!.notes.join(' ')).toContain('OMNIFLOW_ALERT_CHANNELS');
     expect(r.workflows[0]!.notes.join(' ')).toContain('environment variables');
   });
 
@@ -106,7 +106,7 @@ describe('crontab import (Lift)', () => {
     const [w] = importCrontab('15 3 * * * /usr/bin/pg_dump mydb | gzip > /backups/db.sql.gz', opts).workflows;
     const m = parse(w!.manifest);
     expect(m.steps[0].with.argv).toEqual([w!.script!.path]);
-    expect(w!.script!.path).toMatch(/^\/opt\/constans\/scripts\/cron-pg-dump.*\.sh$/);
+    expect(w!.script!.path).toMatch(/^\/opt\/omniflow\/scripts\/cron-pg-dump.*\.sh$/);
     expect(w!.script!.content).toBe('#!/bin/sh\nset -eu\n/usr/bin/pg_dump mydb | gzip > /backups/db.sql.gz\n');
     expect(w!.notes.join(' ')).toContain('refuses `sh -c`');
     const risk = check(w!.manifest).risk!;
@@ -144,7 +144,7 @@ describe('crontab import (Lift)', () => {
     );
     expect(r.workflows.map((w) => w.line)).toEqual([6]); // "61" is accepted by the shape check; validation catches it later
     expect(r.skipped.map((s) => [s.line, s.reason.split('.')[0]])).toEqual([
-      [1, '@reboot jobs run at machine start; Constans has no equivalent trigger'],
+      [1, '@reboot jobs run at machine start; OmniFlow has no equivalent trigger'],
       [2, 'Not a crontab entry (expected five schedule fields followed by a command)'],
       [3, 'Not a crontab entry (expected five schedule fields followed by a command)'],
       [4, 'The command has unbalanced quotes'],

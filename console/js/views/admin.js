@@ -154,7 +154,7 @@ export default async function admin(ctx) {
         empty: 'No API keys yet.',
         columns: [
           { label: 'Name', render: (k) => h('strong', {}, k.name) },
-          { label: 'Key', render: (k) => h('code', { class: 'muted' }, `cns_${k.prefix}_…`) },
+          { label: 'Key', render: (k) => h('code', { class: 'muted' }, `omf_${k.prefix}_…`) },
           { label: 'Roles', render: (k) => k.roles.map((r) => badge(r, 'neutral')) },
           { label: 'Last used', render: (k) => (k.lastUsedAt ? ago(k.lastUsedAt) : 'never') },
           { label: 'Expires', render: (k) => (k.expiresAt ? timestamp(k.expiresAt) : 'never') },
@@ -254,7 +254,7 @@ export default async function admin(ctx) {
             });
             if (!v) return;
             await api.post('/v1/tenants', v);
-            toast('Tenant created. Add its first admin from the command line: constans admin create-user', 'good');
+            toast('Tenant created. Add its first admin from the command line: omniflow admin create-user', 'good');
             reload('tenants');
           },
         }),
@@ -269,7 +269,7 @@ export default async function admin(ctx) {
       { class: 'stack' },
       notice(
         'info',
-        'Notification channels are configured by whoever runs the server (CONSTANS_CHANNELS) so webhook URLs never pass through the browser. Workflows use them with the notify-channel capability; alerts use CONSTANS_ALERT_CHANNELS.',
+        'Notification channels are configured by whoever runs the server (OMNIFLOW_CHANNELS) so webhook URLs never pass through the browser. Workflows use them with the notify-channel capability; alerts use OMNIFLOW_ALERT_CHANNELS.',
       ),
       card(
         null,

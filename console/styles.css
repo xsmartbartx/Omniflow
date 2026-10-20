@@ -1,5 +1,5 @@
 /* Design tokens (source of truth: replica/design/tokens.css, matching NEXORA packages/ui). Keep them identical.
-   Constans design tokens. Names match NEXORA packages/ui/src/tokens.css so shared NEXORA components work unchanged.
+   OmniFlow design tokens. Names match NEXORA packages/ui/src/tokens.css so shared NEXORA components work unchanged.
    Values are hex (NEXORA uses HSL triplets) because three roles were adjusted to pass WCAG AA; see components.md "Deviations".
    Dark is the default, like NEXORA; the OS light preference and an explicit .light / .dark class override it. */
 :root {
