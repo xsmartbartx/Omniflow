@@ -38,7 +38,9 @@ Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/R
 
 On 2026-10-20 the owner decided to **stay with OmniFlow**, and the earlier rename to "Constans" was reverted everywhere (CLI, package,
 `OMNIFLOW_*` variables, `omf_` keys, `omniflow.dev/v1`, docs, console and the product site). The trademark screening of Constans,
-Tenax and six more candidates is kept below and in `replica/brand.md`; **OmniFlow itself has not been screened yet.**
+Tenax and six more candidates is kept below and in `replica/brand.md`; **OmniFlow was screened on 2026-10-20 and has a direct conflict:** a live, pending USPTO
+application for `OMNIFLOW` in class 42 for online workflow management (Synergy Folks Inc), plus other live class 7, 9 and 42 marks, and
+the npm name `omniflow` belongs to someone else. See `replica/brand.md`. This needs a trademark lawyer before any public launch.
 
 ## Open decisions (owner)
 
