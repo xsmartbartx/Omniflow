@@ -14,7 +14,7 @@ Product page on onenexora.com following the Gateway template,website,must,yes,no
 Plan ladder Free/Starter/Pro/Business/Scale with run quotas,billing,must,yes,no,price points are an owner decision
 Stripe products/prices for OmniFlow plans,billing,must,yes,no,test mode only until owner approves live
 Entitlement enforcement (Free blocked at limit; Pro not),entitlements,must,yes,partial,gate + 429 + local reservation + outage grace done against fake Core; real C-ENT in M1
-Usage metering runs per org into NEXORA telemetry,telemetry,must,yes,partial,"run.started via outbox with dedupe and retry; run.completed, publish, approval and audit events not yet"
+Usage metering runs per org into NEXORA telemetry,telemetry,must,yes,yes,"run.started, terminal run outcomes (usage) and publish, kill, revive, deprecate, change and approval decisions (audit) via outbox with dedupe and retry"
 Product switcher / shared shell in console,ui,should,yes,no,needs NEXORA shell package decision (architecture R5)
 Match NEXORA UI tokens in console,ui,should,yes,yes,"console restyled to NEXORA tokens, dark default + light; AA checked"
 Docs section at docs.onenexora.com,docs,should,yes,no,reuse docs/*.md
