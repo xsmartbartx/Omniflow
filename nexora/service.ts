@@ -1,11 +1,34 @@
 import { ConflictError, EntitlementError, type Logger, nullLogger, ValidationError } from '../core/index.ts';
 import type { AdmissionGate } from '../orchestration/scheduler/index.ts';
+import type { EventRecord } from '../schemas/events.ts';
 import type { Principal } from '../schemas/index.ts';
-import type { NexoraOrg, RunRecord, State, UserRecord } from '../state/index.ts';
+import type { NexoraOrg, OutboxKind, RunRecord, State, UserRecord } from '../state/index.ts';
 import { omniflowRoles } from './roles.ts';
 import type { CorePorts, EntitlementDecision, VerifiedIdentity } from './types.ts';
 
 export const RUN_START = 'run.start' as const;
+
+/** Terminal run outcomes are reported to NEXORA as usage; governance decisions as audit events. */
+const USAGE_EVENTS: ReadonlySet<string> = new Set([
+  'run.succeeded',
+  'run.failed',
+  'run.cancelled',
+  'run.rolled-back',
+  'run.compensation-failed',
+]);
+const AUDIT_EVENTS: ReadonlySet<string> = new Set([
+  'workflow.published',
+  'workflow.killed',
+  'workflow.revived',
+  'workflow.deprecated',
+  'workflow.change-approved',
+  'workflow.change-rejected',
+  'approval.decided',
+]);
+const outboxKind = (type: string): OutboxKind | undefined => {
+  if (USAGE_EVENTS.has(type)) return 'usage';
+  return AUDIT_EVENTS.has(type) ? 'audit' : undefined;
+};
 const ORG_ID = /^[A-Za-z0-9_-]{1,100}$/;
 
 export interface NexoraServiceOptions {
@@ -183,6 +206,45 @@ export class NexoraService {
       });
     },
   };
+
+  /**
+   * Mirror terminal run outcomes (usage) and governance decisions (audit) into the outbox as they are
+   * committed, so NEXORA sees more than run starts. Returns the function that stops listening.
+   */
+  observe(): () => void {
+    return this.st.events.onAppend((e) => {
+      try {
+        this.mirror(e);
+      } catch (err) {
+        this.log.warn('could not mirror an event to the NEXORA outbox', { type: e.type, error: err });
+      }
+    });
+  }
+
+  private mirror(e: EventRecord): void {
+    const kind = outboxKind(e.type);
+    if (!kind) return;
+    const org = this.st.nexora.getOrgByTenant(e.tenant);
+    if (!org) return;
+    const run = e.runId ? this.st.runs.getRun(e.runId) : undefined;
+    const key = `${e.type}:${e.id}`;
+    this.st.nexora.enqueue({
+      id: key,
+      tenant: e.tenant,
+      orgId: org.orgId,
+      kind,
+      name: `omniflow.${e.type}`,
+      payload: {
+        eventId: e.id,
+        seq: e.seq,
+        ...(e.runId ? { runId: e.runId } : {}),
+        ...(run ? { workflow: run.workflowName, version: run.workflowVersion } : {}),
+      },
+      idempotencyKey: key,
+      ...(e.correlationId ? { correlationId: e.correlationId } : {}),
+      occurredAt: e.ts,
+    });
+  }
 
   usage(principal: Principal, at: Date = new Date()): UsageView | { metered: false } {
     const org = this.st.nexora.getOrgByTenant(principal.tenant);

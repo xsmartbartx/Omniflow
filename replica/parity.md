@@ -30,7 +30,6 @@ Not shippable yet: 9 must-have features are not done.
 - [must] website: Product page on onenexora.com following the Gateway template, no  (owner publishes; draft only in this session)
 - [must] entitlements: Entitlement enforcement (Free blocked at limit; Pro not), partial  (gate + 429 + local reservation + outage grace done against fake Core; real C-ENT in M1)
 - [must] identity: Sign in through NEXORA identity (Clerk SSO), partial  (fake Core only (unsigned); real Clerk assertion verification is M1)
-- [must] telemetry: Usage metering runs per org into NEXORA telemetry, partial  (run.started via outbox with dedupe and retry; run.completed, publish, approval and audit events not yet)
 - [should] api: Rate-limit headers X-RateLimit-* on API, no  (OmniFlow has rate limits; header parity unverified)
 - [should] billing: Add OmniFlow to Bundle Builder and bundle discount, no  (bundle currently covers Sentinel/CSPM/Gateway)
 - [should] docs: Docs section at docs.onenexora.com, no  (reuse docs/*.md)

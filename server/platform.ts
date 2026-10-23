@@ -88,6 +88,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     : undefined;
   const fakeCore = config.mode === 'nexora' ? (overrides.core ?? new FakeCore()) : undefined;
   const nexoraService = fakeCore ? new NexoraService(state, fakeCore, { log }) : undefined;
+  let stopMirroring: (() => void) | undefined;
   const runs = new RunService({
     state,
     orchestrator,
@@ -175,6 +176,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.start();
       triggers.start();
       alerts.start();
+      stopMirroring = app.nexora?.service.observe();
       app.nexora?.worker.start();
       app.webhooks?.start();
       if (config.analysisIntervalHours > 0) {
@@ -210,6 +212,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.stop();
       triggers.stop();
       alerts.stop();
+      stopMirroring?.();
       app.nexora?.worker.stop();
       app.webhooks?.stop();
       if (analysisTimer) clearTimeout(analysisTimer);

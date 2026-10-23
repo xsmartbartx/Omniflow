@@ -146,7 +146,7 @@ describe('metering', () => {
     expect(usage).toMatchObject({ metered: true, orgId: 'org_M1', plan: 'free', used: 1, limit: 100, remaining: 99 });
 
     const outbox = st().nexora.dueOutbox();
-    const row = outbox.find((r) => r.orgId === 'org_M1')!;
+    const row = outbox.find((r) => r.orgId === 'org_M1' && r.name === 'omniflow.run.started')!;
     expect(row).toMatchObject({
       name: 'omniflow.run.started',
       kind: 'usage',
@@ -236,6 +236,42 @@ describe('metering', () => {
     expect((await admin.post('/v1/workflows', { manifest: wf })).status).toBeLessThan(300);
     expect((await admin.post('/v1/workflows/ops-own/run', { inputs: {} })).status).toBe(202);
     expect((await admin.get('/v1/nexora/usage')).body).toEqual({ metered: false });
+  });
+});
+
+describe('event mirroring', () => {
+  it('mirrors the run outcome as usage and the publish as audit, without inflating the run count', async () => {
+    const o = await signIn('org_E1', 'e_owner', 'owner');
+    await publishHello(o.call, 'mirror-me');
+    const run = await o.call('POST', '/v1/workflows/mirror-me/run', { inputs: {} });
+    expect(run.status).toBe(202);
+    const rows = async () =>
+      st()
+        .nexora.dueOutbox()
+        .filter((r) => r.orgId === 'org_E1');
+    const deadline = Date.now() + 10_000;
+    while (!(await rows()).some((r) => r.name === 'omniflow.run.succeeded') && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const all = await rows();
+    expect(all.find((r) => r.name === 'omniflow.workflow.published')).toMatchObject({ kind: 'audit' });
+    const done = all.find((r) => r.name === 'omniflow.run.succeeded')!;
+    expect(done).toMatchObject({ kind: 'usage' });
+    expect(done.payload).toMatchObject({ runId: run.body.run.id, workflow: 'mirror-me' });
+
+    await api.app.nexora!.worker.tick();
+    expect(core().usageOf('org_E1')).toBe(1);
+  });
+
+  it('does not mirror events of a tenant without an organisation', () => {
+    const before = st().nexora.dueOutbox().length;
+    st().events.append({
+      type: 'workflow.killed',
+      tenant: 'default',
+      actor: { kind: 'system', id: 'test' },
+      data: { workflow: 'x' },
+    } as never);
+    expect(st().nexora.dueOutbox()).toHaveLength(before);
   });
 });
 
