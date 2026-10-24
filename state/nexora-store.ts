@@ -265,6 +265,10 @@ export class NexoraStore {
         attempts: r.attempts,
       }));
   }
+  /** Delete outbox rows that were delivered before `cutoff`; unsent rows are never touched. */
+  pruneSent(cutoff: string): number {
+    return this.db.run('DELETE FROM nexora_outbox WHERE sent_at IS NOT NULL AND sent_at < ?', [cutoff]).changes;
+  }
   markSent(id: string): void {
     this.db.run('UPDATE nexora_outbox SET sent_at = ?, last_error = NULL WHERE id = ?', [this.now(), id]);
   }

@@ -65,7 +65,8 @@ Each is asserted by tests, not just designed:
   environment, throw-away working directory, process-group kill — but no in-process network or resource jail).
 - **Exactly-once needs a cooperating downstream** for the effect itself; OmniFlow guarantees it does not repeat
   the call for the same key.
-- **No automatic retention.** The audit log and run history grow until you archive them.
+- **Retention is manual and partial.** `omniflow admin prune --older-than-days n` erases old runs' artifacts and
+  settled delivery rows. The audit log and run records grow until you archive them; they are never pruned.
 - **AI features need an external model provider** and send prompts (intent, imported scripts, analysis
   evidence) to it. They are optional; the rest of the product does not depend on them.
 - **The console has no build step and no framework** by choice; it is deliberately plain. It is tested for

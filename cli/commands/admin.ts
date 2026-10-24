@@ -76,7 +76,7 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1];
   if (!sub)
     throw new UsageError(
-      'Usage: omniflow admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|doctor|rotate-master-key>',
+      'Usage: omniflow admin <create-user|reset-password|create-api-key|list-users|verify-audit|backup|restore|prune|doctor|rotate-master-key>',
     );
 
   // Restore may target a fresh, empty data directory, so it cannot require an existing database.
@@ -97,6 +97,8 @@ export async function adminCommand(ctx: CliContext): Promise<number> {
         return verifyAudit(ctx, env);
       case 'backup':
         return backupDb(ctx, env);
+      case 'prune':
+        return prune(ctx, env);
       case 'doctor':
         return doctor(ctx, env);
       case 'rotate-master-key':
@@ -160,6 +162,48 @@ async function resetPassword(ctx: CliContext, env: AdminEnv): Promise<number> {
     { email, password },
     () =>
       `${s.green('✓')} password reset for ${email}\n  temporary password: ${s.bold(password)}\n  it must be changed at first sign-in`,
+  );
+  return 0;
+}
+
+/**
+ * Retention for the data that is safe to drop: the bytes of old runs' artifacts (the rows stay, marked
+ * erased) and delivery bookkeeping that is already settled. The audit log and run records are never touched.
+ */
+function prune(ctx: CliContext, env: AdminEnv): number {
+  const { state } = env;
+  const s = ctx.style;
+  const raw = flag(ctx.args, 'older-than-days');
+  const days = raw === undefined ? Number.NaN : Number(raw);
+  if (!Number.isInteger(days) || days < 1)
+    throw new UsageError('Usage: omniflow admin prune --older-than-days <n> [--dry-run]   (n is a whole number ≥ 1)');
+  const dryRun = has(ctx.args, 'dry-run');
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+
+  const artifacts = state.artifacts.expired(cutoff);
+  let erased = 0;
+  if (!dryRun)
+    for (const a of artifacts)
+      if (state.artifacts.tombstone(a.tenant, a.ref, `retention: older than ${days} days`)) erased++;
+  const outbox = dryRun ? undefined : state.nexora.pruneSent(cutoff);
+  const deliveries = dryRun ? undefined : state.webhooks.pruneFinished(cutoff);
+
+  const result = {
+    cutoff,
+    dryRun,
+    artifacts: dryRun ? artifacts.length : erased,
+    nexoraOutbox: outbox ?? null,
+    webhookDeliveries: deliveries ?? null,
+  };
+  emit(
+    ctx,
+    result,
+    () =>
+      `${s.green('✓')} ${dryRun ? 'would erase' : 'erased'} ${result.artifacts} artifact(s) from runs finished before ${cutoff}` +
+      (dryRun
+        ? ''
+        : `\n  removed ${outbox} settled NEXORA outbox row(s) and ${deliveries} settled webhook delivery row(s)`) +
+      '\n  the audit log and run records were not touched',
   );
   return 0;
 }

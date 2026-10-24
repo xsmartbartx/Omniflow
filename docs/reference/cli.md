@@ -45,6 +45,7 @@ Talk to a server (set OMNIFLOW_URL and OMNIFLOW_API_KEY)
 Operate the data directory (run on the server host; OMNIFLOW_DATA_DIR)
   admin create-user --email e [--name n] [--role r]
   admin reset-password --email e
+  admin prune --older-than-days n [--dry-run]   Erase old artifacts and settled delivery rows (never the audit log)
   admin create-api-key --name label [--role r] [--tenant t]
   admin list-users
   admin verify-audit

@@ -123,6 +123,11 @@ export class WebhookStore {
       .map(toDelivery);
   }
 
+  /** Delete deliveries that finished (delivered, or given up) before `cutoff`; pending ones are never touched. */
+  pruneFinished(cutoff: string): number {
+    return this.db.run(`DELETE FROM webhook_deliveries WHERE status != 'pending' AND created_at < ?`, [cutoff]).changes;
+  }
+
   counts(): { pending: number; delivered: number; failed: number } {
     const rows = this.db.all<{ status: DeliveryStatus; n: number }>(
       'SELECT status, COUNT(*) AS n FROM webhook_deliveries GROUP BY status',
