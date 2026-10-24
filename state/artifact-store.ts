@@ -131,6 +131,19 @@ export class ArtifactStore {
     return true;
   }
 
+  /** Live artifacts whose run reached a final state before `cutoff` — what retention may erase. */
+  expired(cutoff: string, limit = 5000): { tenant: string; ref: string }[] {
+    return this.db
+      .all<{ tenant_id: string; hash: string }>(
+        `SELECT a.tenant_id, a.hash FROM artifacts a JOIN runs r ON r.id = a.run_id
+         WHERE a.tombstoned_at IS NULL AND r.finished_at IS NOT NULL AND r.finished_at < ?
+           AND r.status IN ('succeeded','failed','rolled-back','compensation-failed','cancelled')
+         LIMIT ?`,
+        [cutoff, limit],
+      )
+      .map((r) => ({ tenant: r.tenant_id, ref: r.hash }));
+  }
+
   list(tenant: string, runId?: string): ArtifactMeta[] {
     const rows = runId
       ? this.db.all<Row>('SELECT * FROM artifacts WHERE tenant_id = ? AND run_id = ? ORDER BY created_at', [
