@@ -84,6 +84,7 @@ Then read **[Getting started](docs/getting-started.md)**.
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first workflow, first approval |
 | [Writing workflows](docs/workflow-authoring.md) | The manifest, expressions, retries, compensation, testing |
+| [Problems you no longer have to solve](docs/already-solved.md) | Retries, undo, waiting, concurrency and exactly-once, in a page |
 | [Capabilities](docs/capabilities.md) · [catalogue](docs/reference/capabilities.md) | What workflows can do, and how to add more |
 | [API](docs/api.md) | Authentication, endpoints, webhooks, streaming |
 | [Configuration](docs/configuration.md) | Every setting |
