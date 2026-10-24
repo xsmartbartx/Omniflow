@@ -8,6 +8,7 @@ import {
   number,
   percent,
   shortHash,
+  stepOutcome,
   tone,
   truncate,
   until,
@@ -242,5 +243,33 @@ describe('workflow search matcher', () => {
     expect(matcher('a.c*')('abc')).toBe(false);
     expect(matcher('a.c*')('a.c-x')).toBe(true);
     expect(matcher('(*')('(x')).toBe(true);
+  });
+});
+
+describe('stepOutcome', () => {
+  const err = (cls: string, retryable: boolean) => ({ code: 'X', class: cls, retryable, message: 'm' });
+  it('explains a step that is waiting to retry', () => {
+    expect(stepOutcome({ status: 'retry-wait', attempt: 2, maxAttempts: 4, error: err('transient', true) })).toBe(
+      'Attempt 2 of 4 failed because of a temporary problem (network, timeout, rate limit). It is waiting to try again.',
+    );
+  });
+  it('says a non-retryable error stopped the step at once', () => {
+    expect(stepOutcome({ status: 'failed', attempt: 1, maxAttempts: 5, error: err('authorisation', false) })).toBe(
+      'Stopped after 1 attempt: it was not allowed to do this, and authorisation errors are not retried automatically.',
+    );
+  });
+  it('says when the retry limit was reached, and when the step never retried', () => {
+    expect(stepOutcome({ status: 'failed', attempt: 3, maxAttempts: 3, error: err('transient', true) })).toContain(
+      'Gave up after 3 attempts',
+    );
+    expect(stepOutcome({ status: 'failed', attempt: 1, maxAttempts: 1, error: err('transient', true) })).toContain(
+      'not set to retry',
+    );
+  });
+  it('mentions a late success and stays silent for a clean one', () => {
+    expect(stepOutcome({ status: 'succeeded', attempt: 2, maxAttempts: 3 })).toBe(
+      'Succeeded on attempt 2 of 3, after earlier attempts failed.',
+    );
+    expect(stepOutcome({ status: 'succeeded', attempt: 1, maxAttempts: 3 })).toBeNull();
   });
 });

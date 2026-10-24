@@ -139,3 +139,35 @@ export function matcher(term) {
 
 /** `plural(1, 'step')` is "step", `plural(2, 'step')` is "steps"; pass the plural form for irregular words. */
 export const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
+
+const CLASS_WHY = {
+  transient: 'a temporary problem (network, timeout, rate limit)',
+  contract: 'the input or output did not match its schema',
+  authorisation: 'it was not allowed to do this',
+  business: 'a business rule said no',
+  systemic: 'a problem in a dependency or the platform',
+  catastrophic: 'a failure that must not be repeated automatically',
+};
+
+/**
+ * One plain sentence on why a step retried or stopped, from fields the run already carries.
+ * Returns null when there is nothing to explain (a step that simply worked the first time).
+ */
+export function stepOutcome(step) {
+  const { status, attempt = 1, maxAttempts = 1, error } = step;
+  const why = error ? (CLASS_WHY[error.class] ?? 'an error') : null;
+  if (status === 'retry-wait')
+    return `Attempt ${attempt} of ${maxAttempts} failed${why ? ` because of ${why}` : ''}. It is waiting to try again.`;
+  if (status === 'failed' && error) {
+    if (error.retryable === false)
+      return `Stopped after ${attempt} ${plural(attempt, 'attempt')}: ${why}, and ${error.class} errors are not retried automatically.`;
+    if (attempt >= maxAttempts)
+      return maxAttempts > 1
+        ? `Gave up after ${maxAttempts} attempts: ${why}, and the retry limit was reached.`
+        : `Failed on its only attempt: ${why}. This step is not set to retry.`;
+    return `Stopped after ${attempt} ${plural(attempt, 'attempt')} of ${maxAttempts}: ${why}.`;
+  }
+  if (status === 'succeeded' && attempt > 1)
+    return `Succeeded on attempt ${attempt} of ${maxAttempts}, after earlier attempts failed.`;
+  return null;
+}
