@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
-import { duration, number, shortHash, TERMINAL_RUN, timestamp, tone, truncate } from '../format.js';
+import { duration, number, shortHash, stepOutcome, TERMINAL_RUN, timestamp, tone, truncate } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { can } from '../session.js';
 import {
@@ -434,6 +434,7 @@ async function stepDialog(step, base) {
         step.skippedReason ? ['Skipped because', step.skippedReason] : null,
         step.childRunId ? ['Child run', runLink(step.childRunId)] : null,
       ]),
+      stepOutcome(step) ? h('p', {}, h('strong', {}, 'Why: '), stepOutcome(step)) : null,
       step.error
         ? notice('bad', h('strong', {}, `${step.error.code} (${step.error.class})`), h('p', {}, step.error.message))
         : null,
