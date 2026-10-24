@@ -931,6 +931,11 @@ details p {
   font-size: 0.875rem;
 }
 
+.legal a {
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* ---- inner pages */
 .page-hero {
   padding: clamp(3rem, 7vw, 5.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
@@ -1059,4 +1064,16 @@ section.tight {
 }
 figure.window {
   margin-inline: auto;
+}
+
+/* ---- legal text */
+.prose {
+  max-width: 46rem;
+}
+.prose h2 {
+  margin-top: 2rem;
+}
+.prose p,
+.prose .list {
+  margin-top: 0.75rem;
 }

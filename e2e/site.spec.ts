@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 const SITE = 'http://127.0.0.1:18093';
-const PAGES = ['/', '/platform.html', '/security.html', '/pricing.html'];
+const PAGES = ['/', '/platform.html', '/security.html', '/pricing.html', '/privacy.html', '/terms.html'];
 
 for (const path of PAGES) {
   for (const scheme of ['dark', 'light'] as const) {
