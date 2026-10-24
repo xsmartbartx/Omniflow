@@ -47,7 +47,7 @@ Full table and quotes: [feedback.md](feedback.md). Raw rows: [reviews.csv](revie
 | 3 | **Explain a retry in the run view**: why it retried, why it stopped, which error class. The explainer API exists; check what the run page already shows before building. | S | replica-build | failure handling (13 items), debugging (11 items) |
 | 4 | **Workflow search and filters** in the console. **Correction 2026-10-11: search by name/description/owner and filters by state and criticality already existed;** this item became a `*` wildcard and a last-run filter (done). | S | replica-build | "Support wildcard search for workflows" and "Improve filtering support in Airflow 3.x UI Views" |
 | 5 | **Plain per-run pricing**: one billable unit, shown in the console usage card, no hidden "actions". Already how the NEXORA meter works; keep it that way when prices are set. | S | replica-launch | pricing theme (4 items; a thread arguing about what an action costs) |
-| 6 | **Docs that say what is already solved** (retryOn, compensation, wait, concurrency, exactly-once) as a "coming from Temporal/Airflow/n8n" page, without naming them in product copy. | S | replica-launch | "what you already do" above |
+| 6 | (done: `docs/already-solved.md`) **Docs that say what is already solved** (retryOn, compensation, wait, concurrency, exactly-once) as a "coming from Temporal/Airflow/n8n" page, without naming them in product copy. | S | replica-launch | "what you already do" above |
 
 Not planned: more storage backends. The evidence is 1 source, and OmniFlow chose single-node SQLite deliberately (already a `skip` row).
 
