@@ -1,6 +1,6 @@
 # Project status
 
-As of 2026-10-15. A maintainer's snapshot of what is done, what was decided and what is still open. It contains no secrets.
+As of 2026-10-24. A maintainer's snapshot of what is done, what was decided and what is still open. It contains no secrets.
 For what the product does today, see [implementation-status.md](implementation-status.md).
 
 ## Code quality
@@ -30,9 +30,26 @@ never reopen:
 
 ## Product site
 
-`site/` holds a standalone, build-less product site for Constans (home, platform, security, pricing), with a NEXORA
-family strip. It has a strict CSP, a preview server (`npm run site`), an e2e spec and hosting files. **It is not deployed.**
-Every call-to-action opens `https://onenexora.com/company#contact`. See [`site/README.md`](../site/README.md).
+`site/` holds a standalone, build-less product site for OmniFlow (home, platform, security, pricing, and draft privacy
+and terms pages), with a NEXORA family strip. It has a strict CSP, a preview server (`npm run site`), an e2e spec and
+hosting files. **The site itself is not deployed** (the app below is). Every call-to-action opens
+`https://onenexora.com/company#contact`. The privacy and terms pages are drafts that need a lawyer. See
+[`site/README.md`](../site/README.md).
+
+## Deployment
+
+The standalone product (not NEXORA mode) runs on the shared NEXORA OCI host as its own compose project in `~/omniflow`,
+and is served at `https://omniflow.onenexora.com` through the shared edge Caddy (`infrastructure/edge` in the NEXORA
+repo carries the site block and the `omniflow_default` network). Secrets live only in `~/omniflow/.env` on the host.
+Redeploy: copy the repo with `git archive`, then `docker compose up -d --build`. NEXORA mode is not deployable until a
+real NEXORA Core exists (the fake Core is refused in production).
+
+## Built since the last snapshot
+
+- NEXORA usage and audit events: terminal run outcomes and governance decisions go through the outbox with dedupe and retry.
+- `omniflow admin prune`: erases old artifacts and settled delivery rows (never the audit log or run records).
+- The step dialog says why a step retried or stopped.
+- [`already-solved.md`](already-solved.md), a one-page summary of retries, undo, waiting, concurrency and exactly-once.
 
 ## Name
 
@@ -53,4 +70,6 @@ the npm name `omniflow` belongs to someone else. See `replica/brand.md`. This ne
   organisation and PyPI name are taken. Perdura is also in live use: a managed SAP HANA hosting company at
   `perdura.cloud` and `perdura.net` (class 42), a chess product and a memorials service. See `replica/brand.md`. A trademark lawyer should decide.
 - The real NEXORA Core contracts, the Pro-limit rule, prices and the Stripe objects.
-- Go-ahead before any deployment. Nothing is deployed.
+- Audit-log and run-record retention (tiered retention is an open architecture question, Q6); only artifacts and delivery rows can be pruned today.
+- A lawyer's review of the privacy and terms drafts, and the operating entity's name.
+- Back up `OMNIFLOW_MASTER_KEY` from the host's `.env`.
