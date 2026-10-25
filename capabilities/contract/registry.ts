@@ -1,15 +1,25 @@
 import semver from 'semver';
-import { contentHash, ERROR_CLASSES, type Issue, isSensitivity, ValidationError } from '../../core/index.ts';
+import {
+  compareStrings,
+  contentHash,
+  ERROR_CLASSES,
+  type Issue,
+  isSensitivity,
+  ValidationError,
+} from '../../core/index.ts';
 import type { CapabilityDeclaration } from '../../schemas/index.ts';
 import { checkSchemaDefinition, isValidEgressHost, parseCapabilityRef } from '../../security/validator/index.ts';
 import type { CapabilityAdapter, CapabilityRegistration, RegisteredCapability } from './types.ts';
 
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+const BUILTIN: CapabilityRegistration = { owner: 'omniflow', source: 'builtin' };
+
+type Err = (path: string, code: string, message: string) => void;
 
 /** Check a declaration against the capability contract; returns every violation found. */
 export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
   const issues: Issue[] = [];
-  const err = (path: string, code: string, message: string) => issues.push({ path, code, message });
+  const err: Err = (path, code, message) => issues.push({ path, code, message });
 
   if (!NAME.test(d.name)) err('name', 'INVALID_NAME', 'name must be kebab-case');
   if (!semver.valid(d.version)) err('version', 'INVALID_VERSION', 'version must be semver');
@@ -22,6 +32,23 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
       err(key, 'SCHEMA_NOT_OBJECT', `${key} must describe an object`);
     }
   }
+  checkEffect(d, err);
+  checkEgress(d, err);
+  if (!isSensitivity(d.dataClassification)) {
+    err('dataClassification', 'INVALID_CLASSIFICATION', 'dataClassification is required');
+  }
+  if (!Array.isArray(d.scopes)) err('scopes', 'INVALID_SCOPES', 'scopes must be an array');
+  if (!d.costModel || typeof d.costModel.unitsPerInvocation !== 'number' || d.costModel.unitsPerInvocation < 0) {
+    err('costModel', 'INVALID_COST_MODEL', 'costModel.unitsPerInvocation must be a non-negative number');
+  }
+  checkFailureModes(d, err);
+  if (d.compensation !== undefined && !parseCapabilityRef(d.compensation)) {
+    err('compensation', 'INVALID_COMPENSATION', 'compensation must be name@constraint');
+  }
+  return issues;
+}
+
+function checkEffect(d: CapabilityDeclaration, err: Err): void {
   if (!['pure', 'idempotent', 'effectful'].includes(d.effect)) {
     err('effect', 'INVALID_EFFECT', "effect must be 'pure', 'idempotent' or 'effectful'");
   }
@@ -35,6 +62,9 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
       "an effectful capability must declare dryRun: 'simulate' so shadow runs can never perform its effect",
     );
   }
+}
+
+function checkEgress(d: CapabilityDeclaration, err: Err): void {
   if (d.effect === 'pure' && d.egress?.mode !== 'none') {
     err('egress', 'PURE_WITH_EGRESS', 'a pure capability cannot have network egress');
   }
@@ -46,13 +76,9 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
   } else if (d.egress?.mode !== 'none' && d.egress?.mode !== 'step') {
     err('egress', 'INVALID_EGRESS', "egress.mode must be 'none', 'static' or 'step'");
   }
-  if (!isSensitivity(d.dataClassification)) {
-    err('dataClassification', 'INVALID_CLASSIFICATION', 'dataClassification is required');
-  }
-  if (!Array.isArray(d.scopes)) err('scopes', 'INVALID_SCOPES', 'scopes must be an array');
-  if (!d.costModel || typeof d.costModel.unitsPerInvocation !== 'number' || d.costModel.unitsPerInvocation < 0) {
-    err('costModel', 'INVALID_COST_MODEL', 'costModel.unitsPerInvocation must be a non-negative number');
-  }
+}
+
+function checkFailureModes(d: CapabilityDeclaration, err: Err): void {
   const codes = new Set<string>();
   for (const fm of d.failureModes ?? []) {
     if (codes.has(fm.code)) err('failureModes', 'DUPLICATE_FAILURE_MODE', `duplicate failure mode '${fm.code}'`);
@@ -61,10 +87,6 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
       err('failureModes', 'INVALID_ERROR_CLASS', `failure mode '${fm.code}' has an unknown class`);
     }
   }
-  if (d.compensation !== undefined && !parseCapabilityRef(d.compensation)) {
-    err('compensation', 'INVALID_COMPENSATION', 'compensation must be name@constraint');
-  }
-  return issues;
 }
 
 /**
@@ -74,10 +96,7 @@ export function validateDeclaration(d: CapabilityDeclaration): Issue[] {
 export class CapabilityRegistry {
   private readonly byName = new Map<string, Map<string, RegisteredCapability>>();
 
-  register(
-    adapter: CapabilityAdapter,
-    registration: CapabilityRegistration = { owner: 'omniflow', source: 'builtin' },
-  ): RegisteredCapability {
+  register(adapter: CapabilityAdapter, registration: CapabilityRegistration = BUILTIN): RegisteredCapability {
     const declaration = adapter.declaration;
     const issues = validateDeclaration(declaration);
     if (!registration.owner?.trim()) {
@@ -133,7 +152,7 @@ export class CapabilityRegistry {
   }
 
   names(): string[] {
-    return [...this.byName.keys()].sort();
+    return [...this.byName.keys()].sort(compareStrings);
   }
 
   has(name: string): boolean {
@@ -154,10 +173,9 @@ export class CapabilityRegistry {
   /** Latest version of every capability. */
   latest(): RegisteredCapability[] {
     const out: RegisteredCapability[] = [];
-    for (const [name, versions] of this.byName) {
+    for (const versions of this.byName.values()) {
       const best = semver.maxSatisfying([...versions.keys()], '*');
       if (best) out.push(versions.get(best)!);
-      else void name;
     }
     return out.sort((a, b) => a.declaration.name.localeCompare(b.declaration.name));
   }

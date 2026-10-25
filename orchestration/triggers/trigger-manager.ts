@@ -41,13 +41,23 @@ export interface WebhookDelivery {
   workflow: string;
   trigger: string;
   rawBody: string;
-  headers: { timestamp: string | undefined; signature: string | undefined; delivery?: string | undefined };
+  headers: { timestamp: string | undefined; signature: string | undefined; delivery?: string };
 }
 
 export interface WebhookSecretInfo {
   trigger: string;
   /** Shown exactly once, when created or rotated. */
   secret: string;
+}
+
+/** An event trigger's optional filter expression: absent passes, and one that fails to evaluate rejects the event. */
+function passesFilter(filter: string | undefined, facts: Parameters<typeof evaluate>[1]): boolean {
+  if (!filter) return true;
+  try {
+    return isTruthy(evaluate(parseExpressionField(filter), facts));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -136,7 +146,7 @@ export class TriggerManager {
         let nextFireAt: string | undefined;
         if (t.type === 'schedule') {
           const prev = existing.get(name);
-          const same = prev && prev.config.cron === t.cron && prev.config.timezone === t.timezone;
+          const same = prev?.config.cron === t.cron && prev.config.timezone === t.timezone;
           nextFireAt =
             same && prev.nextFireAt && prev.nextFireAt > now.toISOString()
               ? prev.nextFireAt
@@ -259,7 +269,7 @@ export class TriggerManager {
 
   // ================================================================= webhooks
   private secretName(workflow: string, trigger: string): string {
-    return `WEBHOOK_${workflow}_${trigger}`.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 64);
+    return `WEBHOOK_${workflow}_${trigger}`.replaceAll(/\W/g, '_').slice(0, 64);
   }
 
   /** Create or replace a webhook's signing secret. The plaintext is returned once and never retrievable again. */
@@ -352,17 +362,10 @@ export class TriggerManager {
     const runs: string[] = [];
     for (const t of this.st.triggers.eventSubscribers(tenant, type)) {
       const facts = { event: { type, payload, correlation: correlation ?? null } };
-      const filter = t.config.filter as string | undefined;
-      if (filter) {
-        try {
-          if (!isTruthy(evaluate(parseExpressionField(filter), facts))) continue;
-        } catch {
-          continue;
-        }
-      }
+      if (!passesFilter(t.config.filter as string | undefined, facts)) continue;
       try {
         const inputs = this.mapInputs(t, facts.event, tenant);
-        const key = correlation ?? `${Date.now()}:${Math.random()}`;
+        const key = correlation ?? `${Date.now()}:${randomToken(8)}`;
         if (!this.st.triggers.recordFire(t.id, `${type}:${key}`)) continue;
         const r = this.fire(t, inputs, { type: 'event', name: t.name, payload }, `${type}:${key}`);
         if (r && (r.status === 'queued' || r.status === 'deduplicated')) runs.push(r.run.id);

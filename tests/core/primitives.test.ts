@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AuthenticationError,
   ConflictError,
+  OmniflowError,
   canonicalize,
+  compareStrings,
   contentHash,
   createLogger,
   createRng,
@@ -17,7 +19,6 @@ import {
   maxSensitivity,
   NotFoundError,
   newId,
-  OmniflowError,
   PolicyDeniedError,
   parseDuration,
   RateLimitedError,
@@ -240,7 +241,7 @@ describe('sanitisation and redaction', () => {
     cyc.self = cyc;
     expect((redact(cyc) as any).self).toBe('[Circular]');
     expect(String(redact('x'.repeat(20000)))).toContain('truncated');
-    expect((redact(new Array(500).fill(1)) as unknown[]).length).toBe(201);
+    expect(redact(new Array(500).fill(1)) as unknown[]).toHaveLength(201);
     let deep: Record<string, unknown> = {};
     const root = deep;
     for (let i = 0; i < 30; i++) {
@@ -278,5 +279,14 @@ describe('logger', () => {
       n: 1,
     });
     expect(JSON.stringify(records[1])).not.toContain('abcdefghijklmnop');
+  });
+});
+
+describe('compareStrings', () => {
+  it('orders exactly like the default sort (UTF-16 code units), independent of locale', () => {
+    const words = ['b', 'B', 'a', 'A', 'é', 'e', 'Z', 'z', '10', '9', '', 'ab', 'a b', '😀', 'ｚ'];
+    expect([...words].sort(compareStrings)).toEqual([...words].sort());
+    expect(compareStrings('B', 'a')).toBeLessThan(0); // uppercase before lowercase, unlike localeCompare
+    expect(compareStrings('a', 'a')).toBe(0);
   });
 });

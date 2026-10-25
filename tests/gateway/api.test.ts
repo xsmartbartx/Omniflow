@@ -282,7 +282,7 @@ describe('workflow lifecycle over HTTP', () => {
     expect(bad.errors[0]).toMatchObject({ code: 'UNKNOWN_CAPABILITY' });
     expect(bad.errors[0].message).toContain("did you mean 'util-echo'");
     expect(bad.errors[0].line).toBeGreaterThan(1);
-    expect((await api.app.state.registry.getVersion('default', 'order-report', '1.0.0')) === undefined).toBe(true);
+    expect(await api.app.state.registry.getVersion('default', 'order-report', '1.0.0')).toBeUndefined();
   });
 
   it('publishes, lists, describes, graphs and runs it', async () => {
@@ -340,7 +340,7 @@ describe('workflow lifecycle over HTTP', () => {
     expect(String(res.headers['content-type'])).toContain('text/event-stream');
     expect(res.body).toContain('event: run.queued');
     expect(res.body).toContain('event: run.succeeded');
-    expect(res.body.match(/^id: \d+$/gm)!.length).toBe(events.length);
+    expect(res.body.match(/^id: \d+$/gm)!).toHaveLength(events.length);
     // resuming after the last event delivers nothing new
     const last = events.at(-1).seq;
     const resumed = await api.server.inject({
@@ -691,5 +691,44 @@ describe('confidential data handling', () => {
     // operators/admins can read the actual output; other roles cannot
     expect((await admin.get(`/v1/runs/${id}/steps/id/output`)).body.output.value).toEqual({ ssn: '123-45-6789' });
     expect((await (await api.key(['author'])).get(`/v1/runs/${id}/steps/id/output`)).status).toBe(403);
+  });
+});
+
+describe('rate-limit headers', () => {
+  it('reports the bucket on authenticated responses, success and error, and counts down', async () => {
+    const a = await makeApi();
+    try {
+      const c = await a.key(['viewer']);
+      const first = await c.get('/v1/workflows');
+      const second = await c.get('/v1/workflows');
+      for (const r of [first, second]) {
+        expect(Number(r.headers['x-ratelimit-limit'])).toBeGreaterThan(0);
+        expect(Number(r.headers['x-ratelimit-reset'])).toBeGreaterThanOrEqual(0);
+      }
+      expect(Number(second.headers['x-ratelimit-remaining'])).toBeLessThan(
+        Number(first.headers['x-ratelimit-remaining']),
+      );
+      const missing = await c.get('/v1/workflows/does-not-exist');
+      expect(missing.status).toBe(404);
+      expect(missing.headers['x-ratelimit-remaining']).toBeDefined();
+      // public routes are not per-principal and carry no such headers
+      expect((await a.anon.get('/healthz')).headers['x-ratelimit-limit']).toBeUndefined();
+    } finally {
+      await a.stop();
+    }
+  });
+
+  it('sends the headers and Retry-After on a 429', async () => {
+    const a = await makeApi({ env: { OMNIFLOW_RATE_LIMIT_PER_MIN: '10' } });
+    try {
+      const c = await a.key(['viewer']);
+      let last = await c.get('/v1/workflows');
+      for (let i = 0; i < 12 && last.status !== 429; i++) last = await c.get('/v1/workflows');
+      expect(last.status).toBe(429);
+      expect(last.headers['retry-after']).toBeDefined();
+      expect(last.headers['x-ratelimit-remaining']).toBe('0');
+    } finally {
+      await a.stop();
+    }
   });
 });

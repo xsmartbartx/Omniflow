@@ -508,4 +508,31 @@ CREATE INDEX nexora_outbox_org ON nexora_outbox (org_id, occurred_at);
 
 `,
   },
+  {
+    id: 3,
+    name: 'webhooks',
+    sql: `
+-- Outbound run-lifecycle webhooks: one row per (hook, event). The worker reads new events past a cursor,
+-- writes the rows, then delivers them with retries; UNIQUE makes enqueueing idempotent after a crash.
+CREATE TABLE webhook_deliveries (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  hook_id TEXT NOT NULL,
+  event_seq INTEGER NOT NULL,
+  event_type TEXT NOT NULL,
+  run_id TEXT,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','delivered','failed')),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT NOT NULL,
+  last_status INTEGER,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  delivered_at TEXT,
+  UNIQUE (hook_id, event_seq)
+);
+CREATE INDEX idx_webhook_due ON webhook_deliveries (status, next_attempt_at);
+CREATE INDEX idx_webhook_tenant ON webhook_deliveries (tenant_id, created_at DESC);
+`,
+  },
 ];

@@ -2,13 +2,14 @@ import type { RegisteredCapability } from '../../capabilities/contract/types.ts'
 import { type CapabilityRegistry, exampleFromSchema } from '../../capabilities/index.ts';
 import {
   type Clock,
+  OmniflowError,
   collectReferences,
+  compareStrings,
   createRng,
   type ErrorInfo,
   evaluate,
   type Logger,
   nullLogger,
-  OmniflowError,
   parseExpressionField,
   redact,
   resolveValue,
@@ -40,7 +41,7 @@ export interface RuntimeDeps {
 interface InvokeParams {
   cap: RegisteredCapability;
   withTemplate: unknown;
-  keyTemplate?: string | undefined;
+  keyTemplate?: string;
   egress: string[];
   timeoutMs: number;
   outputSchema: object;
@@ -73,7 +74,7 @@ function secretNamesIn(value: unknown): string[] {
       }
     }
   }
-  return [...names].sort();
+  return [...names].sort(compareStrings);
 }
 
 /**
@@ -85,6 +86,28 @@ function secretNamesIn(value: unknown): string[] {
  * lease is revoked in every path — a credential outliving its step is how a bounded system becomes
  * an unbounded one.
  */
+interface MapRun {
+  a: StepAttempt;
+  cap: Exclude<ReturnType<StepRuntime['resolveCapability']>, StepResult>;
+  items: unknown[];
+  allowed: number;
+  signal: AbortSignal;
+  stop: AbortController;
+  results: unknown[];
+  failures: Array<{ index: number; error: ErrorInfo }>;
+  cost: number;
+  rng: ReturnType<typeof createRng>;
+}
+
+/** What one capability call holds between its phases, so a failure in any phase can release it. */
+interface InvokeState {
+  started: number;
+  lease?: ActiveLease;
+  claimed: boolean;
+  key?: string;
+  secretValues: string[];
+}
+
 export class StepRuntime implements StepExecutor {
   private readonly d: RuntimeDeps;
   private readonly clock: Clock;
@@ -159,9 +182,51 @@ export class StepRuntime implements StepExecutor {
     const cap = this.resolveCapability(ref);
     if (!('adapter' in cap)) return cap;
 
+    const resolved = this.resolveMapItems(a);
+    if (!Array.isArray(resolved)) return resolved;
+    const items = resolved;
+    const n = items.length;
+    const tol = step.errorTolerance;
+    const allowed = Math.max(tol?.count ?? 0, Math.floor(((tol?.percent ?? 0) / 100) * n));
+    const stop = new AbortController();
+    const run: MapRun = {
+      a,
+      cap,
+      items,
+      allowed,
+      signal: AbortSignal.any([a.signal, stop.signal]),
+      stop,
+      results: new Array(n).fill(null),
+      failures: [],
+      cost: 0,
+      rng: createRng(a.seed).fork(`${step.id}/map`),
+    };
+
+    let next = 0;
+    const workers = Array.from({ length: Math.min(step.concurrency ?? 4, Math.max(n, 1)) }, async () => {
+      while (!run.signal.aborted) {
+        const idx = next++;
+        if (idx >= n) return;
+        await this.runMapItem(run, idx);
+      }
+    });
+    await Promise.all(workers);
+
+    return this.mapOutcome(a, this.clock.now().getTime() - started, {
+      n,
+      allowed,
+      failures: run.failures,
+      results: run.results,
+      cost: run.cost,
+    });
+  }
+
+  /** Evaluate the map's `items` expression and check it is an array within `maxItems`; a failure result otherwise. */
+  private resolveMapItems(a: StepAttempt): unknown[] | StepResult {
+    const step = a.step;
     let items: unknown;
     try {
-      items = evaluate(parseExpressionField(step.items), a.scope, { seed: a.seed });
+      items = evaluate(parseExpressionField(step.items!), a.scope, { seed: a.seed });
     } catch (e) {
       return this.failed('prepare', 0, {
         code: 'MAP_ITEMS_INVALID',
@@ -178,79 +243,81 @@ export class StepRuntime implements StepExecutor {
         retryable: false,
       });
     }
-    const n = items.length;
-    if (n > (step.maxItems ?? 0)) {
+    if (items.length > (step.maxItems ?? 0)) {
       return this.failed('prepare', 0, {
         code: 'MAP_TOO_LARGE',
-        message: `Collection has ${n} items; maxItems is ${step.maxItems}`,
+        message: `Collection has ${items.length} items; maxItems is ${step.maxItems}`,
         class: 'contract',
         retryable: false,
       });
     }
+    return items;
+  }
 
-    const tol = step.errorTolerance;
-    const allowed = Math.max(tol?.count ?? 0, Math.floor(((tol?.percent ?? 0) / 100) * n));
-    const results: unknown[] = new Array(n).fill(null);
-    const failures: Array<{ index: number; error: ErrorInfo }> = [];
-    let cost = 0;
-    let next = 0;
-    const stop = new AbortController();
-    const signal = AbortSignal.any([a.signal, stop.signal]);
-    const retry = step.retry;
-    const rng = createRng(a.seed).fork(`${step.id}/map`);
-
-    const runItem = async (index: number): Promise<void> => {
-      let attempt = 0;
-      for (;;) {
-        attempt++;
-        const res = await this.invoke(
-          { ...a, signal, attempt },
-          {
-            cap,
-            withTemplate: step.with ?? {},
-            keyTemplate: step.idempotencyKey,
-            egress: step.egress ?? [],
-            timeoutMs: step.timeoutMs,
-            outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
-            extraScope: { item: items[index], index },
-            owner: `${a.runId}/${step.id}#${index}`,
-          },
-        );
-        if (res.kind === 'succeeded') {
-          results[index] = res.output;
-          cost += res.cost;
-          if (n <= 50) this.emit(a, 'step.item.succeeded', { index });
-          return;
-        }
-        if (res.kind === 'deferred') {
-          attempt--;
-          await sleep(res.retryAfterMs, signal);
-          if (signal.aborted) return;
-          continue;
-        }
-        const verdict = shouldRetry(retry, attempt, res.error);
-        if (verdict.retry && !signal.aborted) {
-          await sleep(backoffDelayMs(retry!, attempt, rng.next()), signal);
-          if (signal.aborted) return;
-          continue;
-        }
-        failures.push({ index, error: res.error });
-        this.emit(a, 'step.item.failed', { index, error: res.error });
-        if (failures.length > allowed) stop.abort();
+  /** Run one item to completion: retry per the step's policy, wait out deferrals, record success or failure. */
+  private async runMapItem(run: MapRun, index: number): Promise<void> {
+    const { a, signal } = run;
+    let attempt = 0;
+    for (;;) {
+      attempt++;
+      const res = await this.invokeMapItem(run, index, attempt);
+      if (res.kind === 'succeeded') {
+        run.results[index] = res.output;
+        run.cost += res.cost;
+        if (run.items.length <= 50) this.emit(a, 'step.item.succeeded', { index });
         return;
       }
-    };
-
-    const workers = Array.from({ length: Math.min(step.concurrency ?? 4, Math.max(n, 1)) }, async () => {
-      while (!signal.aborted) {
-        const idx = next++;
-        if (idx >= n) return;
-        await runItem(idx);
+      if (res.kind === 'deferred') {
+        attempt--;
+        await sleep(res.retryAfterMs, signal);
+      } else if (!(await this.waitToRetry(run, res.error, attempt))) {
+        run.failures.push({ index, error: res.error });
+        this.emit(a, 'step.item.failed', { index, error: res.error });
+        if (run.failures.length > run.allowed) run.stop.abort();
+        return;
       }
-    });
-    await Promise.all(workers);
+      if (signal.aborted) return;
+    }
+  }
 
-    const durationMs = this.clock.now().getTime() - started;
+  private invokeMapItem(run: MapRun, index: number, attempt: number): Promise<StepResult> {
+    const { a, cap, signal } = run;
+    const step = a.step;
+    return this.invoke(
+      { ...a, signal, attempt },
+      {
+        cap,
+        withTemplate: step.with ?? {},
+        keyTemplate: step.idempotencyKey,
+        egress: step.egress ?? [],
+        timeoutMs: step.timeoutMs,
+        outputSchema: (step.produces ?? cap.declaration.outputSchema) as object,
+        extraScope: { item: run.items[index], index },
+        owner: `${a.runId}/${step.id}#${index}`,
+      },
+    );
+  }
+
+  /** When the retry policy allows another attempt, wait out the back-off and return true. */
+  private async waitToRetry(run: MapRun, error: ErrorInfo, attempt: number): Promise<boolean> {
+    const retry = run.a.step.retry;
+    if (!shouldRetry(retry, attempt, error).retry || run.signal.aborted) return false;
+    await sleep(backoffDelayMs(retry!, attempt, run.rng.next()), run.signal);
+    return true;
+  }
+
+  /** The step result once every item has been tried: cancelled, too many failures, or the collected results. */
+  private mapOutcome(
+    a: StepAttempt,
+    durationMs: number,
+    r: {
+      n: number;
+      allowed: number;
+      failures: Array<{ index: number; error: ErrorInfo }>;
+      results: unknown[];
+      cost: number;
+    },
+  ): StepResult {
     if (a.signal.aborted) {
       return this.failed('execute', durationMs, {
         code: 'CANCELLED',
@@ -259,20 +326,21 @@ export class StepRuntime implements StepExecutor {
         retryable: false,
       });
     }
-    if (failures.length > allowed) {
-      const first = failures.sort((x, y) => x.index - y.index)[0]!;
+    const sorted = r.failures.toSorted((x, y) => x.index - y.index);
+    if (r.failures.length > r.allowed) {
+      const first = sorted[0]!;
       return this.failed('execute', durationMs, {
         code: 'MAP_TOLERANCE_EXCEEDED',
-        message: `${failures.length} of ${n} items failed (tolerated: ${allowed}); first failure at index ${first.index}: ${first.error.message}`,
+        message: `${r.failures.length} of ${r.n} items failed (tolerated: ${r.allowed}); first failure at index ${first.index}: ${first.error.message}`,
         class: first.error.class,
         retryable: false,
-        details: { failures: failures.slice(0, 10) },
+        details: { failures: r.failures.slice(0, 10) },
       });
     }
     return {
       kind: 'succeeded',
-      output: { results, failures: failures.sort((x, y) => x.index - y.index), count: n },
-      cost,
+      output: { results: r.results, failures: sorted, count: r.n },
+      cost: r.cost,
       durationMs,
     };
   }
@@ -350,178 +418,272 @@ export class StepRuntime implements StepExecutor {
   }
 
   private async invoke(a: StepAttempt, p: InvokeParams): Promise<StepResult> {
-    const started = this.clock.now().getTime();
-    const decl = p.cap.declaration;
-    const elapsed = () => this.clock.now().getTime() - started;
-    const grace = this.d.graceMs ?? 30_000;
-    let lease: ActiveLease | undefined;
-    let claimed = false;
-    let key: string | undefined;
-    let secretValues: string[] = [];
-
+    const st: InvokeState = { started: this.clock.now().getTime(), claimed: false, secretValues: [] };
     try {
-      // ---- Authorised: kill switch and circuit breaker
-      const killed = this.d.kv.isCapabilityKilled(a.tenant, decl.name);
-      if (killed.killed) {
-        return this.failed('authorise', elapsed(), {
-          code: 'CAPABILITY_KILLED',
-          message: `Capability '${decl.name}' is disabled by an operator${killed.reason ? `: ${killed.reason}` : ''}`,
-          class: 'systemic',
-          retryable: false,
-        });
-      }
-      const gate = this.d.breakers.check(decl.name);
-      if (!gate.allowed)
-        return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
+      return await this.runInvocation(a, p, st);
+    } catch (e) {
+      return this.failInvocation(a, p, st, e);
+    } finally {
+      if (st.lease) this.revokeLease(a, st.lease);
+    }
+  }
 
-      // ---- Prepared: lease secrets, resolve and validate the input
-      const names = secretNamesIn(p.withTemplate);
-      try {
-        lease =
-          names.length > 0
-            ? this.d.broker.lease({
-                tenant: a.tenant,
-                runId: a.runId,
-                stepId: a.step.id,
-                names,
-                ttlMs: p.timeoutMs + grace,
-              })
-            : this.d.broker.emptyLease();
-      } catch (e) {
-        this.d.breakers.release(decl.name);
-        return this.failed('authorise', elapsed(), { ...toInfo(e), class: 'contract', retryable: false });
-      }
-      secretValues = lease.values();
-      if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
+  /** The happy path of one capability call; anything it throws is turned into a failure by `failInvocation`. */
+  private async runInvocation(a: StepAttempt, p: InvokeParams, st: InvokeState): Promise<StepResult> {
+    const decl = p.cap.declaration;
+    const elapsed = () => this.clock.now().getTime() - st.started;
+    const grace = this.d.graceMs ?? 30_000;
 
-      const baseScope = { ...a.scope, ...(p.extraScope ?? {}) };
-      let input: unknown;
-      try {
-        input = resolveValue(p.withTemplate, { ...baseScope, secrets: lease.scope() }, { seed: a.seed });
-        if (p.keyTemplate !== undefined) key = String(resolveValue(p.keyTemplate, baseScope, { seed: a.seed }));
-      } catch (e) {
-        this.d.breakers.release(decl.name);
-        return this.failed('prepare', elapsed(), {
+    const early = this.authorise(a, decl, elapsed);
+    if (early) return early;
+
+    // ---- Prepared: lease secrets, resolve and validate the input
+    const names = secretNamesIn(p.withTemplate);
+    const leased = this.leaseSecrets(a, p, names, grace, elapsed);
+    if ('result' in leased) return leased.result;
+    const lease = leased.lease;
+    st.lease = lease;
+    st.secretValues = lease.values();
+    if (names.length > 0) this.emit(a, 'secret.lease.issued', { leaseId: lease.id, names });
+
+    const valid = this.prepareInput(a, p, lease, st.secretValues, elapsed);
+    if ('result' in valid) return valid.result;
+    const key = valid.key;
+    st.key = key;
+
+    const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
+    const ctx = this.capabilityContext(a, p, key, signal, lease);
+
+    // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
+    if (a.dryRun && decl.dryRun === 'simulate') return await this.simulate(a, p, ctx, valid.value, elapsed);
+
+    // ---- Idempotency: effective exactly-once for effectful capabilities
+    if (key !== undefined && decl.effect !== 'pure') {
+      const claim = this.claimKey(a, p, key, grace, elapsed);
+      if ('result' in claim) return claim.result;
+      st.claimed = true;
+    }
+
+    // ---- Executing
+    const output = await raceWithAbort(p.cap.adapter.execute(ctx, valid.value), signal);
+
+    // ---- The effect happened: record it before validating the response shape.
+    if (st.claimed && key !== undefined) {
+      this.d.idempotency.complete(a.tenant, decl.name, key, p.owner, output);
+      st.claimed = false;
+    }
+
+    // ---- Validated
+    const checked = validateValue(p.outputSchema, output);
+    if (!checked.ok) return this.outputInvalid(decl, checked.issues, st.secretValues, elapsed());
+    this.d.breakers.success(decl.name);
+    return {
+      kind: 'succeeded',
+      output: redactSecrets(checked.value, st.secretValues),
+      cost: decl.costModel.unitsPerInvocation,
+      durationMs: elapsed(),
+    };
+  }
+
+  /** Release what the call still held (an unfinished idempotency claim), count it against the breaker if due, and report it. */
+  private failInvocation(a: StepAttempt, p: InvokeParams, st: InvokeState, e: unknown): StepResult {
+    const decl = p.cap.declaration;
+    if (st.claimed && st.key !== undefined) this.d.idempotency.release(a.tenant, decl.name, st.key, p.owner);
+    const err = this.classify(e, decl, st.secretValues, a.signal, p.timeoutMs);
+    if (a.signal.aborted) this.d.breakers.release(decl.name);
+    else this.recordBreakerOutcome(decl.name, err);
+    return this.failed('execute', this.clock.now().getTime() - st.started, err);
+  }
+
+  private capabilityContext(
+    a: StepAttempt,
+    p: InvokeParams,
+    key: string | undefined,
+    signal: AbortSignal,
+    lease: ActiveLease,
+  ): CapabilityContext {
+    return {
+      tenant: a.tenant,
+      runId: a.runId,
+      stepId: a.step.id,
+      attempt: a.attempt,
+      dryRun: a.dryRun,
+      ...(key !== undefined ? { idempotencyKey: key } : {}),
+      egress: p.egress,
+      signal,
+      lease,
+      seed: a.seed,
+      now: a.now,
+      log: (msg, fields) => this.log.info(msg, { runId: a.runId, stepId: a.step.id, ...fields }),
+    };
+  }
+
+  /** Only transient and systemic failures count against the circuit breaker; a caller's mistake does not. */
+  private recordBreakerOutcome(capability: string, err: ErrorInfo): void {
+    if (err.class === 'transient' || err.class === 'systemic') this.d.breakers.failure(capability);
+    else this.d.breakers.release(capability);
+  }
+
+  /** A dry run of a `simulate` capability: its own simulation or an example of its output; never the real effect. */
+  private async simulate(
+    a: StepAttempt,
+    p: InvokeParams,
+    ctx: CapabilityContext,
+    input: unknown,
+    elapsed: () => number,
+  ): Promise<StepResult> {
+    const decl = p.cap.declaration;
+    const out = p.cap.adapter.simulate
+      ? await p.cap.adapter.simulate(ctx, input)
+      : exampleFromSchema(decl.outputSchema);
+    this.emit(a, 'step.dry-run', { capability: decl.name, simulated: true });
+    this.d.breakers.release(decl.name);
+    return { kind: 'succeeded', output: out, cost: 0, durationMs: elapsed(), simulated: true };
+  }
+
+  /** Claim the idempotency key: a replay returns the recorded result, a busy key defers, otherwise the caller owns it. */
+  private claimKey(
+    a: StepAttempt,
+    p: InvokeParams,
+    key: string,
+    grace: number,
+    elapsed: () => number,
+  ): { result: StepResult } | { owned: true } {
+    const decl = p.cap.declaration;
+    const claim = this.d.idempotency.claim(a.tenant, decl.name, key, p.owner, p.timeoutMs + grace);
+    if (claim.state === 'replay') {
+      this.emit(a, 'step.idempotent-replay', { idempotencyKey: key, capability: decl.name });
+      this.d.breakers.release(decl.name);
+      return { result: { kind: 'succeeded', output: claim.output, cost: 0, durationMs: elapsed(), replayed: true } };
+    }
+    if (claim.state === 'busy') {
+      this.d.breakers.release(decl.name);
+      return {
+        result: {
+          kind: 'deferred',
+          reason: `idempotency key '${key}' is being processed by ${claim.owner}`,
+          retryAfterMs: 1000,
+        },
+      };
+    }
+    return { owned: true };
+  }
+
+  /** Kill switch and circuit breaker: a failure result when the capability may not run now, otherwise undefined. */
+  private authorise(
+    a: StepAttempt,
+    decl: RegisteredCapability['declaration'],
+    elapsed: () => number,
+  ): StepResult | undefined {
+    const killed = this.d.kv.isCapabilityKilled(a.tenant, decl.name);
+    if (killed.killed) {
+      const reason = killed.reason ? `: ${killed.reason}` : '';
+      return this.failed('authorise', elapsed(), {
+        code: 'CAPABILITY_KILLED',
+        message: `Capability '${decl.name}' is disabled by an operator${reason}`,
+        class: 'systemic',
+        retryable: false,
+      });
+    }
+    const gate = this.d.breakers.check(decl.name);
+    if (gate.allowed) return undefined;
+    return { kind: 'deferred', reason: `circuit open for '${decl.name}'`, retryAfterMs: gate.retryAfterMs };
+  }
+
+  private leaseSecrets(
+    a: StepAttempt,
+    p: InvokeParams,
+    names: string[],
+    grace: number,
+    elapsed: () => number,
+  ): { lease: ActiveLease } | { result: StepResult } {
+    try {
+      const lease =
+        names.length > 0
+          ? this.d.broker.lease({
+              tenant: a.tenant,
+              runId: a.runId,
+              stepId: a.step.id,
+              names,
+              ttlMs: p.timeoutMs + grace,
+            })
+          : this.d.broker.emptyLease();
+      return { lease };
+    } catch (e) {
+      this.d.breakers.release(p.cap.declaration.name);
+      return { result: this.failed('authorise', elapsed(), { ...toInfo(e), class: 'contract', retryable: false }) };
+    }
+  }
+
+  /** Resolve the step's input and idempotency key from the scope, then check the input against the contract. */
+  private prepareInput(
+    a: StepAttempt,
+    p: InvokeParams,
+    lease: ActiveLease,
+    secretValues: string[],
+    elapsed: () => number,
+  ): { value: unknown; key: string | undefined } | { result: StepResult } {
+    const decl = p.cap.declaration;
+    const baseScope = { ...a.scope, ...p.extraScope };
+    let input: unknown;
+    let key: string | undefined;
+    try {
+      input = resolveValue(p.withTemplate, { ...baseScope, secrets: lease.scope() }, { seed: a.seed });
+      if (p.keyTemplate !== undefined) key = String(resolveValue(p.keyTemplate, baseScope, { seed: a.seed }));
+    } catch (e) {
+      this.d.breakers.release(decl.name);
+      return {
+        result: this.failed('prepare', elapsed(), {
           code: 'INPUT_RESOLUTION_FAILED',
           message: scrubString((e as Error).message, { secretValues }),
           class: 'contract',
           retryable: false,
-        });
-      }
-      const valid = validateValue(decl.inputSchema, input);
-      if (!valid.ok) {
-        this.d.breakers.release(decl.name);
-        const msg = valid.issues
-          .slice(0, 5)
-          .map((i) => `${i.path || 'input'}: ${i.message}`)
-          .join('; ');
-        return this.failed('prepare', elapsed(), {
+        }),
+      };
+    }
+    const valid = validateValue(decl.inputSchema, input);
+    if (!valid.ok) {
+      this.d.breakers.release(decl.name);
+      const msg = valid.issues
+        .slice(0, 5)
+        .map((i) => `${i.path || 'input'}: ${i.message}`)
+        .join('; ');
+      return {
+        result: this.failed('prepare', elapsed(), {
           code: 'INPUT_INVALID',
           message: scrubString(`Input for '${decl.name}' is invalid — ${msg}`, { secretValues }),
           class: 'contract',
           retryable: false,
-        });
-      }
-
-      const signal = AbortSignal.any([a.signal, AbortSignal.timeout(p.timeoutMs)]);
-      const ctx: CapabilityContext = {
-        tenant: a.tenant,
-        runId: a.runId,
-        stepId: a.step.id,
-        attempt: a.attempt,
-        dryRun: a.dryRun,
-        ...(key !== undefined ? { idempotencyKey: key } : {}),
-        egress: p.egress,
-        signal,
-        lease,
-        seed: a.seed,
-        now: a.now,
-        log: (msg, fields) => this.log.info(msg, { runId: a.runId, stepId: a.step.id, ...fields }),
-      };
-
-      // ---- Dry run: effectful capabilities are never executed (structural guarantee, ADR-0002 D3)
-      if (a.dryRun && decl.dryRun === 'simulate') {
-        const out = p.cap.adapter.simulate
-          ? await p.cap.adapter.simulate(ctx, valid.value)
-          : exampleFromSchema(decl.outputSchema);
-        this.emit(a, 'step.dry-run', { capability: decl.name, simulated: true });
-        this.d.breakers.release(decl.name);
-        return { kind: 'succeeded', output: out, cost: 0, durationMs: elapsed(), simulated: true };
-      }
-
-      // ---- Idempotency: effective exactly-once for effectful capabilities
-      if (key !== undefined && decl.effect !== 'pure') {
-        const claim = this.d.idempotency.claim(a.tenant, decl.name, key, p.owner, p.timeoutMs + grace);
-        if (claim.state === 'replay') {
-          this.emit(a, 'step.idempotent-replay', { idempotencyKey: key, capability: decl.name });
-          this.d.breakers.release(decl.name);
-          return { kind: 'succeeded', output: claim.output, cost: 0, durationMs: elapsed(), replayed: true };
-        }
-        if (claim.state === 'busy') {
-          this.d.breakers.release(decl.name);
-          return {
-            kind: 'deferred',
-            reason: `idempotency key '${key}' is being processed by ${claim.owner}`,
-            retryAfterMs: 1000,
-          };
-        }
-        claimed = true;
-      }
-
-      // ---- Executing
-      const run = p.cap.adapter.execute(ctx, valid.value);
-      run.catch(() => {}); // never leave an unhandled rejection if the timeout wins the race
-      const output = await Promise.race([
-        run,
-        new Promise<never>((_, reject) => {
-          if (signal.aborted) reject(signal.reason);
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
         }),
-      ]);
-
-      // ---- The effect happened: record it before validating the response shape.
-      if (claimed && key !== undefined) {
-        this.d.idempotency.complete(a.tenant, decl.name, key, p.owner, output);
-        claimed = false;
-      }
-
-      // ---- Validated
-      const checked = validateValue(p.outputSchema, output);
-      if (!checked.ok) {
-        this.d.breakers.release(decl.name);
-        const msg = checked.issues
-          .slice(0, 5)
-          .map((i) => `${i.path || 'output'}: ${i.message}`)
-          .join('; ');
-        return this.failed('validate', elapsed(), {
-          code: 'OUTPUT_INVALID',
-          message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }),
-          class: 'contract',
-          retryable: true,
-        });
-      }
-      this.d.breakers.success(decl.name);
-      return {
-        kind: 'succeeded',
-        output: redactSecrets(checked.value, secretValues),
-        cost: decl.costModel.unitsPerInvocation,
-        durationMs: elapsed(),
       };
-    } catch (e) {
-      if (claimed && key !== undefined) this.d.idempotency.release(a.tenant, decl.name, key, p.owner);
-      const err = this.classify(e, decl, secretValues, a.signal, p.timeoutMs);
-      if (a.signal.aborted) this.d.breakers.release(decl.name);
-      else if (err.class === 'transient' || err.class === 'systemic') this.d.breakers.failure(decl.name);
-      else this.d.breakers.release(decl.name);
-      return this.failed('execute', elapsed(), err);
-    } finally {
-      if (lease) {
-        const id = lease.id;
-        const granted = lease.names.length;
-        lease.revoke();
-        if (granted > 0) this.emit(a, 'secret.lease.revoked', { leaseId: id });
-      }
     }
+    return { value: valid.value, key };
+  }
+
+  private outputInvalid(
+    decl: RegisteredCapability['declaration'],
+    issues: Array<{ path: string; message: string }>,
+    secretValues: string[],
+    durationMs: number,
+  ): StepResult {
+    this.d.breakers.release(decl.name);
+    const msg = issues
+      .slice(0, 5)
+      .map((i) => `${i.path || 'output'}: ${i.message}`)
+      .join('; ');
+    return this.failed('validate', durationMs, {
+      code: 'OUTPUT_INVALID',
+      message: scrubString(`'${decl.name}' returned an unexpected shape — ${msg}`, { secretValues }),
+      class: 'contract',
+      retryable: true,
+    });
+  }
+
+  private revokeLease(a: StepAttempt, lease: ActiveLease): void {
+    const id = lease.id;
+    const granted = lease.names.length;
+    lease.revoke();
+    if (granted > 0) this.emit(a, 'secret.lease.revoked', { leaseId: id });
   }
 
   /** Map anything an adapter throws onto the failure taxonomy, honouring the capability's declared failure modes. */
@@ -580,4 +742,16 @@ function redactSecrets(value: unknown, secretValues: string[]): unknown {
       json,
     ),
   );
+}
+
+/** Wait for the capability, but give up when the signal fires (timeout or cancellation), whichever comes first. */
+function raceWithAbort<T>(run: Promise<T>, signal: AbortSignal): Promise<T> {
+  run.catch(() => {}); // never leave an unhandled rejection if the timeout wins the race
+  return Promise.race([
+    run,
+    new Promise<never>((_, reject) => {
+      if (signal.aborted) reject(signal.reason);
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }),
+  ]);
 }

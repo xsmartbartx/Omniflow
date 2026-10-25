@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
-import { duration, number, shortHash, TERMINAL_RUN, timestamp, tone, truncate } from '../format.js';
+import { duration, number, shortHash, stepOutcome, TERMINAL_RUN, timestamp, tone, truncate } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { can } from '../session.js';
 import {
@@ -22,6 +22,51 @@ import {
 import { runLink, wfLink } from './common.js';
 
 const clock = (iso) => new Date(iso).toLocaleTimeString([], { hour12: false }) + iso.slice(19, 23);
+
+const DOT_TONES = new Set(['good', 'bad', 'warn']);
+
+/** Tone for an undo (compensation) status: failed is the only alarming one. */
+const undoTone = (status, otherwise) => (status === 'failed' ? 'bad' : otherwise);
+
+/** The "Note" cell of the step table: the error, or why the step was skipped. */
+function stepNote(s) {
+  if (s.error)
+    return h('span', { class: 'muted', title: s.error.message }, truncate(`${s.error.code}: ${s.error.message}`, 70));
+  return s.skippedReason ? h('span', { class: 'muted' }, s.skippedReason) : '';
+}
+
+/** What the step dialog shows for the step's output. */
+function outputPreview(step) {
+  if (step.output?.redacted)
+    return notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`);
+  if (step.output !== null && step.output !== undefined) return codeBlock(JSON.stringify(step.output, null, 2));
+  return h('span', { class: 'muted' }, 'No output recorded.');
+}
+
+function summaryCard(r) {
+  const triggerName = r.trigger.name ? ` · ${r.trigger.name}` : '';
+  return card(
+    'Summary',
+    kv([
+      ['Workflow', wfLink(r.workflow, r.version)],
+      ['Status', statusBadge(r.status)],
+      ['Trigger', `${r.trigger.type}${triggerName}`],
+      ['Requested by', r.requestedBy.name],
+      ['Took', duration(r.durationMs)],
+      ['Cost', number(r.cost)],
+      ['Plan', h('code', { title: r.planHash }, shortHash(r.planHash))],
+      r.parentRunId ? ['Parent run', runLink(r.parentRunId)] : null,
+      r.correlationId ? ['Correlation', h('code', {}, r.correlationId)] : null,
+      [
+        'Inputs',
+        Object.keys(r.inputs).length
+          ? codeBlock(JSON.stringify(r.inputs, null, 2), { copy: false })
+          : h('span', { class: 'muted' }, 'none'),
+      ],
+      r.outputs && Object.keys(r.outputs).length ? ['Outputs', codeBlock(JSON.stringify(r.outputs, null, 2))] : null,
+    ]),
+  );
+}
 
 export default async function run(ctx) {
   const id = ctx.params.id;
@@ -61,10 +106,13 @@ export default async function run(ctx) {
       .filter(Boolean)
       .join(' · ');
     const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+    let eventTone = '';
+    if (bad) eventTone = 'bad';
+    else if (good) eventTone = 'good';
     log.append(
       h(
         'div',
-        { class: ['ev', bad ? 'bad' : good ? 'good' : ''] },
+        { class: ['ev', eventTone] },
         h('span', { class: 't' }, clock(e.ts)),
         h('span', { class: 'ty' }, e.type),
         h('span', {}, [e.stepId ? h('strong', {}, `${e.stepId} `) : '', truncate(detail, 160)]),
@@ -73,40 +121,33 @@ export default async function run(ctx) {
     if (atBottom) log.scrollTop = log.scrollHeight;
   };
 
+  const retryRun = async () => {
+    const x = await api.post(`${base}/retry`);
+    if (x.run) location.hash = `#/runs/${api.enc(x.run.id)}`;
+    else toast(`Skipped: ${x.reason}`, 'warn');
+  };
+
+  const cancelRun = async () => {
+    const v = await formDialog({
+      title: 'Cancel this run?',
+      intro: 'Steps in flight are stopped and any completed effects are compensated where possible.',
+      fields: [{ name: 'reason', label: 'Reason (optional)' }],
+      submitLabel: 'Cancel run',
+      danger: true,
+    });
+    if (!v) return;
+    await api.post(`${base}/cancel`, v.reason ? { reason: v.reason } : {});
+    toast('Cancellation requested', 'good');
+    await refresh();
+  };
+
   const draw = async () => {
     const r = data.run;
     const terminal = TERMINAL_RUN.has(r.status);
-    const rerun =
-      can('run.retry') && terminal
-        ? button('Run again', {
-            icon: 'refresh',
-            onClick: async () => {
-              const x = await api.post(`${base}/retry`);
-              if (x.run) location.hash = `#/runs/${api.enc(x.run.id)}`;
-              else toast(`Skipped: ${x.reason}`, 'warn');
-            },
-          })
-        : null;
+    const rerun = can('run.retry') && terminal ? button('Run again', { icon: 'refresh', onClick: retryRun }) : null;
     const cancel =
       can('run.cancel') && !terminal
-        ? button('Cancel run', {
-            kind: 'danger',
-            icon: 'stop',
-            onClick: async () => {
-              const v = await formDialog({
-                title: 'Cancel this run?',
-                intro: 'Steps in flight are stopped and any completed effects are compensated where possible.',
-                fields: [{ name: 'reason', label: 'Reason (optional)' }],
-                submitLabel: 'Cancel run',
-                danger: true,
-              });
-              if (v) {
-                await api.post(`${base}/cancel`, v.reason ? { reason: v.reason } : {});
-                toast('Cancellation requested', 'good');
-                await refresh();
-              }
-            },
-          })
+        ? button('Cancel run', { kind: 'danger', icon: 'stop', onClick: cancelRun })
         : null;
     clear(head).append(
       pageHeader(
@@ -125,31 +166,7 @@ export default async function run(ctx) {
       ),
     );
 
-    clear(summary).append(
-      card(
-        'Summary',
-        kv([
-          ['Workflow', wfLink(r.workflow, r.version)],
-          ['Status', statusBadge(r.status)],
-          ['Trigger', `${r.trigger.type}${r.trigger.name ? ` · ${r.trigger.name}` : ''}`],
-          ['Requested by', r.requestedBy.name],
-          ['Took', duration(r.durationMs)],
-          ['Cost', number(r.cost)],
-          ['Plan', h('code', { title: r.planHash }, shortHash(r.planHash))],
-          r.parentRunId ? ['Parent run', runLink(r.parentRunId)] : null,
-          r.correlationId ? ['Correlation', h('code', {}, r.correlationId)] : null,
-          [
-            'Inputs',
-            Object.keys(r.inputs).length
-              ? codeBlock(JSON.stringify(r.inputs, null, 2), { copy: false })
-              : h('span', { class: 'muted' }, 'none'),
-          ],
-          r.outputs && Object.keys(r.outputs).length
-            ? ['Outputs', codeBlock(JSON.stringify(r.outputs, null, 2))]
-            : null,
-        ]),
-      ),
-    );
+    clear(summary).append(summaryCard(r));
 
     if (graph)
       clear(graphBox).append(
@@ -184,13 +201,7 @@ export default async function run(ctx) {
                 h('span', {
                   class: [
                     'dot',
-                    tone(s.status) === 'good'
-                      ? 'good'
-                      : tone(s.status) === 'bad'
-                        ? 'bad'
-                        : tone(s.status) === 'warn'
-                          ? 'warn'
-                          : '',
+                    DOT_TONES.has(tone(s.status)) ? tone(s.status) : '',
                     s.status === 'running' ? 'pulse' : '',
                   ],
                 }),
@@ -215,7 +226,7 @@ export default async function run(ctx) {
                   statusBadge(s.status),
                   s.handled ? badge(`handled: ${s.handled}`, 'neutral') : null,
                   s.compensation?.status
-                    ? badge(`undo: ${s.compensation.status}`, s.compensation.status === 'failed' ? 'bad' : 'neutral')
+                    ? badge(`undo: ${s.compensation.status}`, undoTone(s.compensation.status, 'neutral'))
                     : null,
                 ),
             },
@@ -223,16 +234,7 @@ export default async function run(ctx) {
             { label: 'Took', class: 'num nowrap', render: (s) => duration(s.durationMs) },
             {
               label: 'Note',
-              render: (s) =>
-                s.error
-                  ? h(
-                      'span',
-                      { class: 'muted', title: s.error.message },
-                      truncate(`${s.error.code}: ${s.error.message}`, 70),
-                    )
-                  : s.skippedReason
-                    ? h('span', { class: 'muted' }, s.skippedReason)
-                    : '',
+              render: stepNote,
             },
           ],
         }),
@@ -413,11 +415,7 @@ async function stepDialog(step, base) {
       }
     },
   });
-  const preview = step.output?.redacted
-    ? notice('warn', `Output withheld: this step handles ${step.output.sensitivity} data.`)
-    : step.output !== null && step.output !== undefined
-      ? codeBlock(JSON.stringify(step.output, null, 2))
-      : h('span', { class: 'muted' }, 'No output recorded.');
+  const preview = outputPreview(step);
   await openDialog({
     title: `Step ${step.id}`,
     wide: true,
@@ -436,12 +434,13 @@ async function stepDialog(step, base) {
         step.skippedReason ? ['Skipped because', step.skippedReason] : null,
         step.childRunId ? ['Child run', runLink(step.childRunId)] : null,
       ]),
+      stepOutcome(step) ? h('p', {}, h('strong', {}, 'Why: '), stepOutcome(step)) : null,
       step.error
         ? notice('bad', h('strong', {}, `${step.error.code} (${step.error.class})`), h('p', {}, step.error.message))
         : null,
       step.compensation
         ? notice(
-            step.compensation.status === 'failed' ? 'bad' : 'info',
+            undoTone(step.compensation.status, 'info'),
             `Undo with ${step.compensation.capability}: ${step.compensation.status ?? 'not needed'}`,
           )
         : null,

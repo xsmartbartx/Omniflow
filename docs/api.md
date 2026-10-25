@@ -46,6 +46,9 @@ attempts lock an account for 15 minutes; login is rate-limited per address.
   | 502 / 503 | The AI provider failed / AI authoring is not configured |
   | 500 | A bug; quote `requestId` |
 
+- Authenticated responses, success or error, carry `X-RateLimit-Limit` (bucket size), `X-RateLimit-Remaining` (whole
+  requests left) and `X-RateLimit-Reset` (seconds until the bucket is full again), per principal. A `429` also sends
+  `Retry-After`.
 - Lists are newest-first and bounded (`limit`, `offset`/`afterSeq`/`beforeSeq` where relevant).
 - Every request gets a `requestId`; it appears in errors and in server logs.
 
@@ -83,6 +86,7 @@ Paths are under `/v1`. The *Needs* column names the roles that may call it (`adm
 | | `PUT /secrets/{name}` · `DELETE /secrets/{name}` | admin |
 | **Triggers** | `GET /triggers` · `GET /channels` | any signed-in role |
 | | `POST /workflows/{name}/triggers/{trigger}/rotate-secret` · `POST /events` | operator |
+| **Webhooks** | `GET /webhooks/deliveries` (recent outbound deliveries and their status) | operator |
 | **Governance** | `GET/POST /users` · `PATCH /users/{id}` · `GET/POST /api-keys` · `DELETE /api-keys/{id}` · `GET/POST /tenants` | admin |
 | | `GET /audit/events` · `GET /audit/verify` · `GET /audit/export` (NDJSON) | operator |
 
@@ -113,6 +117,24 @@ data: {"seq":42,"type":"step.succeeded","runId":"run_…","stepId":"greet","ts":
 
 Send `Last-Event-ID` to resume without gaps. Behind a reverse proxy, disable buffering for this path
 (see [Operations](operations.md#https)).
+
+## Outbound webhooks
+
+Set `OMNIFLOW_RUN_WEBHOOKS` (see [Configuration](configuration.md#outbound-run-webhooks-optional)) and OmniFlow
+POSTs a JSON event to your URL when a run finishes (or starts, if you subscribe to `run.started`):
+
+```json
+{ "id": "evt_01J…", "type": "run.failed", "occurredAt": "2026-10-11T09:00:00.000Z", "tenant": "default",
+  "run": { "id": "run_01J…", "workflow": "order-router", "version": "1.2.0", "status": "failed", "correlationId": "order-1042" },
+  "error": { "code": "CAPABILITY_FAILED", "message": "…" } }
+```
+
+The body carries no inputs, outputs or secrets. Each delivery has `X-OmniFlow-Event`, `X-OmniFlow-Delivery` (the event
+id; **dedupe on it**: delivery is at least once), `X-OmniFlow-Timestamp` and `X-OmniFlow-Signature: v1=<hex>`, signed
+exactly like inbound webhooks (HMAC-SHA256 over `"<timestamp>.<raw body>"` with your secret, below). Answer 2xx to
+acknowledge. Anything else, or a timeout (10 s), is retried with exponential backoff (5 s, 10 s, 20 s … up to 1 h) for
+8 attempts, except a 4xx other than 408 and 429, which fails at once. Failed deliveries stay visible at
+`GET /v1/webhooks/deliveries`. New hooks start from now; history is never replayed to them.
 
 ## Webhooks
 

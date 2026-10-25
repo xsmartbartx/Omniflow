@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { flag, flagAll, has, intFlag, parseInputs, UsageError } from '../args.ts';
+import { flag, flagAll, has, intFlag, parseInputs, queryFlag, UsageError } from '../args.ts';
 import { ApiError } from '../client.ts';
 import { type CliContext, client, emit, need } from '../context.ts';
 import { ago, humanDuration, renderIssue, statusColour, table } from '../format.ts';
@@ -10,6 +10,29 @@ import { expandFiles } from './local.ts';
 
 const TERMINAL = new Set(['succeeded', 'failed', 'rolled-back', 'compensation-failed', 'cancelled']);
 
+type Painter = CliContext['style'];
+
+/** Workflow state as a coloured word. */
+const stateWord = (s: Painter, w: { killed?: boolean; enabled?: boolean }, killed = 'killed') => {
+  if (w.killed) return s.red(killed);
+  return w.enabled ? s.green('enabled') : s.yellow('disabled');
+};
+
+const stepNote = (s: Painter, st: { error?: { message: unknown }; skippedReason?: string }) => {
+  if (st.error) return s.dim(String(st.error.message).slice(0, 60));
+  return st.skippedReason ? s.dim(st.skippedReason) : '';
+};
+
+const finishMark = (s: Painter, status: string) => {
+  if (status === 'succeeded') return s.green('✓');
+  return TERMINAL.has(status) ? s.red('✗') : s.yellow('…');
+};
+
+const capabilityState = (s: Painter, c: { killed?: boolean; circuit?: string }) => {
+  if (c.killed) return s.red('killed');
+  return c.circuit === 'open' ? s.yellow('circuit open') : 'ok';
+};
+
 export async function statusCommand(ctx: CliContext): Promise<number> {
   const api = client(ctx, { needKey: false });
   const info = await api.get('/v1/info');
@@ -17,9 +40,11 @@ export async function statusCommand(ctx: CliContext): Promise<number> {
   const ready = { ready: probe.status === 'ready', ...(probe.error ? { error: probe.error } : {}) };
   emit(ctx, { info, ready }, () => {
     const s = ctx.style;
+    const environment = s.dim(`(${info.environment})`);
+    const problem = ready.error ? s.dim(`  ${ready.error}`) : '';
     return [
-      `${s.bold('OmniFlow')} ${info.version}  ${s.dim(`(${info.environment})`)}`,
-      `ready: ${ready.ready ? s.green('yes') : s.red('no')}${ready.error ? s.dim(`  ${ready.error}`) : ''}`,
+      `${s.bold('OmniFlow')} ${info.version}  ${environment}`,
+      `ready: ${ready.ready ? s.green('yes') : s.red('no')}${problem}`,
       ...(info.capabilities !== undefined ? [`capabilities: ${info.capabilities}`] : []),
     ].join('\n');
   });
@@ -41,7 +66,7 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
         items.map((w: any) => [
           w.name,
           w.stableVersion ?? '—',
-          w.killed ? s.red('killed') : w.enabled ? s.green('enabled') : s.yellow('disabled'),
+          stateWord(s, w),
           w.criticality ?? '—',
           `${w.recent.succeeded}/${w.recent.total} ok`,
           w.lastRun ? `${statusColour(s, w.lastRun.status)} ${s.dim(ago(w.lastRun.createdAt))}` : '—',
@@ -56,11 +81,14 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   const name = need(ctx, 2, 'workflow');
   if (sub === 'show') {
     const w = await api.get(`/v1/workflows/${encodeURIComponent(name)}`);
+    const canaryNote = w.settings.canaryVersion
+      ? `  canary ${w.settings.canaryVersion} (${w.settings.canaryPercent}%)`
+      : '';
     emit(ctx, w, () =>
       [
-        `${s.bold(w.name)}  ${w.settings.killed ? s.red('KILLED') : w.settings.enabled ? s.green('enabled') : s.yellow('disabled')}  autonomy ${w.settings.autonomyTier}`,
+        `${s.bold(w.name)}  ${stateWord(s, w.settings, 'KILLED')}  autonomy ${w.settings.autonomyTier}`,
         w.plan?.workflow.description ? w.plan.workflow.description : '',
-        `stable ${w.settings.stableVersion ?? '—'}${w.settings.canaryVersion ? `  canary ${w.settings.canaryVersion} (${w.settings.canaryPercent}%)` : ''}`,
+        `stable ${w.settings.stableVersion ?? '—'}${canaryNote}`,
         '',
         s.bold('Versions'),
         table(
@@ -86,13 +114,14 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   }
 
   if (sub === 'graph') {
-    const g = await api.get(
-      `/v1/workflows/${encodeURIComponent(name)}/graph${flag(ctx.args, 'version') ? `?version=${encodeURIComponent(flag(ctx.args, 'version')!)}` : ''}`,
-    );
+    const g = await api.get(`/v1/workflows/${encodeURIComponent(name)}/graph${queryFlag(ctx.args, 'version')}`);
     emit(ctx, g, () =>
       [
         `flowchart TD`,
-        ...g.nodes.map((n: any) => `  ${n.id}["${n.id}${n.capability ? `<br/>${n.capability}` : ''}"]`),
+        ...g.nodes.map((n: any) => {
+          const via = n.capability ? `<br/>${n.capability}` : '';
+          return `  ${n.id}["${n.id}${via}"]`;
+        }),
         ...g.edges.map((e: any) => `  ${e.from} ${e.conditional ? '-.->' : '-->'} ${e.to}`),
         ...g.routes.map((r: any) => `  ${r.from} -. on error .-> ${r.to}`),
       ].join('\n'),
@@ -123,39 +152,55 @@ export async function workflowsCommand(ctx: CliContext): Promise<number> {
   return 0;
 }
 
+function printPublished(ctx: CliContext, r: any): void {
+  const s = ctx.style;
+  if (r.status === 'published') {
+    const ref = s.bold(`${r.version.name}@${r.version.version}`);
+    ctx.out(`${s.green('✓')} published ${ref}  risk ${r.risk.level} (${r.risk.score})\n`);
+  } else {
+    const ref = s.bold(`${r.change.workflowName}@${r.change.version}`);
+    ctx.out(`${s.yellow('…')} ${ref} needs approval (${r.decision.reason}) — change ${r.change.id}\n`);
+  }
+}
+
+function printPublishFailure(ctx: CliContext, file: string, manifest: string, e: ApiError): void {
+  const s = ctx.style;
+  const issues = (e.details as { issues?: any[] } | undefined)?.issues;
+  for (const i of issues ?? []) ctx.err(`${renderIssue(s, file, manifest, i)}\n\n`);
+  ctx.err(`${s.red('✗')} ${file}: ${e.message}\n`);
+}
+
+/** Publish one manifest; an API rejection (4xx) is reported and counted, anything else propagates. */
+async function publishOne(
+  ctx: CliContext,
+  api: ReturnType<typeof client>,
+  file: string,
+  manifest: string,
+  canaryPercent: number | undefined,
+): Promise<{ result: unknown; failed: boolean }> {
+  try {
+    const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
+    if (!ctx.json) printPublished(ctx, r);
+    return { result: { file, ...r }, failed: false };
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status >= 500) throw e;
+    if (!ctx.json) printPublishFailure(ctx, file, manifest, e);
+    return { result: { file, error: { code: e.code, message: e.message, details: e.details } }, failed: true };
+  }
+}
+
 export async function publishCommand(ctx: CliContext): Promise<number> {
   const paths = ctx.args.positionals.slice(1);
   if (paths.length === 0) throw new UsageError('Usage: omniflow publish <file|dir> [--canary <percent>]');
   const api = client(ctx);
-  const s = ctx.style;
   const canaryPercent = intFlag(ctx.args, 'canary');
   let failures = 0;
   const results: unknown[] = [];
   for (const file of expandFiles(ctx, paths)) {
     const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-    try {
-      const r = await api.post('/v1/workflows', { manifest, ...(canaryPercent ? { canaryPercent } : {}) });
-      results.push({ file, ...r });
-      if (!ctx.json) {
-        if (r.status === 'published')
-          ctx.out(
-            `${s.green('✓')} published ${s.bold(`${r.version.name}@${r.version.version}`)}  risk ${r.risk.level} (${r.risk.score})\n`,
-          );
-        else
-          ctx.out(
-            `${s.yellow('…')} ${s.bold(`${r.change.workflowName}@${r.change.version}`)} needs approval (${r.decision.reason}) — change ${r.change.id}\n`,
-          );
-      }
-    } catch (e) {
-      if (!(e instanceof ApiError) || e.status >= 500) throw e;
-      failures++;
-      results.push({ file, error: { code: e.code, message: e.message, details: e.details } });
-      if (!ctx.json) {
-        const issues = (e.details as { issues?: any[] } | undefined)?.issues;
-        if (issues?.length) for (const i of issues) ctx.err(`${renderIssue(s, file, manifest, i)}\n\n`);
-        ctx.err(`${s.red('✗')} ${file}: ${e.message}\n`);
-      }
-    }
+    const outcome = await publishOne(ctx, api, file, manifest, canaryPercent);
+    results.push(outcome.result);
+    if (outcome.failed) failures++;
   }
   if (ctx.json) ctx.out(`${JSON.stringify(results, null, 2)}\n`);
   return failures > 0 ? 1 : 0;
@@ -219,97 +264,116 @@ function runsTable(ctx: CliContext, items: any[]): string {
 
 export async function runsCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1] ?? 'list';
-  const api = client(ctx);
-  const s = ctx.style;
-
-  if (sub === 'list') {
-    const q = new URLSearchParams();
-    for (const [f, p] of [
-      ['workflow', 'workflow'],
-      ['status', 'status'],
-      ['limit', 'limit'],
-    ] as const)
-      if (flag(ctx.args, f)) q.set(p, flag(ctx.args, f)!);
-    const r = await api.get(`/v1/runs${q.size ? `?${q}` : ''}`);
-    emit(ctx, r, () =>
-      r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${s.dim(`${r.items.length} of ${r.total}`)}`,
-    );
-    return 0;
-  }
-
+  if (sub === 'list') return runsList(ctx);
   const id = need(ctx, 2, 'run id');
-  if (sub === 'show') {
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}`);
-    emit(ctx, r, () => {
-      const run = r.run;
-      return [
-        `${s.bold(run.workflow)}@${run.version}  ${statusColour(s, run.status)}${run.dryRun ? s.dim(' (dry run)') : ''}  ${s.dim(run.id)}`,
-        `started ${ago(run.startedAt ?? run.createdAt)} · took ${humanDuration(run.durationMs)} · cost ${run.cost} · plan ${s.dim(String(run.planHash).slice(0, 19))}`,
-        ...(run.error ? [`${s.red(run.error.code)}: ${run.error.message}`] : []),
-        '',
-        table(
-          r.steps.map((st: any) => [
-            st.id,
-            st.capability ?? st.type,
-            statusColour(s, st.status),
-            st.attempt > 1 ? `${st.attempt}/${st.maxAttempts}` : '',
-            humanDuration(st.durationMs),
-            st.error ? s.dim(String(st.error.message).slice(0, 60)) : st.skippedReason ? s.dim(st.skippedReason) : '',
-          ]),
-          ['STEP', 'CAPABILITY', 'STATUS', 'TRY', 'TOOK', 'NOTE'],
-          s,
-        ),
-        ...(run.outputs && Object.keys(run.outputs).length
-          ? ['', s.bold('outputs'), JSON.stringify(run.outputs, null, 2)]
-          : []),
-        ...(r.approvals.some((a: any) => a.status === 'pending')
-          ? [
-              '',
-              s.yellow(
-                `Waiting for approval: omniflow approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
-              ),
-            ]
-          : []),
-      ].join('\n');
-    });
-    return 0;
+  const enc = encodeURIComponent(id);
+  switch (sub) {
+    case 'show':
+      return runShow(ctx, enc);
+    case 'events':
+      return runEvents(ctx, enc);
+    case 'output': {
+      const step = need(ctx, 3, 'step id');
+      const r = await client(ctx).get(`/v1/runs/${enc}/steps/${encodeURIComponent(step)}/output`);
+      ctx.out(`${JSON.stringify(r.output, null, 2)}\n`);
+      return 0;
+    }
+    case 'tail':
+    case 'watch':
+      return tail(ctx, id);
+    case 'cancel':
+      return runCancel(ctx, id, enc);
+    case 'retry':
+      return runRetry(ctx, enc);
+    default:
+      throw new UsageError(`Unknown runs subcommand '${sub}'. Try: list, show, tail, events, output, cancel, retry`);
   }
-  if (sub === 'events') {
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}/events`);
-    emit(ctx, r, () =>
-      r.items
-        .map((e: any) => `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${e.stepId ? s.dim(`  ${e.stepId}`) : ''}`)
-        .join('\n'),
-    );
-    return 0;
-  }
-  if (sub === 'output') {
-    const step = need(ctx, 3, 'step id');
-    const r = await api.get(`/v1/runs/${encodeURIComponent(id)}/steps/${encodeURIComponent(step)}/output`);
-    ctx.out(`${JSON.stringify(r.output, null, 2)}\n`);
-    return 0;
-  }
-  if (sub === 'tail' || sub === 'watch') return tail(ctx, id);
-  if (sub === 'cancel') {
-    await api.post(
-      `/v1/runs/${encodeURIComponent(id)}/cancel`,
-      flag(ctx.args, 'reason') ? { reason: flag(ctx.args, 'reason') } : {},
-    );
-    ctx.out(`${s.green('✓')} cancellation requested for ${id}\n`);
-    return 0;
-  }
-  if (sub === 'retry') {
-    const r = await api.post(`/v1/runs/${encodeURIComponent(id)}/retry`);
-    ctx.out(
-      ctx.json
-        ? `${JSON.stringify(r)}\n`
-        : r.status === 'skipped'
-          ? `${s.yellow('skipped')}: ${r.reason}\n`
-          : `${s.green('✓')} new run ${s.bold(r.run.id)}\n`,
-    );
-    return 0;
-  }
-  throw new UsageError(`Unknown runs subcommand '${sub}'. Try: list, show, tail, events, output, cancel, retry`);
+}
+
+async function runsList(ctx: CliContext): Promise<number> {
+  const s = ctx.style;
+  const q = new URLSearchParams();
+  for (const [f, p] of [
+    ['workflow', 'workflow'],
+    ['status', 'status'],
+    ['limit', 'limit'],
+  ] as const)
+    if (flag(ctx.args, f)) q.set(p, flag(ctx.args, f)!);
+  const suffix = q.size ? `?${q}` : '';
+  const r = await client(ctx).get(`/v1/runs${suffix}`);
+  const count = s.dim(`${r.items.length} of ${r.total}`);
+  emit(ctx, r, () => (r.items.length === 0 ? 'No runs.' : `${runsTable(ctx, r.items)}\n${count}`));
+  return 0;
+}
+
+async function runShow(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/runs/${enc}`);
+  emit(ctx, r, () => {
+    const run = r.run;
+    return [
+      `${s.bold(run.workflow)}@${run.version}  ${statusColour(s, run.status)}${run.dryRun ? s.dim(' (dry run)') : ''}  ${s.dim(run.id)}`,
+      `started ${ago(run.startedAt ?? run.createdAt)} · took ${humanDuration(run.durationMs)} · cost ${run.cost} · plan ${s.dim(String(run.planHash).slice(0, 19))}`,
+      ...(run.error ? [`${s.red(run.error.code)}: ${run.error.message}`] : []),
+      '',
+      table(
+        r.steps.map((st: any) => [
+          st.id,
+          st.capability ?? st.type,
+          statusColour(s, st.status),
+          st.attempt > 1 ? `${st.attempt}/${st.maxAttempts}` : '',
+          humanDuration(st.durationMs),
+          stepNote(s, st),
+        ]),
+        ['STEP', 'CAPABILITY', 'STATUS', 'TRY', 'TOOK', 'NOTE'],
+        s,
+      ),
+      ...(run.outputs && Object.keys(run.outputs).length
+        ? ['', s.bold('outputs'), JSON.stringify(run.outputs, null, 2)]
+        : []),
+      ...(r.approvals.some((a: any) => a.status === 'pending')
+        ? [
+            '',
+            s.yellow(
+              `Waiting for approval: omniflow approvals approve ${r.approvals.find((a: any) => a.status === 'pending').id}`,
+            ),
+          ]
+        : []),
+    ].join('\n');
+  });
+  return 0;
+}
+
+async function runEvents(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/runs/${enc}/events`);
+  emit(ctx, r, () =>
+    r.items
+      .map((e: any) => {
+        const step = e.stepId ? s.dim(`  ${e.stepId}`) : '';
+        return `${String(e.seq).padStart(6)}  ${e.ts}  ${e.type}${step}`;
+      })
+      .join('\n'),
+  );
+  return 0;
+}
+
+async function runCancel(ctx: CliContext, id: string, enc: string): Promise<number> {
+  await client(ctx).post(
+    `/v1/runs/${enc}/cancel`,
+    flag(ctx.args, 'reason') ? { reason: flag(ctx.args, 'reason') } : {},
+  );
+  ctx.out(`${ctx.style.green('✓')} cancellation requested for ${id}\n`);
+  return 0;
+}
+
+async function runRetry(ctx: CliContext, enc: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(`/v1/runs/${enc}/retry`);
+  if (ctx.json) ctx.out(`${JSON.stringify(r)}\n`);
+  else if (r.status === 'skipped') ctx.out(`${s.yellow('skipped')}: ${r.reason}\n`);
+  else ctx.out(`${s.green('✓')} new run ${s.bold(r.run.id)}\n`);
+  return 0;
 }
 
 /** Follow a run's live event stream until it finishes; exit 0 only if it succeeded. */
@@ -319,16 +383,15 @@ async function tail(ctx: CliContext, runId: string): Promise<number> {
   const line = (e: { type: string; ts: string; stepId?: string; data?: Record<string, unknown> }) => {
     const step = e.stepId ? s.cyan(e.stepId.padEnd(18)) : ' '.repeat(18);
     const detail = describeEvent(e);
-    return `${s.dim(e.ts.slice(11, 23))}  ${step} ${e.type}${detail ? s.dim(`  ${detail}`) : ''}`;
+    const note = detail ? s.dim(`  ${detail}`) : '';
+    return `${s.dim(e.ts.slice(11, 23))}  ${step} ${e.type}${note}`;
   };
   await api.stream(`/v1/runs/${encodeURIComponent(runId)}/stream`, ({ data }) => {
     ctx.out(ctx.json ? `${JSON.stringify(data)}\n` : `${line(data)}\n`);
   });
   const { run } = await api.get(`/v1/runs/${encodeURIComponent(runId)}`);
-  if (!ctx.json)
-    ctx.out(
-      `\n${run.status === 'succeeded' ? s.green('✓') : TERMINAL.has(run.status) ? s.red('✗') : s.yellow('…')} ${statusColour(s, run.status)}${run.error ? `  ${run.error.message}` : ''}\n`,
-    );
+  const runError = run.error ? `  ${run.error.message}` : '';
+  if (!ctx.json) ctx.out(`\n${finishMark(s, run.status)} ${statusColour(s, run.status)}${runError}\n`);
   return run.status === 'succeeded' ? 0 : 1;
 }
 
@@ -336,7 +399,10 @@ function describeEvent(e: { data?: Record<string, unknown> }): string {
   const d = e.data ?? {};
   const parts: string[] = [];
   for (const k of ['attempt', 'reason', 'errorCode', 'message', 'decision', 'capability'])
-    if (d[k] !== undefined) parts.push(`${k}=${typeof d[k] === 'object' ? JSON.stringify(d[k]) : d[k]}`);
+    if (d[k] !== undefined)
+      parts.push(
+        `${k}=${typeof d[k] === 'string' || typeof d[k] === 'number' || typeof d[k] === 'boolean' ? String(d[k]) : JSON.stringify(d[k])}`,
+      );
   return parts.join(' ').slice(0, 100);
 }
 
@@ -407,12 +473,11 @@ export async function changesCommand(ctx: CliContext): Promise<number> {
     const c = await api.get(`/v1/changes/${encodeURIComponent(id)}`);
     if (has(ctx.args, 'manifest')) ctx.out(c.manifestText);
     else
-      emit(
-        ctx,
-        c,
-        () =>
-          `${s.bold(`${c.workflowName}@${c.version}`)}  ${c.status}\n${c.reason}\nrisk ${c.risk?.level} (${c.risk?.score})\n${(c.risk?.findings ?? []).map((f: any) => `  - [${f.severity}] ${f.message}`).join('\n')}`,
-      );
+      emit(ctx, c, () => {
+        const ref = s.bold(`${c.workflowName}@${c.version}`);
+        const findings = (c.risk?.findings ?? []).map((f: any) => `  - [${f.severity}] ${f.message}`).join('\n');
+        return `${ref}  ${c.status}\n${c.reason}\nrisk ${c.risk?.level} (${c.risk?.score})\n${findings}`;
+      });
     return 0;
   }
   if (sub === 'approve' || sub === 'reject') {
@@ -420,11 +485,8 @@ export async function changesCommand(ctx: CliContext): Promise<number> {
       `/v1/changes/${encodeURIComponent(id)}/${sub}`,
       flag(ctx.args, 'comment') ? { comment: flag(ctx.args, 'comment') } : {},
     );
-    ctx.out(
-      ctx.json
-        ? `${JSON.stringify(r)}\n`
-        : `${s.green('✓')} ${sub}d ${id}${r.published ? ` — published ${r.published.name}@${r.published.version}` : ''}\n`,
-    );
+    const published = r.published ? ` — published ${r.published.name}@${r.published.version}` : '';
+    ctx.out(ctx.json ? `${JSON.stringify(r)}\n` : `${s.green('✓')} ${sub}d ${id}${published}\n`);
     return 0;
   }
   if (sub === 'withdraw') {
@@ -442,12 +504,7 @@ export async function capabilitiesCommand(ctx: CliContext): Promise<number> {
   const { items } = await api.get('/v1/capabilities');
   emit(ctx, items, () =>
     table(
-      items.map((c: any) => [
-        `${c.name}@${c.version}`,
-        c.effect,
-        c.killed ? ctx.style.red('killed') : c.circuit === 'open' ? ctx.style.yellow('circuit open') : 'ok',
-        c.description ?? '',
-      ]),
+      items.map((c: any) => [`${c.name}@${c.version}`, c.effect, capabilityState(ctx.style, c), c.description ?? '']),
       ['CAPABILITY', 'EFFECT', 'STATE', 'DESCRIPTION'],
       ctx.style,
     ),

@@ -13,7 +13,7 @@ import {
 } from '../core/index.ts';
 import type { Action, Principal } from '../schemas/index.ts';
 import { SESSION_COOKIE } from './auth.ts';
-import type { Omniflow } from './context.ts';
+import type { OmniFlow } from './context.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
 declare module 'fastify' {
@@ -27,7 +27,7 @@ declare module 'fastify' {
 export interface Ctx<B = any, Q = any, P = any> {
   req: FastifyRequest;
   reply: FastifyReply;
-  app: Omniflow;
+  app: OmniFlow;
   principal: Principal;
   body: B;
   query: Q;
@@ -50,7 +50,7 @@ export interface RouteDef {
   raw?: boolean;
   /** Stricter per-IP rate limit bucket name. */
   limit?: 'login' | 'webhook' | 'sso';
-  handler: (ctx: Ctx) => unknown | Promise<unknown>;
+  handler: (ctx: Ctx) => unknown; // may return a promise; the route plumbing awaits it
 }
 
 // ------------------------------------------------------------------ errors
@@ -65,21 +65,23 @@ export function statusFor(e: unknown): number {
   if (e instanceof NotFoundError) return 404;
   if (e instanceof ConflictError) return 409;
   if (e instanceof RateLimitedError) return 429;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_EXCEEDED') return 429;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_DENIED') return 403;
-  if (e instanceof OmniflowError && e.code === 'ENTITLEMENT_UNAVAILABLE') return 503;
-  if (e instanceof OmniflowError && e.code === 'AI_NOT_CONFIGURED') return 503;
-  if (e instanceof OmniflowError && e.code.startsWith('LLM_')) return 502;
-  if (e instanceof OmniflowError)
-    return e.errorClass === 'contract'
-      ? 400
-      : e.errorClass === 'authorisation'
-        ? 403
-        : e.errorClass === 'business'
-          ? 409
-          : 500;
+  if (e instanceof OmniflowError) {
+    if (Object.hasOwn(CODE_STATUS, e.code)) return CODE_STATUS[e.code]!;
+    return e.code.startsWith('LLM_') ? 502 : (CLASS_STATUS[e.errorClass] ?? 500);
+  }
   return 500;
 }
+
+/** HTTP status for specific error codes that need more than their class implies. */
+const CODE_STATUS: Record<string, number> = {
+  ENTITLEMENT_EXCEEDED: 429,
+  ENTITLEMENT_DENIED: 403,
+  ENTITLEMENT_UNAVAILABLE: 503,
+  AI_NOT_CONFIGURED: 503,
+};
+
+/** HTTP status for a failure with no more specific mapping, by error class (architecture §12.2). */
+const CLASS_STATUS: Record<string, number> = { contract: 400, authorisation: 403, business: 409 };
 
 /** Server-side conditions whose messages are written for the caller (configuration and upstream-provider problems). */
 const USER_FACING_5XX = new Set([
@@ -128,19 +130,20 @@ export function problem(
   };
 }
 
+function validationMessage(v: { message?: string; keyword?: string; params?: Record<string, unknown> }): string {
+  if (v.keyword === 'required') return `Missing required property '${String(v.params?.missingProperty)}'`;
+  if (v.keyword === 'additionalProperties') return `Unknown property '${String(v.params?.additionalProperty)}'`;
+  return v.message ?? 'Invalid value';
+}
+
 export function fromFastifyValidation(
   validation: Array<{ instancePath?: string; message?: string; keyword?: string; params?: Record<string, unknown> }>,
   where: string,
 ): ValidationError {
   const issues: Issue[] = validation.map((v) => ({
-    path: `${where}${(v.instancePath ?? '').replace(/\//g, '.')}`.replace(/\.$/, ''),
+    path: `${where}${(v.instancePath ?? '').replaceAll('/', '.')}`.replace(/\.$/, ''),
     code: `SCHEMA_${(v.keyword ?? 'invalid').toUpperCase()}`,
-    message:
-      v.keyword === 'required'
-        ? `Missing required property '${String(v.params?.missingProperty)}'`
-        : v.keyword === 'additionalProperties'
-          ? `Unknown property '${String(v.params?.additionalProperty)}'`
-          : (v.message ?? 'Invalid value'),
+    message: validationMessage(v),
   }));
   return new ValidationError('The request is invalid', issues);
 }
@@ -163,7 +166,7 @@ export const clearSessionCookie = (secure: boolean) =>
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function authenticate(app: Omniflow, req: FastifyRequest): Principal {
+export function authenticate(app: OmniFlow, req: FastifyRequest): Principal {
   const header = req.headers.authorization;
   if (header?.startsWith('Bearer ')) {
     const principal = app.auth.authenticateApiKey(header.slice(7).trim());
@@ -192,21 +195,14 @@ export interface Registered {
 
 export function registerRoutes(
   fastify: FastifyInstance,
-  app: Omniflow,
+  app: OmniFlow,
   defs: RouteDef[],
   limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter; sso: RateLimiter },
 ): void {
   for (const def of defs) {
     const handler: RouteHandlerMethod = async (req, reply) => {
       const ip = req.ip;
-      const bucket =
-        def.limit === 'login'
-          ? limiters.login
-          : def.limit === 'webhook'
-            ? limiters.webhook
-            : def.limit === 'sso'
-              ? limiters.sso
-              : undefined;
+      const bucket = def.limit ? limiters[def.limit] : undefined;
       if (bucket) {
         const wait = bucket.take(`${def.limit}:${ip}`);
         if (wait > 0) throw new RateLimitedError(wait);
@@ -215,7 +211,12 @@ export function registerRoutes(
       if (!def.public) {
         principal = authenticate(app, req);
         req.principal = principal;
-        const wait = limiters.api.take(`p:${principal.id}`);
+        const key = `p:${principal.id}`;
+        const wait = limiters.api.take(key);
+        const rl = limiters.api.snapshot(key);
+        reply.header('x-ratelimit-limit', String(rl.limit));
+        reply.header('x-ratelimit-remaining', String(rl.remaining));
+        reply.header('x-ratelimit-reset', String(rl.resetSeconds));
         if (wait > 0) throw new RateLimitedError(wait);
         if (def.action) {
           const decision = app.policy.decide({ principal, action: def.action, resource: { tenant: principal.tenant } });
@@ -258,7 +259,7 @@ export function registerRoutes(
         ? {
             // A body whose fields are all optional may be omitted entirely.
             preValidation: async (req: FastifyRequest) => {
-              if (req.body === undefined || req.body === null) req.body = {};
+              req.body ??= {};
             },
           }
         : {}),
@@ -272,15 +273,17 @@ export function registerRoutes(
 export function buildOpenApi(defs: RouteDef[], info: { version: string }): object {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const d of defs) {
-    const url = d.url.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+    const url = d.url.replaceAll(/:(\w+)/g, '{$1}');
     const params: unknown[] = [];
-    for (const name of [...d.url.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1]!)) {
+    for (const name of [...d.url.matchAll(/:(\w+)/g)].map((m) => m[1]!)) {
       params.push({ name, in: 'path', required: true, schema: { type: 'string' } });
     }
     const q = d.schema?.querystring as { properties?: Record<string, unknown>; required?: string[] } | undefined;
     for (const [name, schema] of Object.entries(q?.properties ?? {}))
       params.push({ name, in: 'query', required: q?.required?.includes(name) ?? false, schema });
-    (paths[url] ??= {})[d.method.toLowerCase()] = {
+    paths[url] ??= {};
+    const pathItem = paths[url];
+    pathItem[d.method.toLowerCase()] = {
       summary: d.summary,
       tags: [d.tag],
       operationId: `${d.method.toLowerCase()}${url.replace(/[^A-Za-z0-9]+(.)?/g, (_m, c: string | undefined) => (c ?? '').toUpperCase())}`,

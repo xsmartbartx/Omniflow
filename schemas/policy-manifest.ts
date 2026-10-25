@@ -42,7 +42,7 @@ const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 export function buildPolicySchema(): Record<string, unknown> {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: 'https://omniflow.dev/schemas/policy.v1.json',
+    $id: 'https://omniflow.onenexora.com/schemas/policy.v1.json',
     title: 'OmniFlow Policy',
     type: 'object',
     required: ['apiVersion', 'kind', 'metadata', 'rules'],

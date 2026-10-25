@@ -11,7 +11,7 @@ type Schema = Record<string, unknown>;
 
 const KEBAB = '^[a-z][a-z0-9]*(-[a-z0-9]+)*$';
 const IDENT = '^[A-Za-z][A-Za-z0-9_]*$';
-const SEMVER = '^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$';
+const SEMVER = String.raw`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$`;
 
 const str = (extra: Schema = {}): Schema => ({ type: 'string', maxLength: 4096, ...extra });
 const kebab = (): Schema => ({ type: 'string', pattern: KEBAB, maxLength: 64 });
@@ -217,7 +217,7 @@ const guard: Schema = obj({ name: kebab(), expr: expr(), message: str() }, ['nam
 export function buildManifestSchema(): Schema {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    $id: 'https://omniflow.dev/schemas/workflow-manifest.v1.json',
+    $id: 'https://omniflow.onenexora.com/schemas/workflow-manifest.v1.json',
     title: 'OmniFlow Workflow Manifest',
     description: 'Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.',
     type: 'object',

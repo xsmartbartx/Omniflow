@@ -1,0 +1,169 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OmniFlow — Durable workflows without the cluster</title><meta name="description" content="OmniFlow runs the work that is too important for a cron job: checked before it runs, executed once, and recorded in a tamper-evident log. One container, one SQLite file. A NEXORA product."><meta name="color-scheme" content="dark light"><meta name="theme-color" content="#070a13"><meta property="og:type" content="website"><meta property="og:title" content="OmniFlow — Durable workflows without the cluster"><meta property="og:description" content="OmniFlow runs the work that is too important for a cron job: checked before it runs, executed once, and recorded in a tamper-evident log. One container, one SQLite file. A NEXORA product."><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><script src="/site.js"></script></head><body><a class="skip" href="#main">Skip to content</a><div class="family"><div class="wrap"><a href="https://onenexora.com" rel="noopener">NEXORA</a><nav class="products" aria-label="NEXORA products"><a href="https://onenexora.com/products" rel="noopener">All products</a><a class="here" href="/" aria-current="true">OmniFlow</a></nav></div></div><header class="site-header"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><nav class="nav" aria-label="Main"><a href="/platform.html">Platform</a><a href="/security.html">Security</a><a href="/pricing.html">Pricing</a></nav><div class="tools"><button class="icon-btn" id="theme" type="button" aria-label="Light theme" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button><a class="btn btn-primary btn-sm" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a></div></div></header><main id="main">
+
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot" aria-hidden="true"></span>In development · early access soon</span>
+    <h1>Workflows that run <span class="grad">exactly once.</span></h1>
+    <p class="lede">OmniFlow runs the work that is too important for a cron job and too fiddly for a spreadsheet. Described in a short manifest, checked before it runs, executed from a single container, and recorded so you can explain every step.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a>
+      <a class="btn btn-quiet" href="/platform.html">See how it works</a>
+    </div>
+    <p class="hero-note">Part of the NEXORA platform. Sign-in and billing through NEXORA arrive with the beta.</p>
+
+    <figure class="window" aria-labelledby="window-desc"><p class="sr-only" id="window-desc">Illustration of a OmniFlow run: three steps, one waiting for approval, with a plain-language explanation beside it.</p>
+      <div class="window-bar"><i></i><i></i><i></i><span>Run · approval-gated-refund 1.0.0</span></div>
+      <div class="window-body" aria-hidden="true">
+        <div>
+          <div class="run-head"><strong>approval-gated-refund</strong><span class="badge wait">Waiting for approval</span></div>
+          <ul class="steps">
+            <li class="step"><span class="mark">✓</span><span><span class="id">validate</span></span><span class="meta">12 ms</span></li>
+            <li class="step"><span class="mark pause">II</span><span><span class="id">sign-off</span></span><span class="meta">paused · free while waiting</span></li>
+            <li class="step"><span class="mark todo">3</span><span><span class="id">refund</span></span><span class="meta">effectful · idempotency key set</span></li>
+          </ul>
+        </div>
+        <div class="explain">
+          <h3>Explain this run</h3>
+          <p>The run stopped at <b>sign-off</b>. Nothing after it has run.</p>
+          <ul>
+            <li>It needs a different person from the one who started it.</li>
+            <li>If nobody answers in 4 hours, the refund is denied.</li>
+            <li>If you retry later, the refund still happens at most once.</li>
+          </ul>
+        </div>
+      </div>
+    </figure>
+    <p class="caption">Illustration. Real run pages show exactly this: what happened, what is true now, and what to do next.</p>
+  </div>
+</section>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="facts">
+      <div class="fact"><b>1 container</b><span>No cluster, queue or database to run first.</span></div>
+      <div class="fact"><b>1 SQLite file</b><span>Backup and restore are one command each.</span></div>
+      <div class="fact"><b>Exactly-once</b><span>Effectful steps carry an idempotency key.</span></div>
+      <div class="fact"><b>Hash-chained</b><span>An audit log that cannot be edited quietly.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head center">
+      <span class="kicker">Why OmniFlow</span>
+      <h2>Built for the moment a step fails.</h2>
+      <p>Most workflow tools are good at the happy path. OmniFlow is designed around what happens next.</p>
+    </div>
+    <div class="tiles">
+      <article class="tile"><span class="label">Safe by construction</span><h3>One effect, once.</h3><p>Retries and crashes do not repeat a charge, an email or a deploy. The key is recorded before the step acts, so "did that go through twice?" has an answer.</p></article>
+      <article class="tile"><span class="label">Honest failures</span><h3>Know why it stopped.</h3><p>Failures are classified. Only the ones you choose are retried; the rest stop, roll back in reverse order, and say why in plain words.</p></article>
+      <article class="tile"><span class="label">Small to operate</span><h3>Nothing to babysit.</h3><p>One container and one file. It does not scale across machines, and we say so up front. If you need a cluster, this is not the right tool yet.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">How it works</span>
+      <h2>Describe it. Check it. See what happened.</h2>
+    </div>
+    <div class="how">
+      <ol class="numbered">
+        <li><div><h3>Write or describe a workflow</h3><p>A short manifest, or a plain-language draft that a person must review. AI may propose; it never runs anything on its own.</p></div></li>
+        <li><div><h3>It is checked, then it runs</h3><p>Unknown steps, bad references and missing idempotency keys are errors with a line number, found before anything runs.</p></div></li>
+        <li><div><h3>Every run explains itself</h3><p>Attempts, retries and approvals land in a tamper-evident log. Any run can be read back in plain text.</p></div></li>
+      </ol>
+      <div class="code">
+        <div class="window-bar"><i></i><i></i><i></i><span>approval-gated-refund.yaml</span></div>
+<pre><code><span class="c"># a person must approve before the refund</span>
+<span class="k">steps</span>:
+  - <span class="k">id</span>: validate
+    <span class="k">type</span>: capability
+    <span class="k">uses</span>: util-assert@^1
+  - <span class="k">id</span>: sign-off
+    <span class="k">type</span>: approval
+    <span class="k">dependsOn</span>: [validate]
+    <span class="k">approvers</span>: { roles: [approver, admin] }
+    <span class="k">timeout</span>: 4h
+    <span class="k">onTimeout</span>: <span class="s">deny</span>
+  - <span class="k">id</span>: refund
+    <span class="k">type</span>: capability
+    <span class="k">dependsOn</span>: [sign-off]
+    <span class="k">idempotencyKey</span>: <span class="s">"refund-${{ inputs.orderId }}"</span></code></pre>
+        <div class="result"><b>✓ valid</b> · 3 steps · risk low · plan <code>sha256:9f3c…</code></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="kicker">Capabilities</span>
+      <h2>Everything a durable workflow needs. Nothing it doesn't.</h2>
+    </div>
+    <div class="grid three">
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Exactly-once effects</h3><p>Idempotency keys are recorded before a step acts, so retries and restarts never repeat an effect.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></div><h3>Retry only what should be retried</h3><p>Choose which failure classes retry. Contract and authorisation failures stop and explain.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></div><h3>Undo in order</h3><p>Failed workflows roll back completed steps in reverse, with the rollback itself recorded.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg></div><h3>Approvals that cost nothing while they wait</h3><p>Four-eyes review for changes and for individual steps. A paused run holds no resources.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>An audit trail nobody can quietly edit</h3><p>Hash-chained events with a one-click integrity check and export.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><h3>One container</h3><p>One SQLite file. Dry runs, canary versions and a kill switch are built in.</p></div>
+    </div>
+    <div class="honest"><b>Not built yet, said plainly:</b> retention and archival of old runs, and sign-in and billing through NEXORA outside development. <a href="/platform.html">Read the full picture.</a></div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="two">
+      <div>
+        <span class="kicker">Security &amp; governance</span>
+        <h2>Authority is earned, not assumed.</h2>
+        <ul class="list">
+          <li><span><b>Default-deny network.</b> Steps reach only the hosts they declare.</span></li>
+          <li><span><b>Secrets stay secret.</b> Leased per step, scrubbed from logs, never stored in plans.</span></li>
+          <li><span><b>Four-eyes by default.</b> Whoever requests a change cannot approve it.</span></li>
+          <li><span><b>Tenant isolation</b> in the data layer, tested.</span></li>
+        </ul>
+        <p class="mt"><a class="btn btn-quiet" href="/security.html">Security details</a></p>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 420 300" role="img" aria-label="A request passes four gates in order: role check, policy check, approval, then execution with a recorded audit event.">
+          <rect class="box" x="20" y="20" width="380" height="48" rx="12"/><text x="40" y="50">1 · Who is asking? Roles</text>
+          <rect class="box" x="20" y="88" width="380" height="48" rx="12"/><text x="40" y="118">2 · Is it allowed? Policy</text>
+          <rect class="box" x="20" y="156" width="380" height="48" rx="12"/><text x="40" y="186">3 · Does a second person agree? Approval</text>
+          <rect class="hot" x="20" y="224" width="380" height="56" rx="12"/><text x="40" y="250">4 · Run — and record it</text><text class="sub" x="40" y="268">hash-chained audit event</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head center">
+      <span class="kicker">Questions</span>
+      <h2>Straight answers.</h2>
+    </div>
+    <div class="faq">
+      <details><summary>Can I import from other tools?</summary><p>There are importers for crontab files and shell scripts. There is no importer for n8n, Zapier, Airflow or Temporal workflows.</p></details>
+      <details><summary>What happens at my plan limit?</summary><p>New runs are refused with a clear message until the next period or an upgrade. Nothing is billed beyond your plan, and dry runs always work.</p></details>
+      <details><summary>Does the AI run my workflows?</summary><p>No. AI drafts and proposes; every draft goes through the same checks and human approval as anything else.</p></details>
+      <details><summary>Where does my data live?</summary><p>In one SQLite file in the deployment you choose.</p></details>
+      <details><summary>Is it open source?</summary><p>No. OmniFlow is proprietary software.</p></details>
+      <details><summary>Does it scale across machines?</summary><p>No. It is a single-node service by design. High availability means restarting quickly. If you need a cluster, this is not the right tool yet.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="closing alt">
+  <div class="wrap">
+    <h2>Bring the work you can't afford to run twice.</h2>
+    <p>OmniFlow is in development. Request early access through NEXORA and we will tell you when the beta opens.</p>
+    <div class="cta-row"><a class="btn btn-primary" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a><a class="btn btn-quiet" href="/pricing.html">See plans</a></div>
+  </div>
+</section>
+</main><footer class="site-footer"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><p class="foot-blurb">Durable workflows without the cluster. A NEXORA product.</p></div><div><h2>Product</h2><ul><li><a href="/platform.html">Platform</a></li><li><a href="/security.html">Security</a></li><li><a href="/pricing.html">Pricing</a></li></ul></div><div><h2>NEXORA</h2><ul><li><a href="https://onenexora.com" rel="noopener">onenexora.com</a></li><li><a href="https://onenexora.com/products" rel="noopener">All products</a></li><li><a href="https://onenexora.com/pricing" rel="noopener">Platform pricing</a></li></ul></div><div><h2>Status</h2><ul><li>In development</li><li>Single-node by design</li><li>Proprietary software</li></ul></div></div><div class="legal"><span>© 2026 OmniFlow. A NEXORA product. <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></span><span>Illustrations show the product's own output; no customer data or testimonials appear on this site.</span></div></div></footer></body></html>

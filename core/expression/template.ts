@@ -20,6 +20,33 @@ export function hasTemplate(text: string): boolean {
   return text.includes('${{');
 }
 
+/** Index of the `}}` closing an expression that starts at `from`, ignoring braces inside quotes; -1 when unterminated. */
+function findExpressionEnd(source: string, from: number): number {
+  let quote: string | null = null;
+  for (let j = from; j < source.length; j++) {
+    const c = source[j]!;
+    if (quote) {
+      if (c === '\\') j++;
+      else if (c === quote) quote = null;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+    } else if (c === '}' && source[j + 1] === '}') {
+      return j;
+    }
+  }
+  return -1;
+}
+
+/** Parse an embedded expression, reporting syntax errors relative to the whole template. */
+function parseExprAt(exprSource: string, offset: number): Node {
+  try {
+    return parseExpression(exprSource);
+  } catch (e) {
+    if (e instanceof ExpressionSyntaxError) throw new ExpressionSyntaxError(e.message, offset + e.pos);
+    throw e;
+  }
+}
+
 export function parseTemplate(source: string): Template {
   const parts: TemplatePart[] = [];
   let text = '';
@@ -36,33 +63,10 @@ export function parseTemplate(source: string): Template {
     }
     if (source.startsWith('${{', i)) {
       const exprStart = i + 3;
-      let j = exprStart;
-      let quote: string | null = null;
-      let end = -1;
-      while (j < source.length) {
-        const c = source[j]!;
-        if (quote) {
-          if (c === '\\') j++;
-          else if (c === quote) quote = null;
-        } else if (c === "'" || c === '"') {
-          quote = c;
-        } else if (c === '}' && source[j + 1] === '}') {
-          end = j;
-          break;
-        }
-        j++;
-      }
+      const end = findExpressionEnd(source, exprStart);
       if (end === -1) throw new ExpressionSyntaxError("Unterminated '${{' — missing '}}'", i);
       const exprSource = source.slice(exprStart, end);
-      let ast: Node;
-      try {
-        ast = parseExpression(exprSource);
-      } catch (e) {
-        if (e instanceof ExpressionSyntaxError) {
-          throw new ExpressionSyntaxError(e.message, exprStart + e.pos);
-        }
-        throw e;
-      }
+      const ast = parseExprAt(exprSource, exprStart);
       flush();
       parts.push({ kind: 'expr', source: exprSource.trim(), ast, offset: exprStart });
       i = end + 2;
@@ -145,16 +149,18 @@ export interface FoundTemplate {
 /** Find and parse every template inside a JSON-like value, reporting syntax errors by location. */
 export function scanTemplates(value: unknown, basePath = ''): FoundTemplate[] {
   const found: FoundTemplate[] = [];
+  const scanString = (v: string, path: string) => {
+    if (!hasTemplate(v)) return;
+    try {
+      found.push({ path, template: parseTemplate(v), source: v });
+    } catch (e) {
+      if (!(e instanceof ExpressionSyntaxError)) throw e;
+      found.push({ path, error: e, source: v });
+    }
+  };
   const walk = (v: unknown, path: string) => {
-    if (typeof v === 'string') {
-      if (!hasTemplate(v)) return;
-      try {
-        found.push({ path, template: parseTemplate(v), source: v });
-      } catch (e) {
-        if (e instanceof ExpressionSyntaxError) found.push({ path, error: e, source: v });
-        else throw e;
-      }
-    } else if (Array.isArray(v)) {
+    if (typeof v === 'string') scanString(v, path);
+    else if (Array.isArray(v)) {
       for (let i = 0; i < v.length; i++) walk(v[i], `${path}[${i}]`);
     } else if (v !== null && typeof v === 'object') {
       for (const [k, x] of Object.entries(v)) walk(x, path ? `${path}.${k}` : k);

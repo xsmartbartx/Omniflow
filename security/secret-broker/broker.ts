@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { type Clock, newId, OmniflowError, systemClock, ValidationError } from '../../core/index.ts';
+import { type Clock, OmniflowError, compareStrings, newId, systemClock, ValidationError } from '../../core/index.ts';
 import type { Lease } from '../../schemas/capability.ts';
 
 /**
@@ -36,7 +36,7 @@ export interface Keyring {
   keys: Map<string, Buffer>;
 }
 
-export const SECRET_NAME = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+export const SECRET_NAME = /^[A-Za-z]\w{0,63}$/;
 const MAX_SECRET_BYTES = 64 * 1024;
 
 function decodeKey(material: string): Buffer {
@@ -170,7 +170,7 @@ class LeaseImpl implements ActiveLease {
   ) {
     this.id = id;
     this.secrets = secrets;
-    this.names = [...secrets.keys()].sort();
+    this.names = [...secrets.keys()].sort(compareStrings);
     this.expiresAt = expiresAt;
     this.expiresMs = Date.parse(expiresAt);
     this.clock = clock;
@@ -281,7 +281,7 @@ export class SecretBroker {
   /** Issue a lease for exactly `req.names`. Revoke it as soon as the step ends. */
   lease(req: LeaseRequest): ActiveLease {
     const secrets = new Map<string, string>();
-    for (const name of [...new Set(req.names)]) {
+    for (const name of new Set(req.names)) {
       const rec = this.store.get(req.tenant, name);
       if (!rec) {
         throw new OmniflowError('SECRET_NOT_FOUND', `Secret '${name}' does not exist`, {
@@ -296,7 +296,7 @@ export class SecretBroker {
       tenant: req.tenant,
       ...(req.runId ? { runId: req.runId } : {}),
       ...(req.stepId ? { stepId: req.stepId } : {}),
-      names: [...secrets.keys()].sort(),
+      names: [...secrets.keys()].sort(compareStrings),
       ttlMs: req.ttlMs,
     });
     return new LeaseImpl(rec.id, secrets, rec.expiresAt, this.clock, (id) => this.store.revokeLease(id));

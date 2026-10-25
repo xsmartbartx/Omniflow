@@ -62,11 +62,11 @@ export function createAnthropicClient(config: AdapterConfig): LlmClient | undefi
         } catch {
           /* not JSON */
         }
-        throw new OmniflowError(
-          'LLM_REJECTED',
-          `The AI provider rejected the request (HTTP ${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-          { errorClass: 'business', retryable: false },
-        );
+        const reason = detail ? `: ${detail.slice(0, 300)}` : '';
+        throw new OmniflowError('LLM_REJECTED', `The AI provider rejected the request (HTTP ${res.status})${reason}`, {
+          errorClass: 'business',
+          retryable: false,
+        });
       }
       let body: {
         content?: Array<{ type: string; text?: string }>;

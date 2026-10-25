@@ -23,8 +23,36 @@ const roleFields = (value = []) =>
   ROLES.map((r) => ({ name: `role_${r}`, type: 'checkbox', label: r, value: value.includes(r) }));
 const pickRoles = (v) => ROLES.filter((r) => v[`role_${r}`]);
 
+/** The "State" cell of the users table. */
+function userStateBadge(u) {
+  if (u.disabled) return badge('disabled', 'bad');
+  if (u.lockedUntil && Date.parse(u.lockedUntil) > Date.now()) return badge('locked', 'warn');
+  return u.mustChangePassword ? badge('must change password', 'warn') : badge('active', 'good');
+}
+
 export default async function admin(ctx) {
   const reload = (tab) => ctx.navigate('/admin', { tab });
+
+  const toggleButton = (u) =>
+    button(u.disabled ? 'Enable' : 'Disable', {
+      small: true,
+      kind: u.disabled ? 'secondary' : 'danger',
+      onClick: async () => {
+        if (
+          !u.disabled &&
+          !(await confirmDialog({
+            title: `Disable ${u.email}?`,
+            message: 'They are signed out immediately and cannot sign in again until re-enabled.',
+            confirmLabel: 'Disable',
+            danger: true,
+          }))
+        )
+          return;
+        await api.patch(`/v1/users/${api.enc(u.id)}`, { disabled: !u.disabled });
+        toast(u.disabled ? 'User enabled' : 'User disabled', 'good');
+        reload('users');
+      },
+    });
 
   const users = async () => {
     const { items } = await api.get('/v1/users');
@@ -40,14 +68,7 @@ export default async function admin(ctx) {
           { label: 'Roles', render: (u) => u.roles.map((r) => badge(r, r === 'admin' ? 'accent' : 'neutral')) },
           {
             label: 'State',
-            render: (u) =>
-              u.disabled
-                ? badge('disabled', 'bad')
-                : u.lockedUntil && Date.parse(u.lockedUntil) > Date.now()
-                  ? badge('locked', 'warn')
-                  : u.mustChangePassword
-                    ? badge('must change password', 'warn')
-                    : badge('active', 'good'),
+            render: userStateBadge,
           },
           {
             label: 'Last sign-in',
@@ -77,27 +98,7 @@ export default async function admin(ctx) {
                     reload('users');
                   },
                 }),
-                u.id !== session.me.principal.id
-                  ? button(u.disabled ? 'Enable' : 'Disable', {
-                      small: true,
-                      kind: u.disabled ? 'secondary' : 'danger',
-                      onClick: async () => {
-                        if (
-                          !u.disabled &&
-                          !(await confirmDialog({
-                            title: `Disable ${u.email}?`,
-                            message: 'They are signed out immediately and cannot sign in again until re-enabled.',
-                            confirmLabel: 'Disable',
-                            danger: true,
-                          }))
-                        )
-                          return;
-                        await api.patch(`/v1/users/${api.enc(u.id)}`, { disabled: !u.disabled });
-                        toast(u.disabled ? 'User enabled' : 'User disabled', 'good');
-                        reload('users');
-                      },
-                    })
-                  : null,
+                u.id !== session.me.principal.id ? toggleButton(u) : null,
               ),
           },
         ],

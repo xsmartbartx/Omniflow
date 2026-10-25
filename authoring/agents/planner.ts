@@ -138,13 +138,12 @@ export class Planner {
   }
 
   private brief(req: PlanRequest): string {
-    const parts: string[] = [];
-    parts.push(
+    const parts: string[] = [
       req.baseManifest
         ? 'Revise the existing workflow below according to the request. Keep everything that is not affected, and bump metadata.version (semver, patch or minor as appropriate).'
         : 'Create a new workflow for the request below.',
-    );
-    parts.push(`Request:\n${req.intent.slice(0, MAX_INTENT)}`);
+      `Request:\n${req.intent.slice(0, MAX_INTENT)}`,
+    ];
     if (req.baseManifest) parts.push(`Existing manifest:\n\`\`\`yaml\n${req.baseManifest}\n\`\`\``);
     let budget = MAX_UNTRUSTED;
     for (const u of req.untrusted ?? []) {
@@ -159,16 +158,22 @@ export class Planner {
 
 function repairMessage(v: ValidationOutcome, blocking: NonNullable<ValidationOutcome['risk']>['findings']): string {
   const lines: string[] = [];
-  for (const e of v.errors.slice(0, 20))
-    lines.push(`- [${e.code}] ${e.path ? `${e.path}: ` : ''}${e.message}${e.line ? ` (line ${e.line})` : ''}`);
-  for (const f of blocking.slice(0, 10))
-    lines.push(`- [risk:${f.ruleId}] ${f.message}${f.stepId ? ` (step ${f.stepId})` : ''}`);
+  for (const e of v.errors.slice(0, 20)) {
+    const where = e.path ? `${e.path}: ` : '';
+    const at = e.line ? ` (line ${e.line})` : '';
+    lines.push(`- [${e.code}] ${where}${e.message}${at}`);
+  }
+  for (const f of blocking.slice(0, 10)) {
+    const step = f.stepId ? ` (step ${f.stepId})` : '';
+    lines.push(`- [risk:${f.ruleId}] ${f.message}${step}`);
+  }
   return `The validator rejected that manifest:\n${lines.join('\n')}\n\nFix these problems and reply again in the same format with the COMPLETE corrected manifest. Do not remove functionality to make errors go away, and do not invent capabilities.`;
 }
 
 /** Pull the sections out of a model reply. Tolerant of missing tags and of prose around the fenced block. */
 export function parseReply(text: string): { rationale: string; openQuestions: string[]; manifest?: string } {
-  const tag = (name: string) => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`, 'i').exec(text)?.[1]?.trim() ?? '';
+  const tag = (name: string) =>
+    new RegExp(String.raw`<${name}>([\s\S]*?)</${name}>`, 'i').exec(text)?.[1]?.trim() ?? '';
   const fences = [...text.matchAll(/```([\w-]*)[ \t]*\n([\s\S]*?)```/g)]
     .filter((m) => /^(ya?ml)?$/i.test(m[1]!))
     .map((m) => m[2]!.trim());

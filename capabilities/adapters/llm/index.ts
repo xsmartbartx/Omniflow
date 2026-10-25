@@ -110,10 +110,8 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
       dryRun: 'execute',
     } as CapabilityDeclaration,
     async execute(ctx, input) {
-      const framed =
-        input.data === undefined
-          ? ''
-          : `\n\n${frameAsData('workflow data', typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2))}`;
+      const dataText = typeof input.data === 'string' ? input.data : JSON.stringify(input.data, null, 2);
+      const framed = input.data === undefined ? '' : `\n\n${frameAsData('workflow data', dataText)}`;
       const schemaNote = input.schema
         ? `\n\nRespond with ONLY a single JSON value that validates against this JSON Schema, with no commentary:\n${JSON.stringify(input.schema)}`
         : '';
@@ -159,11 +157,11 @@ export function createLlmCapabilities(config: AdapterConfig): CapabilityAdapter[
         } catch {
           /* not JSON */
         }
-        throw new CapabilityError(
-          'LLM_REJECTED',
-          `The LLM provider rejected the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-          { errorClass: 'business', retryable: false },
-        );
+        const reason = detail ? `: ${detail.slice(0, 300)}` : '';
+        throw new CapabilityError('LLM_REJECTED', `The LLM provider rejected the request (${res.status})${reason}`, {
+          errorClass: 'business',
+          retryable: false,
+        });
       }
       const body = JSON.parse(res.body.toString('utf8')) as {
         content?: Array<{ type: string; text?: string }>;

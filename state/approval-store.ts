@@ -3,6 +3,9 @@ import { type Db, fromJson } from './database.ts';
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'timed-out';
 
+/** What happens to an approval nobody decided before it expired. */
+export type ApprovalTimeoutAction = 'deny' | 'escalate' | 'approve';
+
 export interface ApprovalRecord {
   id: string;
   tenant: string;
@@ -16,7 +19,7 @@ export interface ApprovalRecord {
   requestedBy?: string;
   requestedAt: string;
   expiresAt: string;
-  onTimeout: 'deny' | 'escalate' | 'approve';
+  onTimeout: ApprovalTimeoutAction;
   escalated: boolean;
   allowSelf: boolean;
   decidedBy?: string;

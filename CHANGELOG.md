@@ -6,6 +6,24 @@ All notable changes to OmniFlow are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Outbound run webhooks** (`OMNIFLOW_RUN_WEBHOOKS`): signed, durable, retried POSTs when runs finish, plus
+  `GET /v1/webhooks/deliveries`. See [API → Outbound webhooks](docs/api.md#outbound-webhooks).
+- `X-RateLimit-Limit`, `-Remaining` and `-Reset` headers on authenticated API responses.
+- Wildcard (`*`) workflow search and a last-run filter in the console.
+
+### Changed (breaking)
+
+- **The product is now called OmniFlow** (formerly OmniFlow). Nothing was published under the old name, so there is no
+  migration path; a fresh install is the only supported route. What changed:
+  - the CLI is `omniflow` (was `omniflow`); the npm package is `omniflow`;
+  - every environment variable starts with `OMNIFLOW_` (was `OMNIFLOW_`);
+  - API keys start with `omf_` (was `omf_`) and the session cookie is `omf_session`;
+  - workflow manifests use `apiVersion: omniflow.dev/v1` (was `omniflow.dev/v1`);
+  - the database file is `omniflow.db`, metrics start with `omniflow_`, webhook headers are `X-OmniFlow-*`;
+  - plan hashes, the audit chain and stored secrets from an install under the old name do not carry over.
+
 ## [1.0.0] - 2026-09-19
 
 First release.

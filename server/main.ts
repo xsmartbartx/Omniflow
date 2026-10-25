@@ -48,7 +48,9 @@ async function main(): Promise<void> {
   process.on('unhandledRejection', (e) => app.log.error('unhandled rejection', { error: e }));
 }
 
-main().catch((e) => {
+try {
+  await main();
+} catch (e) {
   process.stderr.write(`Fatal: ${(e as Error).message}\n`);
   process.exit(1);
-});
+}

@@ -1,4 +1,4 @@
-import { AuthenticationError, ForbiddenError, redact, ValidationError } from '../../core/index.ts';
+import { AuthenticationError, ForbiddenError } from '../../core/index.ts';
 import { ACTIONS } from '../../schemas/index.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
 import { obj } from './util.ts';
@@ -187,5 +187,3 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
 }
 
 const header = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
-
-export { redact, ValidationError };

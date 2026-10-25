@@ -137,9 +137,10 @@ export class AlertManager {
   active(tenant: string): Alert[] {
     return [...this.open.values()]
       .filter((a) => a.tenant === tenant)
-      .sort((a, b) =>
-        a.severity === b.severity ? a.raisedAt.localeCompare(b.raisedAt) : a.severity === 'critical' ? -1 : 1,
-      )
+      .sort((a, b) => {
+        if (a.severity === b.severity) return a.raisedAt.localeCompare(b.raisedAt);
+        return a.severity === 'critical' ? -1 : 1;
+      })
       .map((a) => ({ ...a }));
   }
 
@@ -155,8 +156,7 @@ export class AlertManager {
     if (this.ticking) return { raised: 0, resolved: 0 };
     this.ticking = true;
     try {
-      let raised = 0;
-      let resolved = 0;
+      const totals = { raised: 0, resolved: 0 };
       const auditDue = this.clock.now().getTime() >= this.nextAuditCheck;
       if (auditDue) this.nextAuditCheck = this.clock.now().getTime() + this.cfg.auditVerifyEveryMs;
       for (const t of this.st.identity.listTenants()) {
@@ -164,57 +164,79 @@ export class AlertManager {
         const seen = new Set<string>();
         for (const c of this.evaluate(t.id, auditDue)) {
           seen.add(c.key);
-          const existing = this.open.get(idOf(t.id, c.key));
-          const now = this.clock.now().toISOString();
-          if (!existing) {
-            const alert: Alert = { tenant: t.id, ...c, raisedAt: now, lastNotifiedAt: now };
-            this.open.set(idOf(t.id, c.key), alert);
-            this.st.events.append({
-              tenant: t.id,
-              type: 'alert.raised',
-              actor: { type: 'system', id: 'alert-manager' },
-              data: { key: c.key, severity: c.severity, title: c.title, message: c.message },
-            });
-            raised++;
-            await this.deliver(alert, 'raised');
-          } else {
-            existing.message = c.message;
-            existing.title = c.title;
-            existing.severity = c.severity;
-            if (this.clock.now().getTime() - Date.parse(existing.lastNotifiedAt) >= this.cfg.renotifyMs) {
-              existing.lastNotifiedAt = now;
-              await this.deliver(existing, 'reminder');
-            }
-          }
+          totals.raised += await this.raiseOrRemind(t.id, c);
         }
-        for (const [id, alert] of [...this.open]) {
-          if (alert.tenant !== t.id || seen.has(alert.key)) continue;
-          // The audit check runs rarely; do not "resolve" an integrity alert just because we did not look this tick.
-          if (alert.key === 'audit-integrity' && !auditDue) continue;
-          this.open.delete(id);
-          this.st.events.append({
-            tenant: t.id,
-            type: 'alert.resolved',
-            actor: { type: 'system', id: 'alert-manager' },
-            data: { key: alert.key, openForMs: this.clock.now().getTime() - Date.parse(alert.raisedAt) },
-          });
-          resolved++;
-          await this.deliver(alert, 'resolved');
-        }
+        totals.resolved += await this.resolveCleared(t.id, seen, auditDue);
       }
-      return { raised, resolved };
+      return totals;
     } finally {
       this.ticking = false;
     }
   }
 
+  /** A new problem raises an alert (returns 1); a known one is refreshed and, when due, re-announced (returns 0). */
+  private async raiseOrRemind(tenant: string, c: Candidate): Promise<number> {
+    const existing = this.open.get(idOf(tenant, c.key));
+    const now = this.clock.now().toISOString();
+    if (!existing) {
+      const alert: Alert = { tenant, ...c, raisedAt: now, lastNotifiedAt: now };
+      this.open.set(idOf(tenant, c.key), alert);
+      this.st.events.append({
+        tenant,
+        type: 'alert.raised',
+        actor: { type: 'system', id: 'alert-manager' },
+        data: { key: c.key, severity: c.severity, title: c.title, message: c.message },
+      });
+      await this.deliver(alert, 'raised');
+      return 1;
+    }
+    existing.message = c.message;
+    existing.title = c.title;
+    existing.severity = c.severity;
+    if (this.clock.now().getTime() - Date.parse(existing.lastNotifiedAt) >= this.cfg.renotifyMs) {
+      existing.lastNotifiedAt = now;
+      await this.deliver(existing, 'reminder');
+    }
+    return 0;
+  }
+
+  /** Close every open alert of this tenant whose problem is no longer seen; returns how many. */
+  private async resolveCleared(tenant: string, seen: ReadonlySet<string>, auditDue: boolean): Promise<number> {
+    let resolved = 0;
+    for (const [id, alert] of this.open) {
+      if (alert.tenant !== tenant || seen.has(alert.key)) continue;
+      // The audit check runs rarely; do not "resolve" an integrity alert just because we did not look this tick.
+      if (alert.key === 'audit-integrity' && !auditDue) continue;
+      this.open.delete(id);
+      this.st.events.append({
+        tenant,
+        type: 'alert.resolved',
+        actor: { type: 'system', id: 'alert-manager' },
+        data: { key: alert.key, openForMs: this.clock.now().getTime() - Date.parse(alert.raisedAt) },
+      });
+      resolved++;
+      await this.deliver(alert, 'resolved');
+    }
+    return resolved;
+  }
+
   /** What is wrong right now, for one tenant. Does not touch alert state. */
   evaluate(tenant: string, checkAudit = false): Candidate[] {
     const now = this.clock.now().getTime();
-    const iso = (ms: number) => new Date(ms).toISOString();
-    const out: Candidate[] = [];
+    return [
+      ...this.failingWorkflows(tenant, now),
+      ...this.staleApprovalAlerts(tenant, now),
+      ...this.stalledRunAlerts(tenant, now),
+      ...this.queueBacklogAlerts(tenant, now),
+      ...this.openCircuitAlerts(tenant),
+      ...this.auditAlerts(tenant, checkAudit),
+    ];
+  }
 
-    for (const o of this.st.analytics.recentOutcomes(tenant, iso(now - this.cfg.failureWindowMs))) {
+  private failingWorkflows(tenant: string, now: number): Candidate[] {
+    const out: Candidate[] = [];
+    const since = new Date(now - this.cfg.failureWindowMs).toISOString();
+    for (const o of this.st.analytics.recentOutcomes(tenant, since)) {
       if (o.finished < this.cfg.failureMinRuns || ratio(o.failed, o.finished) < this.cfg.failureRate) continue;
       const last = this.st.runs.listRuns({
         tenant,
@@ -222,76 +244,87 @@ export class AlertManager {
         status: ['failed', 'rolled-back', 'compensation-failed'],
         limit: 1,
       })[0];
+      const latest = last?.error ? ` Latest error: ${last.error.code} — ${last.error.message}` : '';
       out.push({
         key: `workflow-failing:${o.workflow}`,
         severity: ratio(o.failed, o.finished) >= 0.8 ? 'critical' : 'warning',
         title: `${o.workflow} is failing`,
-        message: `${o.failed} of ${o.finished} runs failed in the last ${humanMs(this.cfg.failureWindowMs)} (${pct(ratio(o.failed, o.finished))}).${last?.error ? ` Latest error: ${last.error.code} — ${last.error.message}` : ''}`,
+        message: `${o.failed} of ${o.finished} runs failed in the last ${humanMs(this.cfg.failureWindowMs)} (${pct(ratio(o.failed, o.finished))}).${latest}`,
       });
     }
+    return out;
+  }
 
-    const stale = this.st.analytics.staleApprovals(tenant, iso(now - this.cfg.approvalSlaMs));
-    if (stale.length > 0) {
-      const oldest = stale[0]!;
-      out.push({
+  private staleApprovalAlerts(tenant: string, now: number): Candidate[] {
+    const stale = this.st.analytics.staleApprovals(tenant, new Date(now - this.cfg.approvalSlaMs).toISOString());
+    if (stale.length === 0) return [];
+    const oldest = stale[0]!;
+    return [
+      {
         key: 'approvals-waiting',
         severity: 'warning',
         title: `${stale.length} approval${stale.length === 1 ? '' : 's'} waiting too long`,
         message: `The oldest, for ${oldest.workflow ?? 'a run'} › ${oldest.stepId}, has been waiting ${humanMs(now - Date.parse(oldest.requestedAt))}. Runs stay paused until someone decides.`,
-      });
-    }
+      },
+    ];
+  }
 
+  private stalledRunAlerts(tenant: string, now: number): Candidate[] {
     const byWorkflow = new Map<string, number>();
-    for (const r of this.st.analytics.stalledRuns(tenant, iso(now - this.cfg.stalledMs)))
+    const since = new Date(now - this.cfg.stalledMs).toISOString();
+    for (const r of this.st.analytics.stalledRuns(tenant, since))
       byWorkflow.set(r.workflow, (byWorkflow.get(r.workflow) ?? 0) + 1);
-    for (const [workflow, n] of byWorkflow) {
-      out.push({
-        key: `runs-stalled:${workflow}`,
-        severity: 'critical',
-        title: `${workflow} has ${n} stalled run${n === 1 ? '' : 's'}`,
-        message: `${n} run${n === 1 ? ' is' : 's are'} marked running but no step has made progress for over ${humanMs(this.cfg.stalledMs)}. The orchestrator may be down or wedged.`,
-      });
-    }
+    return [...byWorkflow].map(([workflow, n]) => ({
+      key: `runs-stalled:${workflow}`,
+      severity: 'critical' as const,
+      title: `${workflow} has ${n} stalled run${n === 1 ? '' : 's'}`,
+      message: `${n} run${n === 1 ? ' is' : 's are'} marked running but no step has made progress for over ${humanMs(this.cfg.stalledMs)}. The orchestrator may be down or wedged.`,
+    }));
+  }
 
+  private queueBacklogAlerts(tenant: string, now: number): Candidate[] {
     const q = this.st.analytics.queue(tenant);
     const age = q.oldestCreatedAt ? now - Date.parse(q.oldestCreatedAt) : 0;
-    if (q.depth >= this.cfg.queueDepth || (q.depth > 0 && age >= this.cfg.queueAgeMs)) {
-      out.push({
+    if (q.depth < this.cfg.queueDepth && !(q.depth > 0 && age >= this.cfg.queueAgeMs)) return [];
+    return [
+      {
         key: 'queue-backlog',
         severity: 'warning',
         title: 'Runs are backing up',
         message: `${q.depth} run${q.depth === 1 ? ' is' : 's are'} queued; the oldest has waited ${humanMs(age)}. Capacity may be exhausted (OMNIFLOW_MAX_CONCURRENT_RUNS).`,
-      });
-    }
+      },
+    ];
+  }
 
-    // Platform-wide facts are reported under the default tenant only.
-    if (tenant === 'default' && this.circuits) {
-      for (const [capability, c] of Object.entries(this.circuits())) {
-        if (c.state === 'closed') continue;
-        out.push({
-          key: `circuit-open:${capability}`,
-          severity: 'warning',
-          title: `Capability ${capability} is failing fast`,
-          message: `The circuit breaker for ${capability} is ${c.state}: steps that use it fail immediately instead of hammering a dependency that is down. It closes itself once calls succeed again.`,
-        });
-      }
-    }
+  /** Platform-wide facts are reported under the default tenant only. */
+  private openCircuitAlerts(tenant: string): Candidate[] {
+    if (tenant !== 'default' || !this.circuits) return [];
+    return Object.entries(this.circuits())
+      .filter(([, c]) => c.state !== 'closed')
+      .map(([capability, c]) => ({
+        key: `circuit-open:${capability}`,
+        severity: 'warning' as const,
+        title: `Capability ${capability} is failing fast`,
+        message: `The circuit breaker for ${capability} is ${c.state}: steps that use it fail immediately instead of hammering a dependency that is down. It closes itself once calls succeed again.`,
+      }));
+  }
 
+  private auditAlerts(tenant: string, checkAudit: boolean): Candidate[] {
     if (checkAudit) {
       const v = this.st.events.verify(tenant);
       if (v.ok) this.auditBroken.delete(tenant);
       else this.auditBroken.set(tenant, `event ${v.brokenAtSeq}: ${v.reason ?? 'hash mismatch'}`);
     }
     const broken = this.auditBroken.get(tenant);
-    if (broken) {
-      out.push({
+    if (!broken) return [];
+    return [
+      {
         key: 'audit-integrity',
         severity: 'critical',
         title: 'The audit log failed its integrity check',
         message: `The hash chain is broken at ${broken}. Someone altered or removed audit history; treat this as a security incident and restore from a verified backup for evidence.`,
-      });
-    }
-    return out;
+      },
+    ];
   }
 
   private async deliver(alert: Alert, event: AlertEvent): Promise<void> {
@@ -311,11 +344,9 @@ export class AlertManager {
 
 /** Plain-text rendering shared by every channel. */
 export function formatAlert(alert: Alert, event: AlertEvent): string {
-  const tag =
-    event === 'resolved'
-      ? 'RESOLVED'
-      : event === 'reminder'
-        ? `STILL ${alert.severity.toUpperCase()}`
-        : alert.severity.toUpperCase();
-  return `[${tag}] ${alert.title}${event === 'resolved' ? '' : `\n${alert.message}`}\n(OmniFlow, tenant ${alert.tenant})`;
+  let tag = alert.severity.toUpperCase();
+  if (event === 'resolved') tag = 'RESOLVED';
+  else if (event === 'reminder') tag = `STILL ${tag}`;
+  const body = event === 'resolved' ? '' : `\n${alert.message}`;
+  return `[${tag}] ${alert.title}${body}\n(OmniFlow, tenant ${alert.tenant})`;
 }

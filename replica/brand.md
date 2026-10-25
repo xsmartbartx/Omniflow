@@ -1,6 +1,6 @@
 # Brand: the workflow product inside NEXORA
 
-Decisions made by the owner: **find a NEXORA-family name**; **licence: proprietary** (done, see the end).
+Decisions made by the owner: **find a NEXORA-family name**; **licence: proprietary** (done, see the end). **Name chosen 2026-10-11: Constans** (rename done in the code and docs; the GitHub repository name is unchanged).
 Nothing here renames the repo yet. A rename touches the `omniflow` CLI, `OMNIFLOW_*` variables, the `omf_` key prefix, the
 package name, the image name and every doc, so it waits for your pick.
 
@@ -48,7 +48,79 @@ Per candidate, the full check matrix. "to run" means nobody has run it; nothing 
 the logo should carry the meaning ("steady"); a proper trademark search by a lawyer must happen before the rename and
 before any money goes into it. These are screening checks, not legal clearance.
 
-Decision needed: pick **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
+**Screening update, 2026-10-16** (WIPO Global Brand Database and USPTO, read-only; screening, not legal clearance):
+
+- **Constans: a direct conflict.** `CONSTANS` was registered in the **UK on 9 October 2026** by Constans Ltd (UK00004400791) in
+  Nice classes **9 and 42** (software and software-as-a-service), the classes this product sits in. WIPO shows 33 records
+  for the word; the rest are in unrelated fields (a Korean hotel, a Brazilian clinic, an EU machinery mark, expired French wine
+  marks) and USPTO has 6 results, none in classes 9 or 42 (one live mark, a restaurant, class 43). Not searched: EUIPO's own
+  search, Poland, Canada, and similar names such as Constance or Constant.
+- **Tenax: crowded.** WIPO shows 651 records, including 49 in class 9 and 8 in class 42 (most are chemicals, materials and machinery;
+  Tenax SpA is the largest owner). USPTO (first 50 of 73 results) shows, in or near the classes that matter:
+  **TENAX SECUREOPS**, a live pending application in class 42 for computer and network security services (IP Pathways, LLC,
+  Iowa), which is close to NEXORA's security family; **TENAX**, live in classes 37 and 42 for oil and gas technical advice
+  (Tenax Energy Systems, LLC); and **TENAX**, live in class 9 among others for chromatography materials (Buchem B.V.) and
+  pending for hardware (Tenax Corporation, Maryland). A cancelled class 42 software mark (an individual) is also listed.
+- **Recommendation:** do not spend money on Constans until a trademark lawyer has looked at the UK registration. Tenax is not
+  a clean fallback either: the pending SECUREOPS class 42 application sits next to the security products NEXORA sells.
+  Screen a third candidate from the pool (the rest of the Latin-flavoured names: Fidus is weak; the metaphor names were mostly
+  cut) or send a new name; run the same WIPO and USPTO check before choosing.
+
+**Third-round candidates, screened 2026-10-17** (WIPO Global Brand Database, word contained in the mark, all offices, expired
+marks included; USPTO for Perdura; screening, not legal clearance):
+
+| name | WIPO records | class 9 | class 42 | what the class 9 and 42 records are |
+| --- | --- | --- | --- | --- |
+| **Perdura** | 316 | 8 | 8 | In the first 30 by relevance only one: PERDURA, EU, RWA Raiffeisen Ware Austria, classes 6, 19, 20, 37, 42, ended 2013. USPTO: 5 results, none in 9 or 42 (classes 16, 19, 30). **Clearest.** |
+| Anchora | 37 | 6 | 5 | **Conflict:** identical ANCHORA registered in the UK on 4 Sep 2026 in classes 9 and 42 (an individual). Out. |
+| Firmo | 66 | 4 | 10 | **Conflict:** identical FIRMO in class 42 (with 35, 36): a Swiss registration (DIMEA Digital M&A GmbH, 2023) and an Estonian application (Firmoportaal OÜ, pending); also a Japanese class 9 mark (2007). Out. |
+| Stabilis | 67 | 14 | 12 | Counts only; records not read. |
+| Serva | 152 | 14 | 20 | Counts only; records not read. |
+| Ballast | 347 | 81 | 23 | Counts only; too crowded. |
+
+Only the first ~25 of each result list were read (the page loads lazily), so a class 9 or 42 record deeper in a list can be
+missing. Not searched: EUIPO's own database, Poland, Canada, similar spellings, and domain or handle availability.
+
+**Perdura domains and handles, checked 2026-10-19** (RDAP and DNS lookups; GitHub, npm, PyPI, crates.io and Docker Hub public APIs):
+
+- **Domains:** `.com` is taken (registered 2001). `.dev`, `.ai` and `.net` were all registered on the same day, 2026-05-09, through
+  the same DNS provider, and `.app` (April), `.org` (June) and `.cloud` (July) were registered in 2026 as well: someone has
+  recently collected the name across many extensions, which suggests a product or a squatter. `.io` and `.co` show no RDAP record
+  but do have nameservers, so they are probably registered (parked). `.tech` has no registration or nameservers and looks free.
+- **Handles:** GitHub `perdura` is taken (an organisation created 2025-11-05, 1 repository); PyPI `perdura` is taken (a reliability
+  engineering and statistics suite, v0.8.3). Free: npm `perdura` and the `@perdura` scope, crates.io `perdura`, Docker Hub `perdura`.
+  X, Instagram and LinkedIn were not checked (those sites block automated lookups).
+- **Who is using it (2026-10-19, homepage titles):** `perdura.cloud` and `perdura.net` serve the same site, "Perdura — Managed
+  SAP HANA that endures" (EU data sovereignty, SLA-backed hosting: a class 42 service); `perdura.app` is a chess-opening preparation
+  product; `perdura.org` is a memorials service ("Memorials that endure"). `perdura.com`, `.dev` and `.ai` did not answer
+  (parked or inactive). Registrant names are not published (RDAP shows registrars only: GoDaddy, Key-Systems, 1&1, Dynadot).
+  The hosting business sits in the same class 42 and sells to the same enterprise buyers, and may hold unregistered
+  (common-law) rights even though no registered class 9 or 42 mark turned up.
+- **Reading:** Perdura is clear in registered trademark classes 9 and 42 so far, but the name is largely taken online, and a same-day
+  multi-extension registration in May 2026 is a warning sign. Treat it as a leading candidate, not a safe choice.
+
+**Recommendation:** Perdura is the strongest candidate so far. Before any rename, read the remaining Perdura records, check
+domains and handles, and have a trademark lawyer look. Do not rename on this screening alone.
+
+**OmniFlow screened, 2026-10-20** (WIPO Global Brand Database, USPTO, RDAP/DNS and public package APIs; screening, not legal clearance):
+
+- **USPTO: a direct conflict.** `OMNIFLOW`, serial 50063002, **live and pending in class 42** for "providing online non-downloadable
+  workflow management" software and services, filed by **Synergy Folks Inc (California)**. Same mark, same kind of goods.
+  Also live: `OMNIFLOW` in class 42 (Baker Hughes Holdings, registered) and in classes 7 and 9 (Omniflow, Portugal, US reg. 86524073).
+- **WIPO:** 46 records, 15 in class 9 and 8 in class 42. Omniflow, S.A. (Portugal, a smart-lighting-pole maker) holds `Omniflow`
+  in classes 7, 9 and 42 as an EU registration (2014), an international registration (2022) and in Malaysia (2023); Baker Hughes
+  holds `OMNIFLOW` in class 42 in the US (2001).
+- **Domains:** `omniflow.com` is another business (OMNI Flow Computers, registered 1997); `.io` serves Omniflow Smart Poles; `.dev` is a
+  tools-and-calculators site (registered 2025); `.app` is for sale; `.ai`, `.net`, `.org`, `.tech` and `.cloud` are registered; `.co`
+  has no record.
+- **Handles:** the npm package `omniflow` belongs to someone else ("omniflow CLI" 1.0.0, 2022), and this repository's `package.json`
+  is named `omniflow` with `private: false`, so it must not be published under that name (use a scoped name). GitHub user `omniflow`
+  exists (2018, no repositories); PyPI `omniflow` exists (an OMOP data tool); crates.io is free; Docker Hub redirects (likely taken).
+- **Reading:** OmniFlow is the most conflicted name of all those screened, because of the pending class 42 workflow-management
+  application. The decision to stay with OmniFlow was made on 2026-10-20; a trademark lawyer should review this before any
+  public launch.
+
+Decision needed: confirm **OmniFlow**, or pick **Perdura**, **Constans**, **Tenax**, or send me a name. Then I rename in one pass with the sweep as the check.
 
 ## Palette
 
@@ -81,7 +153,7 @@ Three words: **plain, exact, calm.**
 | "Retried 3 times, then stopped: the server kept answering 503." | "Failed after multiple attempts." |
 | "No runs yet. Start one from a workflow page." | "Nothing to see here." |
 
-Ten most-seen strings, rewritten (**proposed, not applied**; applying waits for the name):
+Ten most-seen strings, rewritten. **Applied 2026-10-11** (name chosen): sign-in subtitle, NEXORA sign-in text, session-ended toast, empty run list and the low-quota notice. The plan-limit text already matched. Not applied because those screens have no such string yet or already read well: run started toast, run-failed text, approvals empty.
 
 | where | now | proposed |
 | --- | --- | --- |

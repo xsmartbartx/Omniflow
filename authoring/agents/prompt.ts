@@ -106,7 +106,8 @@ export function capabilityCatalogue(caps: CapabilityDeclaration[]): string {
       const outs = Object.keys(
         (c.outputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {},
       ).join(', ');
-      return `- ${c.name}@${c.version} [${c.effect}${c.egress.mode === 'none' ? '' : `, egress:${c.egress.mode}`}] ${c.description.split('. ')[0]?.slice(0, 200)}\n    with: { ${inputs} }   output: { ${outs} }`;
+      const egress = c.egress.mode === 'none' ? '' : `, egress:${c.egress.mode}`;
+      return `- ${c.name}@${c.version} [${c.effect}${egress}] ${c.description.split('. ')[0]?.slice(0, 200)}\n    with: { ${inputs} }   output: { ${outs} }`;
     })
     .join('\n');
 }

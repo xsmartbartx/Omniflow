@@ -6,7 +6,7 @@ import { Ajv } from 'ajv';
 import addFormats from 'ajv-formats';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ulid } from '../core/index.ts';
-import type { Omniflow } from './context.ts';
+import type { OmniFlow } from './context.ts';
 import { buildOpenApi, fromFastifyValidation, problem, type RouteDef, registerRoutes } from './http.ts';
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
@@ -15,7 +15,14 @@ import { insightRoutes } from './routes/insight.ts';
 import { nexoraRoutes } from './routes/nexora.ts';
 import { publicRoutes } from './routes/public.ts';
 import { runRoutes } from './routes/runs.ts';
+import { webhookRoutes } from './routes/webhooks.ts';
 import { workflowRoutes } from './routes/workflows.ts';
+
+/** Plain-language messages for Fastify's own 4xx answers. */
+const CLIENT_ERROR_MESSAGES: Record<number, string> = {
+  413: 'The request body is too large',
+  415: 'Send application/json',
+};
 
 /** Walk up from this file to the directory holding `package.json`. */
 export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url))): string {
@@ -30,7 +37,7 @@ export function packageRoot(from: string = dirname(fileURLToPath(import.meta.url
 const CONSOLE_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
-function securityHeaders(app: Omniflow): Record<string, string> {
+function securityHeaders(app: OmniFlow): Record<string, string> {
   return {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
@@ -49,7 +56,7 @@ function securityHeaders(app: Omniflow): Record<string, string> {
  * Authentication, rate limiting, request correlation and transport-level validation — no business
  * logic; every decision is delegated to the Policy Engine and the services below it.
  */
-export async function buildServer(app: Omniflow): Promise<{ server: FastifyInstance; routes: RouteDef[] }> {
+export async function buildServer(app: OmniFlow): Promise<{ server: FastifyInstance; routes: RouteDef[] }> {
   const server = Fastify({
     logger: false,
     trustProxy: app.config.trustProxy,
@@ -148,12 +155,7 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
       void reply.code(status).send({
         error: {
           code: fv.code ?? 'BAD_REQUEST',
-          message:
-            status === 413
-              ? 'The request body is too large'
-              : status === 415
-                ? 'Send application/json'
-                : 'The request could not be understood',
+          message: CLIENT_ERROR_MESSAGES[status] ?? 'The request could not be understood',
           class: 'contract',
           requestId: req.id,
         },
@@ -178,6 +180,7 @@ export async function buildServer(app: Omniflow): Promise<{ server: FastifyInsta
     ...insightRoutes(),
     ...authoringRoutes(),
     ...adminRoutes(),
+    ...webhookRoutes(),
     ...(app.config.mode === 'nexora' ? nexoraRoutes() : []),
   );
   registerRoutes(server, app, defs, limiters);

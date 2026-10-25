@@ -54,10 +54,10 @@ const DEFAULTS = { maxDepth: 12, maxString: 8192, maxArray: 200, maxKeys: 200 };
 // Control characters (except \t \n \r) and invisible bidirectional-override characters used for
 // log forging and "Trojan Source" attacks.
 const CONTROL_CHARS = new RegExp(
-  `[${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]`,
+  `[${String.fromCodePoint(0)}-${String.fromCodePoint(8)}${String.fromCodePoint(11)}${String.fromCodePoint(12)}${String.fromCodePoint(14)}-${String.fromCodePoint(31)}${String.fromCodePoint(127)}]`,
   'g',
 );
-const BIDI_AND_ZERO_WIDTH = /[​-‏‪-‮⁦-⁩﻿]/g;
+const BIDI_AND_ZERO_WIDTH = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
 
 /** Remove characters that enable log forging and "Trojan Source" attacks; normalise to NFC. */
 export function sanitizeText(text: string): string {
@@ -86,43 +86,45 @@ export function redact(value: unknown, options: RedactOptions = {}): unknown {
   const secretList = options.secretValues ? [...options.secretValues] : [];
   const seen = new WeakSet<object>();
 
+  const leaf = (v: unknown): unknown => {
+    if (typeof v === 'string') return scrubString(v, { ...opts, secretValues: secretList });
+    if (v === null || v === undefined || typeof v === 'number' || typeof v === 'boolean') return v;
+    if (typeof v === 'bigint') return v.toString();
+    if (v instanceof Date) return v.toISOString();
+    if (v instanceof Error) {
+      return { name: v.name, message: scrubString(v.message, { ...opts, secretValues: secretList }) };
+    }
+    return undefined; // functions and symbols
+  };
+
+  const container = (v: object, depth: number): unknown => {
+    if (seen.has(v)) return '[Circular]';
+    if (depth >= opts.maxDepth) return '[MaxDepth]';
+    seen.add(v);
+    if (Array.isArray(v)) {
+      const items = v.slice(0, opts.maxArray).map((x) => walk(x, depth + 1));
+      if (v.length > opts.maxArray) items.push(`…[${v.length - opts.maxArray} more items]`);
+      return items;
+    }
+    const out: Record<string, unknown> = {};
+    let n = 0;
+    for (const [k, x] of Object.entries(v)) {
+      if (n++ >= opts.maxKeys) {
+        out['…'] = 'truncated';
+        break;
+      }
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      out[sanitizeText(k)] = walk(x, depth + 1, k);
+    }
+    return out;
+  };
+
   const walk = (v: unknown, depth: number, keyHint?: string): unknown => {
     if (keyHint !== undefined && SENSITIVE_KEY.test(keyHint) && v !== null && v !== undefined) {
       return typeof v === 'boolean' || typeof v === 'number' ? v : REDACTED;
     }
-    if (typeof v === 'string') return scrubString(v, { ...opts, secretValues: secretList });
-    if (v === null || v === undefined || typeof v === 'number' || typeof v === 'boolean') return v;
-    if (typeof v === 'bigint') return v.toString();
-    if (typeof v === 'function' || typeof v === 'symbol') return undefined;
-    if (v instanceof Date) return v.toISOString();
-    if (v instanceof Error) {
-      return {
-        name: v.name,
-        message: scrubString(v.message, { ...opts, secretValues: secretList }),
-      };
-    }
-    if (typeof v === 'object') {
-      if (seen.has(v)) return '[Circular]';
-      if (depth >= opts.maxDepth) return '[MaxDepth]';
-      seen.add(v);
-      if (Array.isArray(v)) {
-        const items = v.slice(0, opts.maxArray).map((x) => walk(x, depth + 1));
-        if (v.length > opts.maxArray) items.push(`…[${v.length - opts.maxArray} more items]`);
-        return items;
-      }
-      const out: Record<string, unknown> = {};
-      let n = 0;
-      for (const [k, x] of Object.entries(v)) {
-        if (n++ >= opts.maxKeys) {
-          out['…'] = 'truncated';
-          break;
-        }
-        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-        out[sanitizeText(k)] = walk(x, depth + 1, k);
-      }
-      return out;
-    }
-    return undefined;
+    const plainContainer = typeof v === 'object' && v !== null && !(v instanceof Date) && !(v instanceof Error);
+    return plainContainer ? container(v, depth) : leaf(v);
   };
   return walk(value, 0);
 }

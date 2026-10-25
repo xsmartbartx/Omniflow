@@ -51,6 +51,8 @@ export interface Config {
   /** How often alert conditions are evaluated. */
   alertIntervalSeconds: number;
   version: string;
+  /** Outbound run-lifecycle webhooks (OMNIFLOW_RUN_WEBHOOKS). */
+  runWebhooks: Array<{ id: string; url: string; secret: string; events: string[]; tenant: string }>;
   /** `standalone` is OmniFlow as shipped; `nexora` runs it as a tenant product of NEXORA Core. */
   mode: 'standalone' | 'nexora';
   nexora: {
@@ -63,7 +65,7 @@ export interface Config {
   };
 }
 
-export interface Omniflow {
+export interface OmniFlow {
   config: Config;
   log: Logger;
   clock: Clock;
@@ -83,6 +85,8 @@ export interface Omniflow {
   analysis: AnalysisAgent;
   alerts: AlertManager;
   authoring: AuthoringService;
+  /** Present only when OMNIFLOW_RUN_WEBHOOKS is set. */
+  webhooks?: { tick(): Promise<number>; start(): void; stop(): void };
   /** Present only in `nexora` mode. */
   nexora?: { service: NexoraService; worker: OutboxWorker; fake?: import('../nexora/index.ts').FakeCore };
   /** Start background loops, recover interrupted runs, bootstrap the first admin. */

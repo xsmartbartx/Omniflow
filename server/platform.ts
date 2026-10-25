@@ -5,7 +5,7 @@ import { AuthoringService } from '../authoring/index.ts';
 import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
-import type { Omniflow } from '../gateway/context.ts';
+import type { OmniFlow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { FakeCore, NexoraService, OutboxWorker } from '../nexora/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
@@ -19,8 +19,9 @@ import { createKeyring, SecretBroker } from '../security/secret-broker/index.ts'
 import { openState, type State, stateOptionsFor } from '../state/index.ts';
 import type { Config } from './config.ts';
 import { createAnthropicClient } from './llm-client.ts';
+import { WebhookDispatcher } from './webhooks.ts';
 
-export type { Omniflow };
+export type { OmniFlow };
 
 /**
  * The composition root: every component of architecture §5, wired together. Layers below never
@@ -39,7 +40,7 @@ export interface OmniflowOverrides {
   core?: FakeCore;
 }
 
-export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}): Omniflow {
+export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}): OmniFlow {
   const clock = overrides.clock ?? systemClock;
   const log = overrides.log ?? createLogger({ level: config.logLevel });
   const state = overrides.state ?? openState(stateOptionsFor(config.dataDir, clock));
@@ -77,8 +78,17 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const registry = new RegistryService({ state, capabilities, policy, clock });
 
   let scheduler!: Scheduler;
+  const webhooks = config.runWebhooks.length
+    ? new WebhookDispatcher({
+        state,
+        hooks: config.runWebhooks as ConstructorParameters<typeof WebhookDispatcher>[0]['hooks'],
+        adapters: config.adapters,
+        log,
+      })
+    : undefined;
   const fakeCore = config.mode === 'nexora' ? (overrides.core ?? new FakeCore()) : undefined;
   const nexoraService = fakeCore ? new NexoraService(state, fakeCore, { log }) : undefined;
+  let stopMirroring: (() => void) | undefined;
   const runs = new RunService({
     state,
     orchestrator,
@@ -127,7 +137,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
   const authoring = new AuthoringService({ state, registry, policy, capabilities, clock, ...(llm ? { llm } : {}) });
   let analysisTimer: NodeJS.Timeout | undefined;
 
-  const app: Omniflow = {
+  const app: OmniFlow = {
     config,
     log,
     clock,
@@ -147,6 +157,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     analysis,
     alerts,
     authoring,
+    ...(webhooks ? { webhooks } : {}),
     ...(nexoraService && fakeCore
       ? {
           nexora: {
@@ -165,7 +176,9 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.start();
       triggers.start();
       alerts.start();
+      stopMirroring = app.nexora?.service.observe();
       app.nexora?.worker.start();
+      app.webhooks?.start();
       if (config.analysisIntervalHours > 0) {
         // First pass a few minutes after boot (so there is history to read), then on the configured cadence.
         const every = config.analysisIntervalHours * 3_600_000;
@@ -199,7 +212,9 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
       scheduler.stop();
       triggers.stop();
       alerts.stop();
+      stopMirroring?.();
       app.nexora?.worker.stop();
+      app.webhooks?.stop();
       if (analysisTimer) clearTimeout(analysisTimer);
       await orchestrator.stop();
       state.events.append({ tenant: 'default', type: 'system.stopped', data: {} });
@@ -211,7 +226,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
 }
 
 /** Load operator policy documents. A broken governance rule must stop the platform, not be skipped. */
-function loadPolicies(app: Omniflow): void {
+function loadPolicies(app: OmniFlow): void {
   const { policyDir } = app.config;
   if (!existsSync(policyDir)) return;
   const docs = [];
@@ -220,7 +235,8 @@ function loadPolicies(app: Omniflow): void {
     .sort()) {
     const res = parsePolicyDocument(readFileSync(join(policyDir, file), 'utf8'));
     if (!res.ok || !res.document) {
-      throw new Error(`Invalid policy file ${file}: ${res.issues.map((i) => `${i.path} ${i.message}`).join('; ')}`);
+      const problems = res.issues.map((i) => `${i.path} ${i.message}`).join('; ');
+      throw new Error(`Invalid policy file ${file}: ${problems}`);
     }
     docs.push(res.document);
   }
@@ -230,7 +246,7 @@ function loadPolicies(app: Omniflow): void {
 }
 
 /** First start: create the initial admin so the platform is never left without a way in. */
-async function bootstrapAdmin(app: Omniflow): Promise<{ email: string; password: string } | undefined> {
+async function bootstrapAdmin(app: OmniFlow): Promise<{ email: string; password: string } | undefined> {
   if (app.state.identity.countUsers() > 0) return undefined;
   const password = app.config.admin.password ?? `${randomToken(12)}Aa1`;
   const generated = app.config.admin.password === undefined;
@@ -246,7 +262,7 @@ async function bootstrapAdmin(app: Omniflow): Promise<{ email: string; password:
 }
 
 /** Publish the shipped example workflows (opt-in). Anything that needs review is left as a change request. */
-function seedExamples(app: Omniflow): void {
+function seedExamples(app: OmniFlow): void {
   const dir = app.config.workflowsDir;
   if (!existsSync(dir)) return;
   const admin: Principal = { id: 'system:seed', type: 'system', name: 'Seed', tenant: 'default', roles: ['admin'] };

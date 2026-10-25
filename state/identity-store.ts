@@ -1,6 +1,6 @@
 import { type Clock, ConflictError, newId, systemClock } from '../core/index.ts';
 import type { Role } from '../schemas/index.ts';
-import { type Db, fromJson } from './database.ts';
+import { type Db, fromJson, toBit } from './database.ts';
 
 export interface TenantRecord {
   id: string;
@@ -231,9 +231,9 @@ export class IdentityStore {
       [
         patch.name ?? null,
         patch.roles ? JSON.stringify(patch.roles) : null,
-        patch.disabled === undefined ? null : patch.disabled ? 1 : 0,
+        toBit(patch.disabled),
         patch.passwordHash ?? null,
-        patch.mustChangePassword === undefined ? null : patch.mustChangePassword ? 1 : 0,
+        toBit(patch.mustChangePassword),
         id,
       ],
     );

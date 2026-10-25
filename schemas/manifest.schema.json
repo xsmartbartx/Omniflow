@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://omniflow.dev/schemas/workflow-manifest.v1.json",
+  "$id": "https://omniflow.onenexora.com/schemas/workflow-manifest.v1.json",
   "title": "OmniFlow Workflow Manifest",
   "description": "Declarative workflow artifact (ADR-0002 D1). Workflows are data, not code; this schema is closed.",
   "type": "object",

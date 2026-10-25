@@ -1,3 +1,4 @@
+import { compareStrings } from '../../core/index.ts';
 import type { PlanStep } from '../../schemas/index.ts';
 import { humanMs, parseMs, pct, percentile, ratio } from '../util.ts';
 import type { AnalysisInput, Finding, Rule, Thresholds, WorkflowFacts } from './types.ts';
@@ -96,6 +97,18 @@ export const deadSteps: Rule = (input, t) => {
   return out;
 };
 
+/** Errors that retrying cannot fix, and whether the step is configured to retry exactly those classes. */
+function misclassifiedRetries<E extends { errorClass: string }>(
+  planStep: PlanStep | undefined,
+  errs: readonly E[],
+): { nonTransient: E[]; misclassified: boolean } {
+  const nonTransient = errs.filter((e) => e.errorClass !== 'transient' && e.errorClass !== 'systemic');
+  const misclassified =
+    nonTransient.length > 0 &&
+    planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
+  return { nonTransient, misclassified };
+}
+
 /** Repeated retries: a flaky dependency, or errors classified so that they are retried pointlessly. */
 export const retryStorms: Rule = (input, t) => {
   const out: Finding[] = [];
@@ -107,10 +120,7 @@ export const retryStorms: Rule = (input, t) => {
       if (rate < t.retryStormRate) continue;
       const planStep = wf.plan.steps.find((p) => p.id === s.stepId);
       const errs = wf.errors.get(s.stepId) ?? [];
-      const nonTransient = errs.filter((e) => e.errorClass !== 'transient' && e.errorClass !== 'systemic');
-      const misclassified =
-        nonTransient.length > 0 &&
-        planStep?.retry?.retryOn.some((c) => nonTransient.some((e) => e.errorClass === c)) === true;
+      const { nonTransient, misclassified } = misclassifiedRetries(planStep, errs);
       out.push({
         rule: 'retry-storm',
         severity: misclassified || rate >= 0.6 ? 'high' : 'medium',
@@ -140,7 +150,7 @@ export const retryStorms: Rule = (input, t) => {
 const fingerprint = (s: PlanStep): string =>
   s.capability
     ? `${s.capability.name}|${Object.keys(s.with ?? {})
-        .sort()
+        .sort(compareStrings)
         .join(',')}`
     : s.type;
 
@@ -166,7 +176,7 @@ function differingParameters(a: Map<string, PlanStep>, b: Map<string, PlanStep>)
     for (const k of Object.keys(s.with))
       if (JSON.stringify(s.with[k]) !== JSON.stringify(other.with[k])) out.add(`${s.capability?.name ?? s.type}.${k}`);
   }
-  return [...out].sort();
+  return [...out].sort(compareStrings);
 }
 
 /** Two workflows that are the same workflow with different parameters. */
@@ -182,8 +192,9 @@ export const duplicateWorkflows: Rule = (input, t) => {
       const union = a.steps.size + b.steps.size - shared;
       const similarity = shared / union;
       if (similarity < t.duplicateSimilarity) continue;
-      const [x, y] = [a.wf.name, b.wf.name].sort();
+      const [x, y] = [a.wf.name, b.wf.name].sort(compareStrings);
       const params = differingParameters(a.steps, b.steps);
+      const more = params.length > 5 ? '…' : '';
       out.push({
         rule: 'duplicate-workflows',
         severity: 'medium',
@@ -192,7 +203,7 @@ export const duplicateWorkflows: Rule = (input, t) => {
         title: `'${x}' and '${y}' are near-duplicates`,
         summary: `${x} and ${y} share ${pct(similarity)} of their steps (${shared} of ${union}). Two copies drift apart and have to be fixed twice.`,
         recommendation: params.length
-          ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${params.length > 5 ? '…' : ''} — make those inputs.`
+          ? `Merge them into one parameterised workflow. The differences are ${params.slice(0, 5).join(', ')}${more} — make those inputs.`
           : `Merge them into one workflow; they do the same thing.`,
         evidence: {
           workflows: [x, y],
@@ -266,6 +277,8 @@ export const approvalGates: Rule = (input, t) => {
     const finished = decided + a.timedOut;
     const where = `${a.workflow} › ${a.stepId}`;
     if (a.denied === 0 && a.timedOut === 0 && a.approved >= t.rubberStampMinApprovals) {
+      const slow =
+        a.medianDecisionMs === null ? '' : ` and takes people about ${humanMs(a.medianDecisionMs)} to answer`;
       out.push({
         rule: 'approval-rubber-stamp',
         severity: 'low',
@@ -273,7 +286,7 @@ export const approvalGates: Rule = (input, t) => {
         stepId: a.stepId,
         key: `approval-rubber-stamp:${a.workflow}:${a.stepId}`,
         title: `Approval '${a.stepId}' was approved ${a.approved} times out of ${a.approved}`,
-        summary: `${where} has never been denied${a.medianDecisionMs !== null ? ` and takes people about ${humanMs(a.medianDecisionMs)} to answer` : ''}. It may be adding delay without adding safety.`,
+        summary: `${where} has never been denied${slow}. It may be adding delay without adding safety.`,
         recommendation: `Consider replacing the gate with a policy rule that only asks for approval in the risky cases (e.g. above a threshold), or with an autonomy tier.`,
         evidence: { approved: a.approved, medianDecisionMs: a.medianDecisionMs },
       });
@@ -321,24 +334,28 @@ export const shellSunsets: Rule = (input, t) => {
       if (Number.isNaN(due)) continue;
       const days = Math.round((due - today) / 86_400_000);
       if (days > t.sunsetWarnDays) continue;
-      out.push({
-        rule: 'shell-sunset',
-        severity: days < 0 ? 'high' : 'medium',
-        workflow: wf.name,
-        stepId: s.id,
-        key: `shell-sunset:${wf.name}:${s.id}`,
-        title:
-          days < 0
-            ? `Shell step '${s.id}' is ${-days} days past its sunset date`
-            : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
-        summary: `${wf.name} › ${s.id} was meant to be replaced by ${s.sunset}. Temporary bridges that outlive their date become permanent.`,
-        recommendation: `Replace it with a typed capability, or renew the sunset date with a written justification.`,
-        evidence: { sunset: s.sunset, daysRemaining: days, capability: capOf(s) },
-      });
+      out.push(sunsetFinding(wf.name, s, days));
     }
   }
   return out;
 };
+
+function sunsetFinding(workflow: string, s: PlanStep, days: number): Finding {
+  return {
+    rule: 'shell-sunset',
+    severity: days < 0 ? 'high' : 'medium',
+    workflow,
+    stepId: s.id,
+    key: `shell-sunset:${workflow}:${s.id}`,
+    title:
+      days < 0
+        ? `Shell step '${s.id}' is ${-days} days past its sunset date`
+        : `Shell step '${s.id}' reaches its sunset date in ${days} days`,
+    summary: `${workflow} › ${s.id} was meant to be replaced by ${s.sunset}. Temporary bridges that outlive their date become permanent.`,
+    recommendation: `Replace it with a typed capability, or renew the sunset date with a written justification.`,
+    evidence: { sunset: s.sunset, daysRemaining: days, capability: capOf(s) },
+  };
+}
 
 // ------------------------------------------------------------------ timing
 
@@ -359,7 +376,7 @@ export const timing: Rule = (input, t) => {
     if (started !== undefined && scheduled !== undefined)
       lagByWorkflow.set(r.workflow, [...(lagByWorkflow.get(r.workflow) ?? []), Math.max(0, started - scheduled)]);
   }
-  for (const [workflow, lags] of [...lagByWorkflow].sort()) {
+  for (const [workflow, lags] of [...lagByWorkflow].sort(([x], [y]) => compareStrings(x, y))) {
     const p95 = percentile(lags, 95)!;
     if (lags.length < 5 || p95 < t.scheduleDriftP95Ms) continue;
     out.push({
@@ -404,13 +421,14 @@ export const unexercisedCompensation: Rule = (input, t) => {
       (s) => (wf.steps.get(s.id)?.compensated ?? 0) + (wf.steps.get(s.id)?.compensationFailed ?? 0) > 0,
     );
     if (exercised) continue;
+    const steps = compensable.map((s) => `'${s.id}'`).join(', ');
     out.push({
       rule: 'unexercised-compensation',
       severity: 'info',
       workflow: wf.name,
       key: `unexercised-compensation:${wf.name}`,
       title: `Compensation in '${wf.name}' has never run`,
-      summary: `${wf.name} declares compensation for ${compensable.map((s) => `'${s.id}'`).join(', ')}, but none has run in ${wf.runs.total} runs. Rollback that has never been exercised may not work when it is needed.`,
+      summary: `${wf.name} declares compensation for ${steps}, but none has run in ${wf.runs.total} runs. Rollback that has never been exercised may not work when it is needed.`,
       recommendation: `Rehearse it: run the workflow in staging with a failure injected after the compensable step and confirm the rollback does what you expect.`,
       evidence: { compensableSteps: compensable.map((s) => s.id), runs: wf.runs.total },
     });

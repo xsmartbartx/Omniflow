@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { flag, has, UsageError } from '../args.ts';
+import { flag, has, queryFlag, UsageError } from '../args.ts';
 import { type CliContext, client, emit, need } from '../context.ts';
 import { ago, table } from '../format.ts';
 
@@ -9,13 +9,17 @@ import { ago, table } from '../format.ts';
 function summarise(ctx: CliContext, draft: any): string[] {
   const s = ctx.style;
   const v = draft.validation ?? {};
-  const lines = [
-    `${v.ok ? s.green('✓ valid') : s.red('✗ not valid yet')}${v.risk ? `  risk ${v.risk.level} (${v.risk.score})` : ''}  ${s.dim(draft.id)}`,
-  ];
-  for (const e of (v.errors ?? []).slice(0, 8))
-    lines.push(`  ${s.red('error')}${s.dim(`[${e.code}]`)} ${e.path ? `${e.path}: ` : ''}${e.message}`);
-  for (const f of (v.risk?.findings ?? []).filter((x: any) => x.blocking))
-    lines.push(`  ${s.red('blocking')}${s.dim(`[${f.ruleId}]`)} ${f.message}`);
+  const risk = v.risk ? `  risk ${v.risk.level} (${v.risk.score})` : '';
+  const lines = [`${v.ok ? s.green('✓ valid') : s.red('✗ not valid yet')}${risk}  ${s.dim(draft.id)}`];
+  for (const e of (v.errors ?? []).slice(0, 8)) {
+    const where = e.path ? `${e.path}: ` : '';
+    const code = s.dim(`[${e.code}]`);
+    lines.push(`  ${s.red('error')}${code} ${where}${e.message}`);
+  }
+  for (const f of (v.risk?.findings ?? []).filter((x: any) => x.blocking)) {
+    const rule = s.dim(`[${f.ruleId}]`);
+    lines.push(`  ${s.red('blocking')}${rule} ${f.message}`);
+  }
   return lines;
 }
 
@@ -69,84 +73,25 @@ export async function planCommand(ctx: CliContext): Promise<number> {
 
 export async function draftsCommand(ctx: CliContext): Promise<number> {
   const sub = ctx.args.positionals[1] ?? 'list';
-  const api = client(ctx);
-  const s = ctx.style;
-  if (sub === 'list') {
-    const r = await api.get(`/v1/drafts${flag(ctx.args, 'status') ? `?status=${flag(ctx.args, 'status')}` : ''}`);
-    emit(ctx, r.items, () =>
-      r.items.length === 0
-        ? 'No drafts.'
-        : table(
-            r.items.map((d: any) => [
-              d.id,
-              d.workflowName ?? '—',
-              d.origin,
-              d.status,
-              d.validation?.ok ? s.green('valid') : s.red('invalid'),
-              ago(d.updatedAt),
-            ]),
-            ['DRAFT', 'WORKFLOW', 'ORIGIN', 'STATUS', 'VALIDATION', 'UPDATED'],
-            s,
-          ),
-    );
-    return 0;
-  }
-  if (sub === 'create') {
-    const file = need(ctx, 2, 'manifest file');
-    const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-    const d = await api.post('/v1/drafts', { manifest });
-    emit(ctx, d, () => summarise(ctx, d).join('\n'));
-    return d.validation?.ok ? 0 : 1;
-  }
+  if (sub === 'list') return draftsList(ctx);
+  if (sub === 'create') return draftsCreate(ctx);
   const id = need(ctx, 2, 'draft id');
   const path = `/v1/drafts/${encodeURIComponent(id)}`;
   switch (sub) {
-    case 'show': {
-      const d = await api.get(path);
-      if (has(ctx.args, 'manifest') && !ctx.json) {
-        if (!outFile(ctx, d.manifestText)) ctx.out(d.manifestText);
-      } else
-        emit(ctx, d, () =>
-          [
-            `${s.bold(d.workflowName ?? '(unnamed)')}  ${d.origin} · ${d.status}`,
-            ...summarise(ctx, d),
-            ...(d.notes?.rationale ? ['', d.notes.rationale] : []),
-            ...(d.notes?.openQuestions ?? []).map((q: string) => `  ? ${q}`),
-            '',
-            d.manifestText,
-          ].join('\n'),
-        );
-      return 0;
-    }
+    case 'show':
+      return draftShow(ctx, path);
     case 'validate': {
-      const d = await api.post(`${path}/validate`);
+      const d = await client(ctx).post(`${path}/validate`);
       emit(ctx, d, () => summarise(ctx, d).join('\n'));
       return d.validation?.ok ? 0 : 1;
     }
-    case 'submit': {
-      const r = await api.post(
-        `${path}/submit`,
-        has(ctx.args, 'canary') ? { canaryPercent: Number(flag(ctx.args, 'canary')) } : {},
-      );
-      emit(ctx, r, () =>
-        r.status === 'published'
-          ? `${s.green('✓')} published ${s.bold(`${r.version.name}@${r.version.version}`)}`
-          : `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`,
-      );
-      return 0;
-    }
-    case 'apply': {
-      const r = await api.post(`${path}/apply`);
-      emit(ctx, r, () =>
-        r.applied
-          ? `${s.green('✓')} tier ${r.tier}: ${r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`}\n  ${r.verdict.reason}`
-          : `${s.yellow('—')} tier ${r.tier}: nothing applied. ${r.verdict.reason}`,
-      );
-      return 0;
-    }
+    case 'submit':
+      return draftSubmit(ctx, path);
+    case 'apply':
+      return draftApply(ctx, path);
     case 'delete': {
-      await api.del(path);
-      ctx.out(`${s.green('✓')} deleted ${id}\n`);
+      await client(ctx).del(path);
+      ctx.out(`${ctx.style.green('✓')} deleted ${id}\n`);
       return 0;
     }
     default:
@@ -156,6 +101,83 @@ export async function draftsCommand(ctx: CliContext): Promise<number> {
   }
 }
 
+async function draftsList(ctx: CliContext): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).get(`/v1/drafts${queryFlag(ctx.args, 'status')}`);
+  emit(ctx, r.items, () =>
+    r.items.length === 0
+      ? 'No drafts.'
+      : table(
+          r.items.map((d: any) => [
+            d.id,
+            d.workflowName ?? '—',
+            d.origin,
+            d.status,
+            d.validation?.ok ? s.green('valid') : s.red('invalid'),
+            ago(d.updatedAt),
+          ]),
+          ['DRAFT', 'WORKFLOW', 'ORIGIN', 'STATUS', 'VALIDATION', 'UPDATED'],
+          s,
+        ),
+  );
+  return 0;
+}
+
+async function draftsCreate(ctx: CliContext): Promise<number> {
+  const file = need(ctx, 2, 'manifest file');
+  const manifest = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
+  const d = await client(ctx).post('/v1/drafts', { manifest });
+  emit(ctx, d, () => summarise(ctx, d).join('\n'));
+  return d.validation?.ok ? 0 : 1;
+}
+
+async function draftShow(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const d = await client(ctx).get(path);
+  if (has(ctx.args, 'manifest') && !ctx.json) {
+    if (!outFile(ctx, d.manifestText)) ctx.out(d.manifestText);
+  } else
+    emit(ctx, d, () =>
+      [
+        `${s.bold(d.workflowName ?? '(unnamed)')}  ${d.origin} · ${d.status}`,
+        ...summarise(ctx, d),
+        ...(d.notes?.rationale ? ['', d.notes.rationale] : []),
+        ...(d.notes?.openQuestions ?? []).map((q: string) => `  ? ${q}`),
+        '',
+        d.manifestText,
+      ].join('\n'),
+    );
+  return 0;
+}
+
+async function draftSubmit(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(
+    `${path}/submit`,
+    has(ctx.args, 'canary') ? { canaryPercent: Number(flag(ctx.args, 'canary')) } : {},
+  );
+  emit(ctx, r, () => {
+    if (r.status !== 'published')
+      return `${s.yellow('…')} needs approval (${r.decision.reason}) — change ${r.change.id}`;
+    const ref = s.bold(`${r.version.name}@${r.version.version}`);
+    return `${s.green('✓')} published ${ref}`;
+  });
+  return 0;
+}
+
+async function draftApply(ctx: CliContext, path: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post(`${path}/apply`);
+  const outcome =
+    r.status === 'published' ? `published ${r.version}` : `change request ${r.changeId} opened for approval`;
+  emit(ctx, r, () =>
+    r.applied
+      ? `${s.green('✓')} tier ${r.tier}: ${outcome}\n  ${r.verdict.reason}`
+      : `${s.yellow('—')} tier ${r.tier}: nothing applied. ${r.verdict.reason}`,
+  );
+  return 0;
+}
+
 export async function importCommand(ctx: CliContext): Promise<number> {
   const kind = ctx.args.positionals[1];
   const file = ctx.args.positionals[2];
@@ -163,25 +185,29 @@ export async function importCommand(ctx: CliContext): Promise<number> {
     throw new UsageError(
       'Usage: omniflow import crontab <file|-> [--owner e] [--timezone tz] [--out-dir dir]\n       omniflow import script <file> [--name n]',
     );
+  const text = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
+  return kind === 'script' ? importScript(ctx, text) : importCrontab(ctx, text);
+}
+
+async function importScript(ctx: CliContext, text: string): Promise<number> {
+  const s = ctx.style;
+  const r = await client(ctx).post('/v1/import/script', {
+    script: text,
+    ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name') } : {}),
+  });
+  emit(ctx, r, () =>
+    [
+      r.plan.rationale ?? '',
+      ...(r.plan.openQuestions ?? []).map((q: string) => `  ? ${q}`),
+      ...(r.draft ? summarise(ctx, r.draft) : [s.red('No usable draft was produced.')]),
+    ].join('\n'),
+  );
+  return r.plan.ok ? 0 : 1;
+}
+
+async function importCrontab(ctx: CliContext, text: string): Promise<number> {
   const s = ctx.style;
   const api = client(ctx);
-  const text = file === '-' ? await ctx.readStdin() : readFileSync(resolve(ctx.cwd, file), 'utf8');
-
-  if (kind === 'script') {
-    const r = await api.post('/v1/import/script', {
-      script: text,
-      ...(flag(ctx.args, 'name') ? { name: flag(ctx.args, 'name') } : {}),
-    });
-    emit(ctx, r, () =>
-      [
-        r.plan.rationale ?? '',
-        ...(r.plan.openQuestions ?? []).map((q: string) => `  ? ${q}`),
-        ...(r.draft ? summarise(ctx, r.draft) : [s.red('No usable draft was produced.')]),
-      ].join('\n'),
-    );
-    return r.plan.ok ? 0 : 1;
-  }
-
   const r = await api.post('/v1/import/crontab', {
     text,
     ...(flag(ctx.args, 'owner') ? { owner: flag(ctx.args, 'owner') } : {}),
@@ -198,10 +224,12 @@ export async function importCommand(ctx: CliContext): Promise<number> {
     }
   }
   emit(ctx, r, () => {
-    const out = r.drafts.map(
-      (d: any) =>
-        `${s.bold(d.draft.workflowName ?? '?')}  ${d.draft.validation?.ok ? s.green('valid') : s.red('invalid')}  ${s.dim(`line ${d.line}`)}  ${s.dim(d.draft.id)}\n${d.notes.map((n: string) => `    - ${n}`).join('\n')}`,
-    );
+    const out = r.drafts.map((d: any) => {
+      const validity = d.draft.validation?.ok ? s.green('valid') : s.red('invalid');
+      const notes = d.notes.map((n: string) => `    - ${n}`).join('\n');
+      const line = s.dim(`line ${d.line}`);
+      return `${s.bold(d.draft.workflowName ?? '?')}  ${validity}  ${line}  ${s.dim(d.draft.id)}\n${notes}`;
+    });
     for (const k of r.skipped) out.push(`${s.yellow('skipped')} line ${k.line}: ${k.reason}`);
     if (dir)
       out.push(
@@ -220,9 +248,7 @@ export async function explainCommand(ctx: CliContext): Promise<number> {
     throw new UsageError('Usage: omniflow explain workflow <name> [--version v]\n       omniflow explain run <run-id>');
   const api = client(ctx);
   if (kind === 'workflow') {
-    const e = await api.get(
-      `/v1/workflows/${encodeURIComponent(target)}/explain${flag(ctx.args, 'version') ? `?version=${encodeURIComponent(flag(ctx.args, 'version')!)}` : ''}`,
-    );
+    const e = await api.get(`/v1/workflows/${encodeURIComponent(target)}/explain${queryFlag(ctx.args, 'version')}`);
     emit(ctx, e, () => e.markdown);
   } else {
     const e = await api.get(`/v1/runs/${encodeURIComponent(target)}/explain`);

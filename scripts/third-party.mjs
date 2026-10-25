@@ -13,12 +13,9 @@ for (const [path, meta] of Object.entries(lock.packages)) {
   const name = path.replace(/^.*node_modules\//, '');
   const pkgFile = join(root, path, 'package.json');
   const pkg = existsSync(pkgFile) ? JSON.parse(readFileSync(pkgFile, 'utf8')) : {};
-  const license =
-    typeof meta.license === 'string'
-      ? meta.license
-      : typeof pkg.license === 'string'
-        ? pkg.license
-        : (pkg.license?.type ?? 'UNKNOWN');
+  let license = meta.license;
+  if (typeof license !== 'string')
+    license = typeof pkg.license === 'string' ? pkg.license : (pkg.license?.type ?? 'UNKNOWN');
   const repo = (typeof pkg.repository === 'string' ? pkg.repository : (pkg.repository?.url ?? pkg.homepage ?? ''))
     .replace(/^git\+/, '')
     .replace(/\.git$/, '')
@@ -53,7 +50,6 @@ if (process.argv.includes('--check')) {
   console.log('THIRD_PARTY_NOTICES.md is up to date');
 } else {
   writeFileSync(out, text);
-  console.log(
-    `wrote THIRD_PARTY_NOTICES.md (${rows.length} packages${odd.length ? `, ${odd.length} need review` : ''})`,
-  );
+  const review = odd.length ? `, ${odd.length} need review` : '';
+  console.log(`wrote THIRD_PARTY_NOTICES.md (${rows.length} packages${review})`);
 }

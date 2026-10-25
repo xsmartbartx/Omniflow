@@ -12,8 +12,18 @@ type Token =
   | { type: 'punct'; value: string; pos: number; end: number }
   | { type: 'eof'; value: ''; pos: number; end: number };
 
-const PUNCT2 = ['&&', '||', '??', '==', '!=', '<=', '>='];
+const PUNCT2 = new Set(['&&', '||', '??', '==', '!=', '<=', '>=']);
 const PUNCT1 = '()[],.?:!-+*/%<>';
+
+const STRING_ESCAPES: Record<string, string> = {
+  n: '\n',
+  t: '\t',
+  r: '\r',
+  '\\': '\\',
+  "'": "'",
+  '"': '"',
+  '/': '/',
+};
 
 function tokenize(src: string): Token[] {
   const tokens: Token[] = [];
@@ -25,94 +35,71 @@ function tokenize(src: string): Token[] {
       i++;
       continue;
     }
-    const start = i;
-    const prev = tokens[tokens.length - 1];
+    const prev = tokens.at(-1);
     const afterDot = prev?.type === 'punct' && prev.value === '.';
-
-    if (/[0-9]/.test(ch) && !afterDot) {
-      const m = /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(src.slice(i))!;
-      i += m[0].length;
-      tokens.push({ type: 'num', value: Number(m[0]), pos: start, end: i });
-      continue;
-    }
-    // After a dot, a property name may contain hyphens (kebab-case step ids) and digits.
-    if (afterDot && /[A-Za-z0-9_]/.test(ch)) {
-      const m = /^[A-Za-z0-9_](?:[A-Za-z0-9_]|-(?=[A-Za-z0-9_]))*/.exec(src.slice(i))!;
-      i += m[0].length;
-      tokens.push({ type: 'ident', value: m[0], pos: start, end: i });
-      continue;
-    }
-    if (/[A-Za-z_]/.test(ch)) {
-      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i))!;
-      i += m[0].length;
-      tokens.push({ type: 'ident', value: m[0], pos: start, end: i });
-      continue;
-    }
-    if (ch === "'" || ch === '"') {
-      i++;
-      let out = '';
-      let closed = false;
-      while (i < n) {
-        const c = src[i]!;
-        if (c === ch) {
-          closed = true;
-          i++;
-          break;
-        }
-        if (c === '\\') {
-          const e = src[i + 1];
-          if (e === undefined) break;
-          const map: Record<string, string> = {
-            n: '\n',
-            t: '\t',
-            r: '\r',
-            '\\': '\\',
-            "'": "'",
-            '"': '"',
-            '/': '/',
-          };
-          if (e === 'u') {
-            const hex = src.slice(i + 2, i + 6);
-            if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-              throw new ExpressionSyntaxError('Invalid \\u escape in string', i);
-            }
-            out += String.fromCharCode(Number.parseInt(hex, 16));
-            i += 6;
-            continue;
-          }
-          if (!(e in map)) throw new ExpressionSyntaxError(`Invalid escape '\\${e}' in string`, i);
-          out += map[e];
-          i += 2;
-          continue;
-        }
-        out += c;
-        i++;
-      }
-      if (!closed) throw new ExpressionSyntaxError('Unterminated string literal', start);
-      tokens.push({ type: 'str', value: out, pos: start, end: i });
-      continue;
-    }
-    const two = src.slice(i, i + 2);
-    if (PUNCT2.includes(two)) {
-      tokens.push({ type: 'punct', value: two, pos: start, end: i + 2 });
-      i += 2;
-      continue;
-    }
-    if (PUNCT1.includes(ch)) {
-      tokens.push({ type: 'punct', value: ch, pos: start, end: i + 1 });
-      i++;
-      continue;
-    }
-    if (ch === '=' || ch === '&' || ch === '|') {
-      throw new ExpressionSyntaxError(
-        `Unexpected '${ch}' — did you mean '${ch}${ch}'? (assignment is not supported)`,
-        i,
-      );
-    }
-    throw new ExpressionSyntaxError(`Unexpected character '${ch}'`, i);
+    const token = lexToken(src, i, afterDot);
+    tokens.push(token);
+    i = token.end;
   }
   tokens.push({ type: 'eof', value: '', pos: n, end: n });
   return tokens;
+}
+
+/** The token starting at `i`. After a dot, a property name may contain hyphens (kebab-case step ids) and digits. */
+function lexToken(src: string, i: number, afterDot: boolean): Token {
+  const ch = src[i]!;
+  if (/\d/.test(ch) && !afterDot) return lexMatch(src, i, /^\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/, 'num');
+  if (afterDot && /\w/.test(ch)) return lexMatch(src, i, /^\w(?:\w|-(?=\w))*/, 'ident');
+  if (/[A-Za-z_]/.test(ch)) return lexMatch(src, i, /^[A-Za-z_]\w*/, 'ident');
+  if (ch === "'" || ch === '"') return lexString(src, i);
+  return lexPunct(src, i);
+}
+
+function lexMatch(src: string, i: number, re: RegExp, type: 'num' | 'ident'): Token {
+  const m = re.exec(src.slice(i))!;
+  const end = i + m[0].length;
+  return type === 'num' ? { type, value: Number(m[0]), pos: i, end } : { type, value: m[0], pos: i, end };
+}
+
+function lexString(src: string, start: number): Token {
+  const quote = src[start]!;
+  let i = start + 1;
+  let out = '';
+  while (i < src.length) {
+    const c = src[i]!;
+    if (c === quote) return { type: 'str', value: out, pos: start, end: i + 1 };
+    if (c !== '\\') {
+      out += c;
+      i++;
+      continue;
+    }
+    const e = src[i + 1];
+    if (e === undefined) break;
+    if (e === 'u') {
+      const hex = src.slice(i + 2, i + 6);
+      if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+        throw new ExpressionSyntaxError(String.raw`Invalid \u escape in string`, i);
+      }
+      out += String.fromCodePoint(Number.parseInt(hex, 16));
+      i += 6;
+      continue;
+    }
+    if (!(e in STRING_ESCAPES)) throw new ExpressionSyntaxError(`Invalid escape '\\${e}' in string`, i);
+    out += STRING_ESCAPES[e];
+    i += 2;
+  }
+  throw new ExpressionSyntaxError('Unterminated string literal', start);
+}
+
+function lexPunct(src: string, i: number): Token {
+  const ch = src[i]!;
+  const two = src.slice(i, i + 2);
+  if (PUNCT2.has(two)) return { type: 'punct', value: two, pos: i, end: i + 2 };
+  if (PUNCT1.includes(ch)) return { type: 'punct', value: ch, pos: i, end: i + 1 };
+  if (ch === '=' || ch === '&' || ch === '|') {
+    throw new ExpressionSyntaxError(`Unexpected '${ch}' — did you mean '${ch}${ch}'? (assignment is not supported)`, i);
+  }
+  throw new ExpressionSyntaxError(`Unexpected character '${ch}'`, i);
 }
 
 class Parser {
@@ -171,10 +158,10 @@ class Parser {
     let result = test;
     if (this.isPunct('?')) {
       this.next();
-      const then = this.parseTernary();
+      const consequent = this.parseTernary();
       this.expectPunct(':');
-      const otherwise = this.parseTernary();
-      result = { type: 'cond', test, then, else: otherwise, pos };
+      const alternate = this.parseTernary();
+      result = { type: 'cond', test, consequent, alternate, pos };
     }
     this.leave();
     return result;
@@ -305,40 +292,45 @@ class Parser {
         return { type: 'literal', value: t.value, pos: t.pos };
       case 'str':
         return { type: 'literal', value: t.value, pos: t.pos };
-      case 'ident': {
-        if (t.value === 'true') return { type: 'literal', value: true, pos: t.pos };
-        if (t.value === 'false') return { type: 'literal', value: false, pos: t.pos };
-        if (t.value === 'null') return { type: 'literal', value: null, pos: t.pos };
-        if (t.value === 'in') throw new ExpressionSyntaxError("Unexpected keyword 'in'", t.pos);
-        if (this.isPunct('(')) return this.parseCall(t);
-        return { type: 'ident', name: t.value, pos: t.pos };
-      }
-      case 'punct': {
-        if (t.value === '(') {
-          this.enter(t.pos);
-          const inner = this.parseTernary();
-          this.leave();
-          this.expectPunct(')');
-          return inner;
-        }
-        if (t.value === '[') {
-          const items: Node[] = [];
-          if (!this.isPunct(']')) {
-            do {
-              if (items.length >= MAX_ARRAY_LITERAL) {
-                throw new ExpressionSyntaxError('Array literal is too large', t.pos);
-              }
-              items.push(this.parseTernary());
-            } while (this.isPunct(',') && this.next());
-          }
-          this.expectPunct(']');
-          return { type: 'array', items, pos: t.pos };
-        }
-        throw new ExpressionSyntaxError(`Unexpected '${t.value}'`, t.pos);
-      }
+      case 'ident':
+        return this.parseIdentifier(t);
+      case 'punct':
+        return this.parsePunctuated(t);
       default:
         throw new ExpressionSyntaxError('Unexpected end of expression', t.pos);
     }
+  }
+  private parseIdentifier(t: Token & { type: 'ident' }): Node {
+    if (t.value === 'true') return { type: 'literal', value: true, pos: t.pos };
+    if (t.value === 'false') return { type: 'literal', value: false, pos: t.pos };
+    if (t.value === 'null') return { type: 'literal', value: null, pos: t.pos };
+    if (t.value === 'in') throw new ExpressionSyntaxError("Unexpected keyword 'in'", t.pos);
+    if (this.isPunct('(')) return this.parseCall(t);
+    return { type: 'ident', name: t.value, pos: t.pos };
+  }
+  /** A parenthesised expression or an array literal. */
+  private parsePunctuated(t: Token & { type: 'punct' }): Node {
+    if (t.value === '(') {
+      this.enter(t.pos);
+      const inner = this.parseTernary();
+      this.leave();
+      this.expectPunct(')');
+      return inner;
+    }
+    if (t.value === '[') {
+      const items: Node[] = [];
+      if (!this.isPunct(']')) {
+        do {
+          if (items.length >= MAX_ARRAY_LITERAL) {
+            throw new ExpressionSyntaxError('Array literal is too large', t.pos);
+          }
+          items.push(this.parseTernary());
+        } while (this.isPunct(',') && this.next());
+      }
+      this.expectPunct(']');
+      return { type: 'array', items, pos: t.pos };
+    }
+    throw new ExpressionSyntaxError(`Unexpected '${t.value}'`, t.pos);
   }
   private parseCall(nameTok: Token & { type: 'ident' }): Node {
     const spec = FUNCTIONS[nameTok.value];

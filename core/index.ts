@@ -1,4 +1,5 @@
 export * from './canonical.ts';
+export * from './compare.ts';
 export * from './errors.ts';
 export * from './expression/index.ts';
 export * from './graph.ts';

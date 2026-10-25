@@ -11,7 +11,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export const WEBHOOK_TOLERANCE_MS = 5 * 60_000;
 
 export function signWebhook(secret: string, timestampSeconds: number, rawBody: string): string {
-  return `v1=${createHmac('sha256', secret).update(`${timestampSeconds}.${rawBody}`).digest('hex')}`;
+  const signed = `${timestampSeconds}.${rawBody}`;
+  return `v1=${createHmac('sha256', secret).update(signed).digest('hex')}`;
 }
 
 export type WebhookVerdict =

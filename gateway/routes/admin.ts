@@ -1,8 +1,8 @@
-import { NotFoundError, ValidationError } from '../../core/index.ts';
+import { NotFoundError } from '../../core/index.ts';
 import { ROLES } from '../../schemas/index.ts';
 import { GLOBAL_TENANT } from '../../state/index.ts';
 import type { RouteDef } from '../http.ts';
-import { id, limitQ, name, obj } from './util.ts';
+import { id, name, obj } from './util.ts';
 
 const roles = { type: 'array', items: { enum: [...ROLES] }, minItems: 1, uniqueItems: true } as const;
 
@@ -370,12 +370,10 @@ export function adminRoutes(): RouteDef[] {
           const batch = app.state.events.list({ tenant: principal.tenant, afterSeq: after, limit: 1000 });
           if (batch.length === 0) break;
           for (const e of batch) reply.raw.write(`${JSON.stringify(e)}\n`);
-          after = batch[batch.length - 1]!.seq;
+          after = batch.at(-1)!.seq;
         }
         reply.raw.end();
       },
     },
   ];
 }
-
-export { limitQ, ValidationError };

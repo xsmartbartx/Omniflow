@@ -17,7 +17,7 @@ export type Node =
   | { type: 'unary'; op: '!' | '-'; arg: Node; pos: number }
   | { type: 'binary'; op: BinaryOp; left: Node; right: Node; pos: number }
   | { type: 'logical'; op: '&&' | '||' | '??'; left: Node; right: Node; pos: number }
-  | { type: 'cond'; test: Node; then: Node; else: Node; pos: number }
+  | { type: 'cond'; test: Node; consequent: Node; alternate: Node; pos: number }
   | { type: 'array'; items: Node[]; pos: number };
 
 export class ExpressionError extends Error {
@@ -62,8 +62,8 @@ export function visit(node: Node, cb: (n: Node) => void): void {
       break;
     case 'cond':
       visit(node.test, cb);
-      visit(node.then, cb);
-      visit(node.else, cb);
+      visit(node.consequent, cb);
+      visit(node.alternate, cb);
       break;
     case 'array':
       for (const i of node.items) visit(i, cb);
@@ -117,17 +117,22 @@ export function collectReferences(node: Node): Reference[] {
     return { root: cur.name, path, dynamic, pos: cur.pos };
   };
 
+  /** A member/index/ident chain: record it, then descend into whatever hangs off it. */
+  const walkChain = (n: Node): void => {
+    const ref = chain(n);
+    if (ref) refs.push(ref);
+    // Still descend into computed indexes, whose expressions may reference other data.
+    let cur: Node = n;
+    while (cur.type === 'member' || cur.type === 'index') {
+      if (cur.type === 'index' && cur.index.type !== 'literal') walk(cur.index);
+      cur = cur.object;
+    }
+    if (cur.type !== 'ident') walk(cur);
+  };
+
   const walk = (n: Node): void => {
     if (n.type === 'member' || n.type === 'index' || n.type === 'ident') {
-      const ref = chain(n);
-      if (ref) refs.push(ref);
-      // Still descend into computed indexes, whose expressions may reference other data.
-      let cur: Node = n;
-      while (cur.type === 'member' || cur.type === 'index') {
-        if (cur.type === 'index' && !(cur.index.type === 'literal')) walk(cur.index);
-        cur = cur.object;
-      }
-      if (cur.type !== 'ident') walk(cur);
+      walkChain(n);
       return;
     }
     switch (n.type) {
@@ -144,8 +149,8 @@ export function collectReferences(node: Node): Reference[] {
         break;
       case 'cond':
         walk(n.test);
-        walk(n.then);
-        walk(n.else);
+        walk(n.consequent);
+        walk(n.alternate);
         break;
       case 'array':
         for (const i of n.items) walk(i);

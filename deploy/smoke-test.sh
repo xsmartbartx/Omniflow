@@ -32,7 +32,7 @@ trap cleanup EXIT
 
 wait_healthy() {
   for _ in $(seq 1 60); do
-    [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q omniflow)" 2>/dev/null)" = healthy ] && return 0
+    [[ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q omniflow)" 2>/dev/null)" == healthy ]] && return 0
     sleep 2
   done
   die "the container did not become healthy"
@@ -52,14 +52,14 @@ curl -fsSI "$base/" | grep -qi "content-security-policy: default-src 'self'" && 
 curl -fsS "$base/v1/info" | grep -q '"environment":"production"' && ok "running in production mode"
 
 step "hardening"
-[ "$(docker compose exec -T omniflow id -u)" = 10001 ] && ok "runs as uid 10001, not root"
+[[ "$(docker compose exec -T omniflow id -u)" == 10001 ]] && ok "runs as uid 10001, not root"
 docker compose exec -T omniflow sh -c 'touch /app/should-fail 2>/dev/null' && die "the root filesystem is writable" || ok "root filesystem is read-only"
 docker compose exec -T omniflow sh -c 'touch /data/ok && rm /data/ok' && ok "the data volume is writable"
 docker inspect -f '{{.HostConfig.CapDrop}}' "$(docker compose ps -q omniflow)" | grep -q ALL && ok "all Linux capabilities dropped"
 
 step "use it"
 KEY="$(omni admin create-api-key --name smoke --role admin --json | sed -n 's/.*"key": *"\([^"]*\)".*/\1/p')"
-[ -n "$KEY" ] || die "could not create an API key"
+[[ -n "$KEY" ]] || die "could not create an API key"
 ok "created an API key from inside the container (no login needed)"
 omni publish /app/workflows | tee "$tmp/publish.txt" >/dev/null
 grep -q "published hello-world@1.0.0" "$tmp/publish.txt" && ok "published the example workflows"

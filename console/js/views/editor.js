@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
-import { ago } from '../format.js';
+import { ago, plural } from '../format.js';
 import { can } from '../session.js';
 import {
   badge,
@@ -41,6 +41,19 @@ steps:
 outputs:
   greeting: "\${{ steps.greet.output.value }}"
 `;
+
+/** The "From" cell of the drafts table. */
+function originCell(d) {
+  if (d.origin === 'agent') return badge('AI', 'accent');
+  return d.origin === 'import' ? badge('import', 'neutral') : 'you';
+}
+
+/** What the policy engine said about publishing this manifest. */
+function policyNotice(policy) {
+  if (policy.effect === 'allow') return notice('good', 'Policy: can be published directly.');
+  if (policy.effect === 'require-approval') return notice('warn', h('strong', {}, 'Needs approval. '), policy.reason);
+  return notice('bad', h('strong', {}, 'Policy would refuse this. '), policy.reason);
+}
 
 export default async function editor(ctx) {
   const status = await api.get('/v1/authoring/status').catch(() => ({ aiEnabled: false }));
@@ -118,7 +131,7 @@ export default async function editor(ctx) {
     }
     if ((ev.metaKey || ev.ctrlKey) && ev.key === 's') {
       ev.preventDefault();
-      saveDraft();
+      void saveDraft();
     }
   });
   ctx.cleanup(() => clearTimeout(timer));
@@ -248,7 +261,7 @@ export default async function editor(ctx) {
               notice(
                 r.plan.ok ? 'good' : 'warn',
                 r.plan.ok
-                  ? `Draft ready after ${r.plan.attempts} attempt${r.plan.attempts === 1 ? '' : 's'}.`
+                  ? `Draft ready after ${r.plan.attempts} ${plural(r.plan.attempts, 'attempt')}.`
                   : 'The draft still has problems the assistant could not fix — see the checks, and edit by hand.',
               ),
               r.plan.rationale ? h('p', {}, r.plan.rationale) : null,
@@ -361,8 +374,7 @@ export default async function editor(ctx) {
         { label: 'Draft', render: (d) => d.workflowName ?? '(unnamed)' },
         {
           label: 'From',
-          render: (d) =>
-            d.origin === 'agent' ? badge('AI', 'accent') : d.origin === 'import' ? badge('import', 'neutral') : 'you',
+          render: originCell,
         },
         { label: 'Status', render: (d) => statusBadge(d.status) },
         { label: 'Valid', render: (d) => (d.validation?.ok ? badge('yes', 'good') : badge('no', 'warn')) },
@@ -402,7 +414,7 @@ export default async function editor(ctx) {
     ctx.query.tab ?? 'checks',
   );
 
-  validate();
+  void validate();
   return h(
     'div',
     {},
@@ -413,9 +425,14 @@ export default async function editor(ctx) {
 }
 
 /** Bump the patch version so a copy of a published manifest can be published. */
+function blockedMessage(r) {
+  if (!r.errors.length) return 'Blocked by the risk review';
+  return `${r.errors.length} ${plural(r.errors.length, 'problem')} to fix`;
+}
+
 export function bump(text) {
   return text.replace(
-    /^(\s*version:\s*)["']?(\d+)\.(\d+)\.(\d+)["']?/m,
+    /^([ \t]*version:[ \t]*)["']?(\d+)\.(\d+)\.(\d+)["']?/m,
     (_m, pre, a, b, c) => `${pre}${a}.${b}.${Number(c) + 1}`,
   );
 }
@@ -436,47 +453,29 @@ function agentNote(d) {
 }
 
 function renderValidation(r, goto) {
-  const issue = (i, kind) =>
-    h(
+  const issue = (i, kind) => {
+    const inPath = i.path ? ` · ${i.path}` : '';
+    const atLine = i.line ? ` · line ${i.line}` : '';
+    return h(
       'div',
       { class: ['issue', i.line ? 'clickable' : ''], onClick: i.line ? () => goto(i.line, i.column) : undefined },
       badge(kind, kind === 'error' ? 'bad' : 'warn'),
-      h(
-        'div',
-        {},
-        h('div', {}, i.message),
-        h('div', { class: 'where' }, `${i.code}${i.path ? ` · ${i.path}` : ''}${i.line ? ` · line ${i.line}` : ''}`),
-      ),
+      h('div', {}, h('div', {}, i.message), h('div', { class: 'where' }, `${i.code}${inPath}${atLine}`)),
     );
+  };
   const parts = [];
   parts.push(
     r.ok
       ? notice(
           'good',
           h('strong', {}, `${r.workflow.name} ${r.workflow.version} is valid. `),
-          `${r.steps} step${r.steps === 1 ? '' : 's'}.`,
+          `${r.steps} ${plural(r.steps, 'step')}.`,
         )
-      : notice(
-          'bad',
-          h(
-            'strong',
-            {},
-            r.errors.length
-              ? `${r.errors.length} problem${r.errors.length === 1 ? '' : 's'} to fix`
-              : 'Blocked by the risk review',
-          ),
-        ),
+      : notice('bad', h('strong', {}, blockedMessage(r))),
   );
   for (const e of r.errors) parts.push(issue(e, 'error'));
   for (const w of r.warnings) parts.push(issue(w, 'warning'));
-  if (r.policy)
-    parts.push(
-      r.policy.effect === 'allow'
-        ? notice('good', 'Policy: can be published directly.')
-        : r.policy.effect === 'require-approval'
-          ? notice('warn', h('strong', {}, 'Needs approval. '), r.policy.reason)
-          : notice('bad', h('strong', {}, 'Policy would refuse this. '), r.policy.reason),
-    );
+  if (r.policy) parts.push(policyNotice(r.policy));
   if (r.risk) {
     parts.push(
       h(
@@ -487,7 +486,8 @@ function renderValidation(r, goto) {
         h('span', { class: 'muted' }, ` score ${r.risk.score}/100`),
       ),
     );
-    for (const f of r.risk.findings)
+    for (const f of r.risk.findings) {
+      const inStep = f.stepId ? ` · step ${f.stepId}` : '';
       parts.push(
         h(
           'div',
@@ -497,10 +497,11 @@ function renderValidation(r, goto) {
             'div',
             {},
             h('div', {}, f.message, f.blocking ? badge('blocking', 'bad') : null),
-            h('div', { class: 'where' }, `${f.ruleId}${f.stepId ? ` · step ${f.stepId}` : ''}`),
+            h('div', { class: 'where' }, `${f.ruleId}${inStep}`),
           ),
         ),
       );
+    }
   }
   return h('div', { class: 'stack' }, parts);
 }

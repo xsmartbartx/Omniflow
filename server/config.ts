@@ -6,6 +6,7 @@ import { type LogLevel, OmniflowError } from '../core/index.ts';
 import type { Config } from '../gateway/context.ts';
 import type { EnvironmentName } from '../schemas/index.ts';
 import { generateMasterKey } from '../security/secret-broker/index.ts';
+import { parseRunWebhooks, type RunWebhook } from './webhooks.ts';
 
 export type { Config };
 
@@ -45,48 +46,22 @@ function json<T>(env: Env, name: string, dflt: T): T {
   }
 }
 
-/**
- * Load configuration from the environment and fail fast on anything malformed. The master key is
- * taken from `OMNIFLOW_MASTER_KEY`; if it is not set, one is generated once and stored (mode 0600)
- * in the data directory so secrets survive restarts. Production deployments should supply the key
- * from a secret manager instead.
- */
-export function loadConfig(
-  rawEnv: Env = process.env,
-  opts: {
-    version?: string;
-    cwd?: string;
-    /** Tooling that only reads must not invent and store a key. */
-    persistMasterKey?: boolean;
-  } = {},
-): Config {
-  // A blank value (`OMNIFLOW_ADMIN_PASSWORD=` in an env file) means "not set", never "set to nothing".
-  const env: Env = Object.fromEntries(Object.entries(rawEnv).filter(([, v]) => v !== undefined && v.trim() !== ''));
-  const cwd = opts.cwd ?? process.cwd();
-  const environment = (env.OMNIFLOW_ENV ?? 'production') as EnvironmentName;
-  if (!['development', 'staging', 'production'].includes(environment))
-    fail('OMNIFLOW_ENV', 'must be development, staging or production');
+function resolveMasterKey(
+  env: Env,
+  dataDir: string,
+  persist: boolean | undefined,
+): { masterKey: string; masterKeySource: Config['masterKeySource'] } {
+  const fromEnv = env.OMNIFLOW_MASTER_KEY?.trim();
+  if (fromEnv) return { masterKey: fromEnv, masterKeySource: 'env' };
+  const keyFile = join(dataDir, 'master.key');
+  if (existsSync(keyFile)) return { masterKey: readFileSync(keyFile, 'utf8').trim(), masterKeySource: 'file' };
+  const masterKey = generateMasterKey();
+  if (persist === false) return { masterKey, masterKeySource: 'ephemeral' };
+  writeFileSync(keyFile, `${masterKey}\n`, { mode: 0o600 });
+  return { masterKey, masterKeySource: 'generated' };
+}
 
-  const dataDir = resolve(cwd, env.OMNIFLOW_DATA_DIR ?? './data');
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-
-  let masterKey = env.OMNIFLOW_MASTER_KEY?.trim();
-  let masterKeySource: Config['masterKeySource'] = 'env';
-  if (!masterKey) {
-    const keyFile = join(dataDir, 'master.key');
-    if (existsSync(keyFile)) {
-      masterKey = readFileSync(keyFile, 'utf8').trim();
-      masterKeySource = 'file';
-    } else {
-      masterKey = generateMasterKey();
-      if (opts.persistMasterKey === false) masterKeySource = 'ephemeral';
-      else {
-        writeFileSync(keyFile, `${masterKey}\n`, { mode: 0o600 });
-        masterKeySource = 'generated';
-      }
-    }
-  }
-
+function buildAdapters(env: Env, cwd: string, dataDir: string): AdapterConfig {
   const defaults = defaultAdapterConfig();
   const allowedCommands = (env.OMNIFLOW_SHELL_ALLOWED_COMMANDS ?? '')
     .split(',')
@@ -115,6 +90,50 @@ export function loadConfig(
   for (const [name, cmd] of Object.entries(allowedCommands))
     if (!cmd.startsWith('/'))
       fail('OMNIFLOW_SHELL_ALLOWED_COMMANDS', `entry ${name} ('${cmd}') must be an absolute path`);
+  return adapters;
+}
+
+function resolveMode(env: Env, environment: EnvironmentName): 'standalone' | 'nexora' {
+  const mode = (env.OMNIFLOW_MODE ?? 'standalone') as 'standalone' | 'nexora';
+  if (mode !== 'standalone' && mode !== 'nexora') fail('OMNIFLOW_MODE', 'must be standalone or nexora');
+  const nexoraCore = (env.OMNIFLOW_NEXORA_CORE ?? '') as string;
+  if (mode === 'nexora') {
+    if (nexoraCore !== 'fake')
+      fail('OMNIFLOW_NEXORA_CORE', 'must be fake (the only Core implementation until NEXORA publishes its contracts)');
+    if (environment === 'production')
+      fail('OMNIFLOW_NEXORA_CORE', 'fake is unsigned and cannot be used when OMNIFLOW_ENV=production');
+  }
+  return mode;
+}
+
+/**
+ * Load configuration from the environment and fail fast on anything malformed. The master key is
+ * taken from `OMNIFLOW_MASTER_KEY`; if it is not set, one is generated once and stored (mode 0600)
+ * in the data directory so secrets survive restarts. Production deployments should supply the key
+ * from a secret manager instead.
+ */
+export function loadConfig(
+  rawEnv: Env = process.env,
+  opts: {
+    version?: string;
+    cwd?: string;
+    /** Tooling that only reads must not invent and store a key. */
+    persistMasterKey?: boolean;
+  } = {},
+): Config {
+  // A blank value (`OMNIFLOW_ADMIN_PASSWORD=` in an env file) means "not set", never "set to nothing".
+  const env: Env = Object.fromEntries(Object.entries(rawEnv).filter(([, v]) => v !== undefined && v.trim() !== ''));
+  const cwd = opts.cwd ?? process.cwd();
+  const environment = (env.OMNIFLOW_ENV ?? 'production') as EnvironmentName;
+  if (!['development', 'staging', 'production'].includes(environment))
+    fail('OMNIFLOW_ENV', 'must be development, staging or production');
+
+  const dataDir = resolve(cwd, env.OMNIFLOW_DATA_DIR ?? './data');
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+
+  const { masterKey, masterKeySource } = resolveMasterKey(env, dataDir, opts.persistMasterKey);
+
+  const adapters = buildAdapters(env, cwd, dataDir);
 
   const alertChannels = (env.OMNIFLOW_ALERT_CHANNELS ?? '')
     .split(',')
@@ -129,15 +148,14 @@ export function loadConfig(
   if (!['debug', 'info', 'warn', 'error', 'silent'].includes(logLevel))
     fail('OMNIFLOW_LOG_LEVEL', 'must be debug, info, warn, error or silent');
 
-  const mode = (env.OMNIFLOW_MODE ?? 'standalone') as 'standalone' | 'nexora';
-  if (mode !== 'standalone' && mode !== 'nexora') fail('OMNIFLOW_MODE', 'must be standalone or nexora');
-  const nexoraCore = (env.OMNIFLOW_NEXORA_CORE ?? '') as string;
-  if (mode === 'nexora') {
-    if (nexoraCore !== 'fake')
-      fail('OMNIFLOW_NEXORA_CORE', 'must be fake (the only Core implementation until NEXORA publishes its contracts)');
-    if (environment === 'production')
-      fail('OMNIFLOW_NEXORA_CORE', 'fake is unsigned and cannot be used when OMNIFLOW_ENV=production');
+  let runWebhooks: RunWebhook[] = [];
+  try {
+    runWebhooks = parseRunWebhooks(env.OMNIFLOW_RUN_WEBHOOKS, { production: environment === 'production' });
+  } catch (e) {
+    fail('OMNIFLOW_RUN_WEBHOOKS', (e as Error).message);
   }
+
+  const mode = resolveMode(env, environment);
 
   return {
     environment,
@@ -169,6 +187,7 @@ export function loadConfig(
     alertIntervalSeconds: int(env, 'OMNIFLOW_ALERT_INTERVAL_SECONDS', 60, 5, 3600),
     version: opts.version ?? '1.0.0',
     mode,
+    runWebhooks,
     nexora: {
       core: 'fake',
       sessionTtlMinutes: int(env, 'OMNIFLOW_NEXORA_SESSION_TTL_MINUTES', 5, 1, 60),

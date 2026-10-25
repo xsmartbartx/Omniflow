@@ -45,21 +45,8 @@ export function createStorageCapabilities(config: AdapterConfig): CapabilityAdap
     await mkdir(root, { recursive: true });
     const realRoot = await realpath(root);
     const target = resolve(realRoot, path.replace(/^\/+/, ''));
-    if (target !== realRoot && !target.startsWith(realRoot + sep)) throw denied(path);
-    // Resolve the deepest existing ancestor so a symlink anywhere on the path cannot escape.
-    let probe = target;
-    for (;;) {
-      try {
-        const real = await realpath(probe);
-        if (real !== realRoot && !real.startsWith(realRoot + sep)) throw denied(path);
-        break;
-      } catch (e) {
-        if (e instanceof CapabilityError) throw e;
-        const parent = dirname(probe);
-        if (parent === probe) break;
-        probe = parent;
-      }
-    }
+    if (!isInside(target, realRoot)) throw denied(path);
+    await assertNoSymlinkEscape(target, realRoot, path);
     if (opts.mustExist) {
       try {
         await stat(target);
@@ -71,6 +58,24 @@ export function createStorageCapabilities(config: AdapterConfig): CapabilityAdap
       }
     }
     return target;
+  }
+
+  const isInside = (p: string, realRoot: string) => p === realRoot || p.startsWith(realRoot + sep);
+
+  /** Resolve the deepest existing ancestor so a symlink anywhere on the path cannot escape the root. */
+  async function assertNoSymlinkEscape(target: string, realRoot: string, path: string): Promise<void> {
+    let probe = target;
+    for (;;) {
+      try {
+        if (!isInside(await realpath(probe), realRoot)) throw denied(path);
+        return;
+      } catch (e) {
+        if (e instanceof CapabilityError) throw e;
+        const parent = dirname(probe);
+        if (parent === probe) return;
+        probe = parent;
+      }
+    }
   }
 
   const decode = (content: string, encoding: string) => Buffer.from(content, encoding === 'base64' ? 'base64' : 'utf8');

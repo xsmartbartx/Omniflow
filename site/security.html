@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Security — OmniFlow</title><meta name="description" content="How OmniFlow limits what workflows can do: default-deny network, leased secrets, four-eyes approval, tenant isolation and a tamper-evident audit log."><meta name="color-scheme" content="dark light"><meta name="theme-color" content="#070a13"><meta property="og:type" content="website"><meta property="og:title" content="Security — OmniFlow"><meta property="og:description" content="How OmniFlow limits what workflows can do: default-deny network, leased secrets, four-eyes approval, tenant isolation and a tamper-evident audit log."><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><script src="/site.js"></script></head><body><a class="skip" href="#main">Skip to content</a><div class="family"><div class="wrap"><a href="https://onenexora.com" rel="noopener">NEXORA</a><nav class="products" aria-label="NEXORA products"><a href="https://onenexora.com/products" rel="noopener">All products</a><a class="here" href="/" aria-current="true">OmniFlow</a></nav></div></div><header class="site-header"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><nav class="nav" aria-label="Main"><a href="/platform.html">Platform</a><a href="/security.html" aria-current="page">Security</a><a href="/pricing.html">Pricing</a></nav><div class="tools"><button class="icon-btn" id="theme" type="button" aria-label="Light theme" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button><a class="btn btn-primary btn-sm" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a></div></div></header><main id="main">
+
+<section class="page-hero">
+  <div class="wrap">
+    <span class="kicker">Security &amp; governance</span>
+    <h1>Authority is earned, not assumed.</h1>
+    <p>Workflows touch money, data and production. OmniFlow limits what they can do by default, and records what they did.</p>
+  </div>
+</section>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="grid three">
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div><h3>Default-deny network</h3><p>Steps reach only the hosts they declare. Private and metadata addresses are blocked unless you turn that on, and redirects are re-checked at every hop.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></svg></div><h3>Secrets stay secret</h3><p>Secrets are encrypted at rest, leased to one step at a time, scrubbed from logs and outputs, and never written into plans.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg></div><h3>Four-eyes by default</h3><p>Whoever requests a change cannot approve it. Approval rules can depend on risk, environment and criticality.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.2 8 8 9 4.8-1 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Roles and policy</h3><p>Admin, author, operator, approver and viewer roles, plus policy documents you control. Agents may propose, never execute.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></div><h3>Tenant isolation</h3><p>Every row carries its tenant and is filtered in the data layer. Isolation is covered by tests, not by convention.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>Tamper-evident history</h3><p>Audit events are hash-chained. A broken chain is detected, reported, and raised as an alert.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="two">
+      <div>
+        <span class="kicker">Review before it runs</span>
+        <h2>Risk is assessed at publish time.</h2>
+        <p class="sub-copy">Each workflow is reviewed against a set of rules before it can be published: shell use, wildcard or raw-IP egress, effectful steps with no rollback, secret-shaped values, and text that looks like instructions to an AI.</p>
+        <ul class="list">
+          <li><span><b>Blocking findings</b> stop publication until resolved.</span></li>
+          <li><span><b>Production effects</b> need a second reviewer.</span></li>
+          <li><span><b>Everything is recorded</b> with who decided and why.</span></li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 420 250" role="img" aria-label="A workflow is reviewed, scored, and either blocked, sent for approval, or published.">
+          <rect class="box" x="20" y="20" width="380" height="44" rx="12"/><text x="40" y="48">Workflow submitted</text>
+          <rect class="box" x="20" y="84" width="380" height="44" rx="12"/><text x="40" y="112">Risk review and policy check</text>
+          <rect class="box" x="20" y="148" width="180" height="44" rx="12"/><text x="36" y="176">Blocked</text>
+          <rect class="hot" x="220" y="148" width="180" height="44" rx="12"/><text x="236" y="176">Needs approval</text>
+          <rect class="box" x="20" y="204" width="380" height="36" rx="12"/><text x="40" y="228">Published · recorded in the audit log</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head"><span class="kicker">Reporting</span><h2>Found a problem?</h2><p>Report vulnerabilities through NEXORA's security contact. We acknowledge reports and keep you informed. This page describes the product's design; it is not a certification claim.</p></div>
+    <p><a class="btn btn-quiet" href="https://onenexora.com/company#contact" rel="noopener">Contact NEXORA</a></p>
+  </div>
+</section>
+</main><footer class="site-footer"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><p class="foot-blurb">Durable workflows without the cluster. A NEXORA product.</p></div><div><h2>Product</h2><ul><li><a href="/platform.html">Platform</a></li><li><a href="/security.html">Security</a></li><li><a href="/pricing.html">Pricing</a></li></ul></div><div><h2>NEXORA</h2><ul><li><a href="https://onenexora.com" rel="noopener">onenexora.com</a></li><li><a href="https://onenexora.com/products" rel="noopener">All products</a></li><li><a href="https://onenexora.com/pricing" rel="noopener">Platform pricing</a></li></ul></div><div><h2>Status</h2><ul><li>In development</li><li>Single-node by design</li><li>Proprietary software</li></ul></div></div><div class="legal"><span>© 2026 OmniFlow. A NEXORA product. <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></span><span>Illustrations show the product's own output; no customer data or testimonials appear on this site.</span></div></div></footer></body></html>

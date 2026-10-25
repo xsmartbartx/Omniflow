@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compareStrings } from './compare.ts';
 
 /**
  * Canonical JSON: object keys sorted lexicographically, no insignificant whitespace, `undefined`
@@ -33,8 +34,9 @@ function serialize(value: unknown, stack: Set<object>): string {
         const record = obj as Record<string, unknown>;
         const keys = Object.keys(record)
           .filter((k) => record[k] !== undefined && typeof record[k] !== 'function')
-          .sort();
-        return `{${keys.map((k) => `${JSON.stringify(k)}:${serialize(record[k], stack)}`).join(',')}}`;
+          .sort(compareStrings);
+        const members = keys.map((k) => JSON.stringify(k) + ':' + serialize(record[k], stack));
+        return `{${members.join(',')}}`;
       } finally {
         stack.delete(obj);
       }

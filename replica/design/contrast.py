@@ -53,18 +53,23 @@ def ratio(fg, bg):
     return (hi + 0.05) / (lo + 0.05)
 
 
+def token_value(obj):
+    """The string under "value" or "$value", if the dict is a token leaf."""
+    for value_key in ("value", "$value"):
+        if isinstance(obj.get(value_key), str):
+            return obj[value_key]
+    return None
+
+
 def flatten(obj, prefix=""):
     """{"color": {"text": {"muted": "#..."}}} -> {"text-muted": "#..."}."""
     out = {}
     if isinstance(obj, dict):
-        if "value" in obj and isinstance(obj["value"], str):
-            out[prefix] = obj["value"]
-            return out
-        if "$value" in obj and isinstance(obj["$value"], str):
-            out[prefix] = obj["$value"]
-            return out
+        value = token_value(obj)
+        if value is not None:
+            return {prefix: value}
         for k, v in obj.items():
-            if k.startswith("$") or k.startswith("_"):
+            if k.startswith(("$", "_")):
                 continue
             key = "%s-%s" % (prefix, k) if prefix else k
             out.update(flatten(v, key))
@@ -84,38 +89,42 @@ def default_pairs(cols):
     return [[f, b] for f in fg for b in bg]
 
 
+def check_pair(cols, p):
+    """One result row for a [fg, bg, size?] pair."""
+    fg, bg = p[0], p[1]
+    size = p[2] if len(p) > 2 else "normal"
+    if size not in NEEDS:
+        size = "normal"
+    if fg not in cols or bg not in cols:
+        return {"fg": fg, "bg": bg, "size": size, "error": "unknown token"}
+    r = ratio(cols[fg], cols[bg])
+    aa, aaa = NEEDS[size]
+    return {"fg": fg, "bg": bg, "size": size, "ratio": round(r, 2),
+            "aa": r >= aa, "aaa": r >= aaa,
+            "fg_hex": cols[fg], "bg_hex": cols[bg]}
+
+
 def check(cols, pairs):
-    rows = []
-    for p in pairs:
-        if len(p) < 2:
-            continue
-        fg, bg = p[0], p[1]
-        size = p[2] if len(p) > 2 else "normal"
-        if size not in NEEDS:
-            size = "normal"
-        if fg not in cols or bg not in cols:
-            rows.append({"fg": fg, "bg": bg, "size": size, "error": "unknown token"})
-            continue
-        r = ratio(cols[fg], cols[bg])
-        aa, aaa = NEEDS[size]
-        rows.append({"fg": fg, "bg": bg, "size": size, "ratio": round(r, 2),
-                     "aa": r >= aa, "aaa": r >= aaa,
-                     "fg_hex": cols[fg], "bg_hex": cols[bg]})
-    return rows
+    return [check_pair(cols, p) for p in pairs if len(p) >= 2]
+
+
+def grade_of(r):
+    if r["size"] == "ui":
+        return "PASS" if r["aa"] else "FAIL"
+    if r["aaa"]:
+        return "AAA"
+    return "AA" if r["aa"] else "FAIL"
+
+
+def render_row(r):
+    if "error" in r:
+        return "  ??    %-24s on %-20s %s" % (r["fg"], r["bg"], r["error"])
+    size = "" if r["size"] == "normal" else r["size"]
+    return "  %-5s %5.2f:1  %-24s on %-20s %s" % (grade_of(r), r["ratio"], r["fg"], r["bg"], size)
 
 
 def render(rows):
-    out = []
-    for r in rows:
-        if "error" in r:
-            out.append("  ??    %-24s on %-20s %s" % (r["fg"], r["bg"], r["error"]))
-            continue
-        if r["size"] == "ui":
-            grade = "PASS" if r["aa"] else "FAIL"
-        else:
-            grade = "AAA" if r["aaa"] else ("AA" if r["aa"] else "FAIL")
-        out.append("  %-5s %5.2f:1  %-24s on %-20s %s" % (
-            grade, r["ratio"], r["fg"], r["bg"], "" if r["size"] == "normal" else r["size"]))
+    out = [render_row(r) for r in rows]
     fails = sum(1 for r in rows if "error" in r or not r["aa"])
     out.append("")
     out.append("  %d pairs, %d failing AA" % (len(rows), fails))

@@ -239,3 +239,57 @@ describe('backup and restore', () => {
     expect((await cli(['admin', 'restore'], { OMNIFLOW_DATA_DIR: target })).code).toBe(2);
   });
 });
+
+describe('admin prune', () => {
+  const OLD = '2026-01-01T00:00:00.000Z';
+  function seed(dir: string) {
+    const st = openState(stateOptionsFor(dir));
+    const raw = new DatabaseSync(join(dir, 'omniflow.db'));
+    const run = (id: string, status: string, finished: string | null) =>
+      raw
+        .prepare(
+          `INSERT INTO runs (id, tenant_id, workflow_name, workflow_version, plan_hash, status, environment, trigger_type,
+             inputs, seed, context_now, requested_by, created_at, finished_at)
+           VALUES (?, 'default', 'w', '1', 'h', ?, 'dev', 'manual', '{}', 's', ?, 'u', ?, ?)`,
+        )
+        .run(id, status, OLD, OLD, finished);
+    run('run_old', 'succeeded', OLD);
+    run('run_active', 'running', null);
+    const oldA = st.artifacts.put('default', 'old output', { runId: 'run_old' });
+    const liveA = st.artifacts.put('default', 'still running', { runId: 'run_active' });
+    st.close();
+    raw.close();
+    return { oldA, liveA };
+  }
+
+  it('erases old artifacts only, supports a dry run, and leaves the audit chain intact', async () => {
+    const dir = await provision();
+    const { oldA, liveA } = seed(dir);
+    const env = { OMNIFLOW_DATA_DIR: dir };
+
+    const dry = JSON.parse((await cli(['admin', 'prune', '--older-than-days', '30', '--dry-run', '--json'], env)).out);
+    expect(dry).toMatchObject({ dryRun: true, artifacts: 1 });
+    let st = openState(stateOptionsFor(dir));
+    expect(st.artifacts.meta('default', oldA.ref)?.tombstonedAt).toBeUndefined();
+    st.close();
+
+    const real = JSON.parse((await cli(['admin', 'prune', '--older-than-days', '30', '--json'], env)).out);
+    expect(real).toMatchObject({ dryRun: false, artifacts: 1 });
+    st = openState(stateOptionsFor(dir));
+    expect(st.artifacts.meta('default', oldA.ref)?.tombstonedAt).toBeDefined();
+    expect(st.artifacts.meta('default', liveA.ref)?.tombstonedAt).toBeUndefined();
+    st.close();
+
+    expect((await cli(['admin', 'verify-audit'], env)).code).toBe(0);
+    const again = JSON.parse((await cli(['admin', 'prune', '--older-than-days', '30', '--json'], env)).out);
+    expect(again.artifacts).toBe(0);
+  });
+
+  it('requires a sensible age', async () => {
+    const dir = await provision();
+    for (const bad of [[], ['--older-than-days', '0'], ['--older-than-days', 'soon']]) {
+      const r = await cli(['admin', 'prune', ...bad], { OMNIFLOW_DATA_DIR: dir });
+      expect(r.code).not.toBe(0);
+    }
+  });
+});

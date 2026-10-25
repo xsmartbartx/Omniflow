@@ -1,18 +1,27 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
-import { number } from '../format.js';
+import { matcher, number } from '../format.js';
 import { can } from '../session.js';
 import { badge, button, card, dataTable, icon, input, pageHeader, select, statusBadge } from '../ui.js';
 import { triggerChips, wfLink, when } from './common.js';
 
-const stateOf = (w) => (w.killed ? 'killed' : w.enabled ? 'enabled' : 'disabled');
+const stateOf = (w) => {
+  if (w.killed) return 'killed';
+  return w.enabled ? 'enabled' : 'disabled';
+};
+
+const recentCell = (w) => {
+  if (!w.recent.total) return '—';
+  const failed = w.recent.failed ? badge(`${w.recent.failed} failed`, 'bad') : null;
+  return h('span', {}, `${w.recent.succeeded}/${w.recent.total}`, failed);
+};
 
 export default async function workflows(ctx) {
   const { items } = await api.get('/v1/workflows');
   const list = h('div');
   const q = input({
     type: 'search',
-    placeholder: 'Filter workflows…',
+    placeholder: 'Filter workflows… (* matches anything)',
     'aria-label': 'Filter workflows',
     value: ctx.query.q ?? '',
   });
@@ -21,13 +30,18 @@ export default async function workflows(ctx) {
     'aria-label': 'Criticality',
   });
 
+  const lastRun = select([['', 'Any last run'], 'succeeded', 'failed', 'running', 'waiting'], '', {
+    'aria-label': 'Last run',
+  });
+
   const draw = () => {
-    const term = q.value.trim().toLowerCase();
+    const matches = matcher(q.value);
     const rows = items.filter(
       (w) =>
-        (!term || `${w.name} ${w.description ?? ''} ${w.owner ?? ''}`.toLowerCase().includes(term)) &&
+        matches(`${w.name} ${w.description ?? ''} ${w.owner ?? ''}`.toLowerCase()) &&
         (!state.value || stateOf(w) === state.value) &&
-        (!crit.value || w.criticality === crit.value),
+        (!crit.value || w.criticality === crit.value) &&
+        (!lastRun.value || w.lastRun?.status === lastRun.value),
     );
     clear(list).append(
       dataTable({
@@ -60,15 +74,7 @@ export default async function workflows(ctx) {
           {
             label: 'Recent',
             class: 'num nowrap',
-            render: (w) =>
-              w.recent.total
-                ? h(
-                    'span',
-                    {},
-                    `${w.recent.succeeded}/${w.recent.total}`,
-                    w.recent.failed ? badge(`${w.recent.failed} failed`, 'bad') : null,
-                  )
-                : '—',
+            render: recentCell,
           },
           {
             label: 'Last run',
@@ -80,7 +86,7 @@ export default async function workflows(ctx) {
       }),
     );
   };
-  for (const c of [q, state, crit]) c.addEventListener('input', draw);
+  for (const c of [q, state, crit, lastRun]) c.addEventListener('input', draw);
   draw();
 
   return h(
@@ -93,7 +99,14 @@ export default async function workflows(ctx) {
         ? [button('New workflow', { kind: 'primary', icon: 'plus', onClick: () => (location.hash = '#/editor') })]
         : null,
     ),
-    h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search', { size: 15 }), q), state, crit),
+    h(
+      'div',
+      { class: 'toolbar' },
+      h('div', { class: 'search' }, icon('search', { size: 15 }), q),
+      state,
+      crit,
+      lastRun,
+    ),
     card(null, list, { flush: true }),
   );
 }

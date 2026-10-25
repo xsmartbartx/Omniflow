@@ -43,7 +43,7 @@ export function defaultAdapterConfig(overrides: Partial<AdapterConfig> = {}): Ad
       maxResponseBytes: 5 * 1024 * 1024,
       maxRedirects: 3,
       defaultTimeoutMs: 30_000,
-      userAgent: 'OmniFlow/1.0 (+https://omniflow.dev)',
+      userAgent: 'OmniFlow/1.0 (+https://onenexora.com)',
     },
     shell: {
       allowedCommands: [],

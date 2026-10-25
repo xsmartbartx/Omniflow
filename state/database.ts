@@ -128,7 +128,7 @@ export class Db {
   /** Consistent online backup of the whole database into `destination` (must not exist). */
   backupTo(destination: string): void {
     mkdirSync(dirname(destination), { recursive: true });
-    this.raw.exec(`VACUUM INTO '${destination.replace(/'/g, "''")}'`);
+    this.raw.exec(`VACUUM INTO '${destination.replaceAll("'", "''")}'`);
   }
 
   checkpoint(): void {
@@ -140,6 +140,9 @@ export class Db {
     this.raw.close();
   }
 }
+
+/** A nullable boolean as a SQLite 0/1 (null when unknown), for columns patched only when supplied. */
+export const toBit = (b: boolean | undefined): number | null => (b === undefined ? null : Number(b));
 
 export const toJson = (v: unknown): string | null => (v === undefined || v === null ? null : JSON.stringify(v));
 export function fromJson<T>(s: unknown): T | undefined {

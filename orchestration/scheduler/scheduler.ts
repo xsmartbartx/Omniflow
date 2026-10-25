@@ -88,6 +88,18 @@ export class Scheduler {
     }
   }
 
+  /** A queued run whose workflow was killed or disabled meanwhile must not start: cancel it. Returns true if it did. */
+  private cancelIfPulled(run: { id: string; tenant: string; workflowName: string }): boolean {
+    const settings = this.st.registry.getSettings(run.tenant, run.workflowName);
+    if (!settings || (!settings.killed && settings.enabled !== false)) return false;
+    this.orch.cancelRun(
+      run.id,
+      { id: 'system:scheduler', name: 'Scheduler' },
+      settings.killed ? 'workflow killed while queued' : 'workflow disabled while queued',
+    );
+    return true;
+  }
+
   /** Admit as many queued runs as capacity, per-workflow limits and fairness allow. Returns how many started. */
   pump(): number {
     if (this.pumping) return 0;
@@ -103,16 +115,7 @@ export class Scheduler {
 
       for (const run of queued) {
         if (active >= this.cfg.maxConcurrentRuns) break;
-        const settings = this.st.registry.getSettings(run.tenant, run.workflowName);
-        if (settings?.killed || settings?.enabled === false) {
-          // Queued behind a limit while an operator pulled the plug: do not start it.
-          this.orch.cancelRun(
-            run.id,
-            { id: 'system:scheduler', name: 'Scheduler' },
-            settings.killed ? 'workflow killed while queued' : 'workflow disabled while queued',
-          );
-          continue;
-        }
+        if (this.cancelIfPulled(run)) continue;
         const tenantActive = perTenant.get(run.tenant) ?? this.st.runs.activeCount(run.tenant);
         if (tenantActive >= this.cfg.maxConcurrentRunsPerTenant) continue;
 

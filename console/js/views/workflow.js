@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { h } from '../dom.js';
-import { ago, number, shortHash, timestamp } from '../format.js';
+import { ago, number, plural, shortHash, timestamp } from '../format.js';
 import { renderGraph } from '../graph.js';
 import { renderMarkdown } from '../markdown.js';
 import { can, isAdmin } from '../session.js';
@@ -25,6 +25,24 @@ import {
 } from '../ui.js';
 import { runsTable } from './common.js';
 
+const isRunnable = (s) => !s.killed && s.enabled;
+
+function killedNotice(s) {
+  return s.killed
+    ? notice('bad', h('strong', {}, 'Killed. '), s.killReason ?? 'This workflow refuses new runs.')
+    : null;
+}
+
+function pendingNotice(count) {
+  return count
+    ? notice(
+        'warn',
+        h('strong', {}, `${count} change ${plural(count, 'request')} waiting. `),
+        h('a', { href: '#/changes' }, 'Review'),
+      )
+    : null;
+}
+
 export default async function workflow(ctx) {
   const name = ctx.params.name;
   const base = `/v1/workflows/${api.enc(name)}`;
@@ -44,45 +62,34 @@ export default async function workflow(ctx) {
         reload();
       },
     });
-  const stateBadge = s.killed ? statusBadge('killed') : s.enabled ? statusBadge('enabled') : statusBadge('disabled');
+  const killWorkflow = async () => {
+    const v = await formDialog({
+      title: `Kill ${name}?`,
+      intro: 'New runs are refused and queued runs are cancelled until you lift the switch.',
+      fields: [
+        { name: 'reason', label: 'Reason', required: true, placeholder: 'e.g. duplicate charges — investigating' },
+      ],
+      submitLabel: 'Kill',
+      danger: true,
+    });
+    if (!v) return;
+    await api.post(`${base}/kill`, { reason: v.reason });
+    toast('Workflow killed', 'good');
+    reload();
+  };
+  const stateBadge = statusBadge(stateName(s));
+  const toggle = s.enabled ? 'disable' : 'enable';
+  const toggleLabel = s.enabled ? 'Disable' : 'Enable';
 
   const actions = [
-    can('workflow.run') && stable && !s.killed && s.enabled
+    can('workflow.run') && stable && isRunnable(s)
       ? button('Run', { kind: 'primary', icon: 'play', onClick: () => runDialog(name, detail) })
       : null,
     can('workflow.draft')
       ? button('New version', { icon: 'edit', onClick: () => (location.hash = `#/editor?from=${api.enc(name)}`) })
       : null,
-    manage && !s.killed
-      ? control(s.enabled ? 'Disable' : 'Enable', {}, () => api.post(`${base}/${s.enabled ? 'disable' : 'enable'}`))
-      : null,
-    manage && !s.killed
-      ? button('Kill switch', {
-          kind: 'danger',
-          small: true,
-          onClick: async () => {
-            const v = await formDialog({
-              title: `Kill ${name}?`,
-              intro: 'New runs are refused and queued runs are cancelled until you lift the switch.',
-              fields: [
-                {
-                  name: 'reason',
-                  label: 'Reason',
-                  required: true,
-                  placeholder: 'e.g. duplicate charges — investigating',
-                },
-              ],
-              submitLabel: 'Kill',
-              danger: true,
-            });
-            if (v) {
-              await api.post(`${base}/kill`, { reason: v.reason });
-              toast('Workflow killed', 'good');
-              reload();
-            }
-          },
-        })
-      : null,
+    manage && !s.killed ? control(toggleLabel, {}, () => api.post(`${base}/${toggle}`)) : null,
+    manage && !s.killed ? button('Kill switch', { kind: 'danger', small: true, onClick: killWorkflow }) : null,
     manage && s.killed ? control('Lift kill switch', { kind: 'primary' }, () => api.post(`${base}/revive`)) : null,
   ];
 
@@ -91,20 +98,8 @@ export default async function workflow(ctx) {
     detail.plan?.workflow.description ?? 'No description',
     actions,
   );
-  const killed = s.killed
-    ? notice('bad', h('strong', {}, 'Killed. '), s.killReason ?? 'This workflow refuses new runs.')
-    : null;
-  const pending = detail.pendingChanges.length
-    ? notice(
-        'warn',
-        h(
-          'strong',
-          {},
-          `${detail.pendingChanges.length} change request${detail.pendingChanges.length === 1 ? '' : 's'} waiting. `,
-        ),
-        h('a', { href: '#/changes' }, 'Review'),
-      )
-    : null;
+  const killed = killedNotice(s);
+  const pending = pendingNotice(detail.pendingChanges.length);
 
   const overview = async () => {
     const [explain, graph] = await Promise.all([
@@ -360,6 +355,41 @@ async function showManifest(name, version) {
 }
 
 /** A run form generated from the workflow's declared inputs. */
+const stateName = (s) => {
+  if (s.killed) return 'killed';
+  return s.enabled ? 'enabled' : 'disabled';
+};
+
+/** The form-dialog field shape for one workflow input. */
+function fieldShape(spec) {
+  const fallback = spec.default !== undefined ? String(spec.default) : undefined;
+  if (spec.enum) return { options: spec.enum.map(String), value: fallback };
+  if (spec.type === 'boolean') return { type: 'checkbox', value: spec.default === true };
+  if (spec.type === 'object' || spec.type === 'array')
+    return { textarea: true, rows: 3, placeholder: spec.type === 'array' ? '[ … ]' : '{ … }' };
+  let type = 'text';
+  if (spec.sensitivity === 'secret') type = 'password';
+  else if (spec.type === 'integer' || spec.type === 'number') type = 'number';
+  return { type, value: fallback ?? '' };
+}
+
+/** The typed value for a form entry (checkboxes arrive as booleans, everything else as text). */
+function inputValue(spec, raw) {
+  switch (spec.type) {
+    case 'integer':
+      return Number.parseInt(raw, 10);
+    case 'number':
+      return Number(raw);
+    case 'boolean':
+      return raw === true;
+    case 'object':
+    case 'array':
+      return JSON.parse(raw);
+    default:
+      return raw;
+  }
+}
+
 async function runDialog(name, detail) {
   const inputs = detail.plan?.inputs ?? {};
   const fields = Object.entries(inputs).map(([k, spec]) => ({
@@ -373,21 +403,7 @@ async function runDialog(name, detail) {
     ]
       .filter(Boolean)
       .join(' · '),
-    ...(spec.enum
-      ? { options: spec.enum.map(String), value: spec.default !== undefined ? String(spec.default) : undefined }
-      : spec.type === 'boolean'
-        ? { type: 'checkbox', value: spec.default === true }
-        : spec.type === 'object' || spec.type === 'array'
-          ? { textarea: true, rows: 3, placeholder: spec.type === 'array' ? '[ … ]' : '{ … }' }
-          : {
-              type:
-                spec.sensitivity === 'secret'
-                  ? 'password'
-                  : spec.type === 'integer' || spec.type === 'number'
-                    ? 'number'
-                    : 'text',
-              value: spec.default !== undefined ? String(spec.default) : '',
-            }),
+    ...fieldShape(spec),
   }));
   const v = await formDialog({
     title: `Run ${name}`,
@@ -405,16 +421,7 @@ async function runDialog(name, detail) {
     for (const [k, spec] of Object.entries(inputs)) {
       const raw = v[k];
       if (raw === '' || raw === undefined) continue;
-      body[k] =
-        spec.type === 'integer'
-          ? Number.parseInt(raw, 10)
-          : spec.type === 'number'
-            ? Number(raw)
-            : spec.type === 'boolean'
-              ? raw === true
-              : spec.type === 'object' || spec.type === 'array'
-                ? JSON.parse(raw)
-                : raw;
+      body[k] = inputValue(spec, raw);
     }
   } catch (e) {
     return toast(`Invalid input: ${e.message}`, 'bad');

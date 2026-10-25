@@ -5,6 +5,13 @@ import { can } from '../session.js';
 import { badge, button, card, dataTable, emptyState, notice, pageHeader, statusBadge, tabs, toast } from '../ui.js';
 import { wfLink } from './common.js';
 
+const raisedTone = (severity) => (severity === 'critical' ? 'bad' : 'warn');
+
+const proposalTone = (severity) => {
+  if (severity === 'high') return 'bad';
+  return severity === 'medium' ? 'warn' : 'neutral';
+};
+
 export default async function insights(ctx) {
   const alerts = async () => {
     const r = await api.get('/v1/insights/alerts');
@@ -35,9 +42,7 @@ export default async function insights(ctx) {
             {
               label: 'Event',
               render: (e) =>
-                e.event === 'raised'
-                  ? badge('raised', e.severity === 'critical' ? 'bad' : 'warn')
-                  : badge('resolved', 'good'),
+                e.event === 'raised' ? badge('raised', raisedTone(e.severity)) : badge('resolved', 'good'),
             },
             { label: 'Alert', render: (e) => e.title ?? e.key },
           ],
@@ -62,22 +67,15 @@ export default async function insights(ctx) {
       { class: 'stack' },
       items.map((p) => {
         const b = p.body ?? {};
+        const stepSuffix = b.stepId ? ` › ${b.stepId}` : '';
         return card(
-          h(
-            'span',
-            {},
-            p.title,
-            ' ',
-            badge(b.severity ?? 'info', b.severity === 'high' ? 'bad' : b.severity === 'medium' ? 'warn' : 'neutral'),
-          ),
+          h('span', {}, p.title, ' ', badge(b.severity ?? 'info', proposalTone(b.severity))),
           h(
             'div',
             { class: 'stack' },
             h('p', {}, b.summary),
             h('p', {}, h('strong', {}, 'Suggestion: '), b.recommendation),
-            p.workflowName
-              ? h('p', { class: 'muted' }, 'Workflow: ', wfLink(p.workflowName), b.stepId ? ` › ${b.stepId}` : '')
-              : null,
+            p.workflowName ? h('p', { class: 'muted' }, 'Workflow: ', wfLink(p.workflowName), stepSuffix) : null,
             h(
               'details',
               {},

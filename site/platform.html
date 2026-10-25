@@ -1,0 +1,74 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Platform — OmniFlow</title><meta name="description" content="How OmniFlow turns a manifest into a checked plan, runs it exactly once from a single container, and explains every run."><meta name="color-scheme" content="dark light"><meta name="theme-color" content="#070a13"><meta property="og:type" content="website"><meta property="og:title" content="Platform — OmniFlow"><meta property="og:description" content="How OmniFlow turns a manifest into a checked plan, runs it exactly once from a single container, and explains every run."><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><script src="/site.js"></script></head><body><a class="skip" href="#main">Skip to content</a><div class="family"><div class="wrap"><a href="https://onenexora.com" rel="noopener">NEXORA</a><nav class="products" aria-label="NEXORA products"><a href="https://onenexora.com/products" rel="noopener">All products</a><a class="here" href="/" aria-current="true">OmniFlow</a></nav></div></div><header class="site-header"><div class="wrap"><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><nav class="nav" aria-label="Main"><a href="/platform.html" aria-current="page">Platform</a><a href="/security.html">Security</a><a href="/pricing.html">Pricing</a></nav><div class="tools"><button class="icon-btn" id="theme" type="button" aria-label="Light theme" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button><a class="btn btn-primary btn-sm" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a></div></div></header><main id="main">
+
+<section class="page-hero">
+  <div class="wrap">
+    <span class="kicker">Platform</span>
+    <h1>From manifest to proof.</h1>
+    <p>One small service takes a workflow from a file to a recorded, explainable run. Here is every part, and the limits that come with it.</p>
+  </div>
+</section>
+
+<section class="tight">
+  <div class="wrap">
+    <div class="diagram">
+      <svg viewBox="0 0 900 330" role="img" aria-label="Architecture: manifests are checked and compiled into a plan, the orchestrator runs steps through capabilities, and state and the audit log live in one SQLite file. A console, API and CLI sit on top.">
+        <rect class="box" x="20" y="20" width="860" height="52" rx="12"/><text x="40" y="52">Console · REST API + live events · CLI</text>
+        <rect class="box" x="20" y="100" width="260" height="80" rx="12"/><text x="40" y="132">Check &amp; compile</text><text class="sub" x="40" y="154">errors with line numbers</text>
+        <rect class="hot" x="320" y="100" width="260" height="80" rx="12"/><text x="340" y="132">Orchestrator</text><text class="sub" x="340" y="154">retries · approvals · rollback</text>
+        <rect class="box" x="620" y="100" width="260" height="80" rx="12"/><text x="640" y="132">Capabilities</text><text class="sub" x="640" y="154">http · shell · storage · data · email</text>
+        <path class="line" d="M280 140h40M580 140h40"/>
+        <rect class="box" x="20" y="212" width="860" height="96" rx="12"/><text x="40" y="244">One SQLite file</text><text class="sub" x="40" y="268">runs · step state · idempotency · secrets (encrypted) · hash-chained audit log</text><text class="sub" x="40" y="288">backup and restore: one command each</text>
+        <path class="line" d="M150 180v32M450 180v32M750 180v32"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head"><span class="kicker">The lifecycle</span><h2>Four stages, each one checkable.</h2></div>
+    <div class="grid">
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></div><h3>1 · Author</h3><p>Write a manifest by hand, import a crontab or a shell script, or describe the work and review the draft. Drafts are versioned and can require a second reader.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.2 8 8 9 4.8-1 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>2 · Check &amp; plan</h3><p>The manifest becomes an immutable plan with a content hash. Unknown capabilities, bad references and unsafe patterns are errors you see before anything runs.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/><path d="m9 12 2 2 4-4"/></svg></div><h3>3 · Run</h3><p>Triggers: manual, schedule, signed webhook, event or another workflow's completion. Dry runs, canary percentages and a kill switch are built in.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>4 · Explain</h3><p>Every attempt, retry and approval is recorded. Ask any run why it retried or stopped and get a plain-language answer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="section-head"><span class="kicker">Guarantees</span><h2>What OmniFlow promises, and how.</h2></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Promise</th><th>How it is kept</th></tr></thead>
+      <tbody>
+        <tr><td>An effect happens at most once</td><td>An idempotency key is claimed before the step acts; replays return the recorded result.</td></tr>
+        <tr><td>Only the right failures retry</td><td>Failures are classed; contract, authorisation and business failures never retry.</td></tr>
+        <tr><td>Partial work can be undone</td><td>Steps declare a compensation; failures roll back in reverse order.</td></tr>
+        <tr><td>History cannot be rewritten</td><td>Events are hash-chained per tenant; verification is a command and a button.</td></tr>
+        <tr><td>A paused run costs nothing</td><td>Approvals and waits are state, not running processes.</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head"><span class="kicker">Boundaries</span><h2>What it is not.</h2><p>Knowing the limits is part of the product.</p></div>
+    <div class="grid three">
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></div><h3>Single node</h3><p>One process on one SQLite file. High availability means restarting quickly, not failing over.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div><h3>No cluster</h3><p>If you need a distributed engine today, OmniFlow is not the right tool yet.</p></div>
+      <div class="card"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><h3>Retention is coming</h3><p>Old runs and audit history are kept; archival and retention policies are not built yet.</p></div>
+    </div>
+    <div class="honest" id="documentation"><b>Documentation</b> ships with the beta: a quickstart, a guide to writing workflows, and a reference for errors, retries and idempotency.</div>
+  </div>
+</section>
+
+<section class="closing alt">
+  <div class="wrap">
+    <h2>Run something that matters.</h2>
+    <p>Request early access and be first in line when the beta opens.</p>
+    <div class="cta-row"><a class="btn btn-primary" href="https://onenexora.com/company#contact" rel="noopener">Request early access</a><a class="btn btn-quiet" href="/security.html">Security details</a></div>
+  </div>
+</section>
+</main><footer class="site-footer"><div class="wrap"><div class="foot-grid"><div><a class="brand" href="/"><img src="/favicon.svg" alt="" width="28" height="28">OmniFlow</a><p class="foot-blurb">Durable workflows without the cluster. A NEXORA product.</p></div><div><h2>Product</h2><ul><li><a href="/platform.html">Platform</a></li><li><a href="/security.html">Security</a></li><li><a href="/pricing.html">Pricing</a></li></ul></div><div><h2>NEXORA</h2><ul><li><a href="https://onenexora.com" rel="noopener">onenexora.com</a></li><li><a href="https://onenexora.com/products" rel="noopener">All products</a></li><li><a href="https://onenexora.com/pricing" rel="noopener">Platform pricing</a></li></ul></div><div><h2>Status</h2><ul><li>In development</li><li>Single-node by design</li><li>Proprietary software</li></ul></div></div><div class="legal"><span>© 2026 OmniFlow. A NEXORA product. <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></span><span>Illustrations show the product's own output; no customer data or testimonials appear on this site.</span></div></div></footer></body></html>

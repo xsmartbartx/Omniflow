@@ -8,13 +8,13 @@ import { systemClock } from '../../core/index.ts';
 import { buildServer } from '../../gateway/server.ts';
 import type { Role } from '../../schemas/index.ts';
 import { loadConfig } from '../../server/config.ts';
-import { createOmniflow, type Omniflow } from '../../server/platform.ts';
+import { createOmniflow, type OmniFlow } from '../../server/platform.ts';
 import { makeState } from './state.ts';
 
 export const ADMIN = { email: 'admin@example.com', password: 'correct-horse-battery-staple' };
 
 export interface Api {
-  app: Omniflow;
+  app: OmniFlow;
   server: FastifyInstance;
   dir: string;
   /** Sign in and return a client bound to the session cookie. */
@@ -63,7 +63,7 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
 
   const client = (auth: { cookie?: string; apiKey?: string }): Client => {
     const request: Client['request'] = async (method, url, o = {}) => {
-      const headers: Record<string, string> = { ...(o.headers ?? {}) };
+      const headers: Record<string, string> = { ...o.headers };
       if (auth.cookie) {
         headers.cookie = auth.cookie;
         if (method !== 'GET' && !o.noCsrf) headers['x-requested-with'] = 'omniflow';

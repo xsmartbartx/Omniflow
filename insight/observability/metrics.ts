@@ -5,7 +5,8 @@
 
 type Labels = Record<string, string>;
 
-const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"');
+const esc = (v: string) =>
+  v.replaceAll('\\', String.raw`\\`).replaceAll('\n', String.raw`\n`).replaceAll('"', String.raw`\"`);
 const key = (labels: Labels) =>
   Object.entries(labels)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -77,17 +78,26 @@ export class MetricsRegistry {
 
   counter(name: string, help: string): Counter {
     let c = this.counters.get(name);
-    if (!c) this.counters.set(name, (c = new Counter(name, help)));
+    if (!c) {
+      c = new Counter(name, help);
+      this.counters.set(name, c);
+    }
     return c;
   }
   gauge(name: string, help: string): Gauge {
     let g = this.gauges.get(name);
-    if (!g) this.gauges.set(name, (g = new Gauge(name, help)));
+    if (!g) {
+      g = new Gauge(name, help);
+      this.gauges.set(name, g);
+    }
     return g;
   }
   histogram(name: string, help: string, buckets = DURATION_BUCKETS): Histogram {
     let h = this.histograms.get(name);
-    if (!h) this.histograms.set(name, (h = new Histogram(name, help, buckets)));
+    if (!h) {
+      h = new Histogram(name, help, buckets);
+      this.histograms.set(name, h);
+    }
     return h;
   }
 
@@ -105,8 +115,10 @@ export class MetricsRegistry {
       }
     }
     const out: string[] = [];
-    const line = (name: string, labels: string, v: number) =>
-      out.push(`${name}${labels ? `{${labels}}` : ''} ${Number.isFinite(v) ? v : 0}`);
+    const line = (name: string, labels: string, v: number) => {
+      const set = labels ? `{${labels}}` : '';
+      out.push(`${name}${set} ${Number.isFinite(v) ? v : 0}`);
+    };
     for (const c of this.counters.values()) {
       out.push(`# HELP ${c.name} ${c.help}`, `# TYPE ${c.name} counter`);
       for (const [l, v] of c.values) line(c.name, l, v);
@@ -117,14 +129,23 @@ export class MetricsRegistry {
     }
     for (const h of this.histograms.values()) {
       out.push(`# HELP ${h.name} ${h.help}`, `# TYPE ${h.name} histogram`);
-      for (const [l, s] of h.series) {
-        for (let i = 0; i < h.buckets.length; i++)
-          line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="${h.buckets[i]}"`, s.counts[i]!);
-        line(`${h.name}_bucket`, `${l}${l ? ',' : ''}le="+Inf"`, s.count);
-        line(`${h.name}_sum`, l, s.sum);
-        line(`${h.name}_count`, l, s.count);
-      }
+      for (const [l, s] of h.series) renderSeries(h.name, h.buckets, l, s, line);
     }
     return `${out.join('\n')}\n`;
   }
+}
+
+/** The bucket, sum and count lines for one labelled histogram series. */
+function renderSeries(
+  name: string,
+  buckets: readonly number[],
+  labels: string,
+  s: { counts: number[]; count: number; sum: number },
+  line: (name: string, labels: string, v: number) => void,
+): void {
+  const sep = labels ? ',' : '';
+  for (let i = 0; i < buckets.length; i++) line(`${name}_bucket`, `${labels}${sep}le="${buckets[i]}"`, s.counts[i]!);
+  line(`${name}_bucket`, `${labels}${sep}le="+Inf"`, s.count);
+  line(`${name}_sum`, labels, s.sum);
+  line(`${name}_count`, labels, s.count);
 }

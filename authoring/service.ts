@@ -9,8 +9,12 @@ import {
 } from '../core/index.ts';
 import type { RegistryService, SubmitResult } from '../orchestration/registry/index.ts';
 import type { Principal } from '../schemas/index.ts';
-import type { PolicyEngine, RiskSummary } from '../security/policy/index.ts';
-import { type AutonomyVerdict, autonomyVerdict } from '../security/policy/index.ts';
+import {
+  type AutonomyVerdict,
+  autonomyVerdict,
+  type PolicyEngine,
+  type RiskSummary,
+} from '../security/policy/index.ts';
 import type { DraftRecord, DraftStatus, State } from '../state/index.ts';
 import { explainPlan, explainRun, type PlanExplanation, type RunExplanation } from './agents/explainer.ts';
 import { type ImportResult, importCrontab } from './agents/importer.ts';
@@ -255,12 +259,13 @@ export class AuthoringService {
       evidence?: unknown;
       stepId?: string | null;
     };
+    const stepNote = body.stepId ? ` (step "${body.stepId}")` : '';
     return this.plan(
       principal,
       {
         workflow: p.workflowName,
         proposalId,
-        intent: `Apply this improvement to the workflow "${p.workflowName}": ${p.title}${body.stepId ? ` (step "${body.stepId}")` : ''}.\nRecommendation: ${body.recommendation ?? ''}\nMake the smallest change that addresses it.`,
+        intent: `Apply this improvement to the workflow "${p.workflowName}": ${p.title}${stepNote}.\nRecommendation: ${body.recommendation ?? ''}\nMake the smallest change that addresses it.`,
         untrusted: [
           {
             label: 'analysis evidence',
@@ -278,10 +283,12 @@ export class AuthoringService {
     input: { script: string; name?: string; description?: string },
     signal?: AbortSignal,
   ): Promise<PlanOutcome> {
+    const nameNote = input.name ? ` Name it "${input.name}".` : '';
+    const purpose = input.description ? ` What it is for: ${input.description}` : '';
     return this.plan(
       principal,
       {
-        intent: `Convert the legacy script below into an OmniFlow workflow.${input.name ? ` Name it "${input.name}".` : ''}${input.description ? ` What it is for: ${input.description}` : ''}\nReplace each recognisable operation with a typed capability from the catalogue (HTTP calls, database queries, notifications…). Anything that has no capability equivalent should be listed in <questions>. Do not use shell-exec unless nothing else fits, and then it needs a sunset date. Give every step a sensible timeout and retry policy, and add compensation where an action can be undone.`,
+        intent: `Convert the legacy script below into an OmniFlow workflow.${nameNote}${purpose}\nReplace each recognisable operation with a typed capability from the catalogue (HTTP calls, database queries, notifications…). Anything that has no capability equivalent should be listed in <questions>. Do not use shell-exec unless nothing else fits, and then it needs a sunset date. Give every step a sensible timeout and retry policy, and add compensation where an action can be undone.`,
         untrusted: [{ label: 'legacy script', content: input.script }],
       },
       signal,

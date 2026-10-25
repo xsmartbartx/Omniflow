@@ -1,6 +1,11 @@
 import { ACTIVE_RUN_STATUSES, type State } from '../../state/index.ts';
 import { MetricsRegistry } from './metrics.ts';
 
+const stepOutcome = (d: { simulated?: unknown; replayed?: unknown }) => {
+  if (d.simulated) return 'simulated';
+  return d.replayed ? 'replayed' : 'succeeded';
+};
+
 /**
  * Feed the metrics registry from the event log (the single source of truth) and from live state at
  * scrape time. Read-only over the event log (architecture §5.1 #19).
@@ -49,7 +54,7 @@ export function createMetrics(
         break;
       }
       case 'step.succeeded':
-        steps.inc({ outcome: d.simulated ? 'simulated' : d.replayed ? 'replayed' : 'succeeded' });
+        steps.inc({ outcome: stepOutcome(d) });
         if (typeof d.durationMs === 'number') stepSeconds.observe({}, d.durationMs / 1000);
         break;
       case 'step.failed':

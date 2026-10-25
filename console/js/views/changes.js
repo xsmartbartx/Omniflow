@@ -1,7 +1,7 @@
 import * as api from '../api.js';
 import { collapse, diffLines, stats } from '../diff.js';
 import { h } from '../dom.js';
-import { ago, timestamp } from '../format.js';
+import { ago, plural, timestamp } from '../format.js';
 import { can } from '../session.js';
 import {
   badge,
@@ -19,6 +19,8 @@ import {
   toast,
 } from '../ui.js';
 import { wfLink } from './common.js';
+
+const DIFF_MARKS = { add: '+', del: '−' };
 
 export default async function changes(ctx) {
   const view = (status) => async () => {
@@ -72,11 +74,11 @@ function diffView(before, after) {
   const { added, removed } = stats(ops);
   const rows = collapse(ops, 3).map((o) =>
     o.op === 'gap'
-      ? h('div', { class: 'diff-gap' }, `… ${o.count} unchanged line${o.count === 1 ? '' : 's'} …`)
+      ? h('div', { class: 'diff-gap' }, `… ${o.count} unchanged ${plural(o.count, 'line')} …`)
       : h(
           'div',
           { class: `diff-line diff-${o.op}` },
-          h('span', { class: 'diff-mark' }, o.op === 'add' ? '+' : o.op === 'del' ? '−' : ' '),
+          h('span', { class: 'diff-mark' }, DIFF_MARKS[o.op] ?? ' '),
           h('span', {}, o.text || ' '),
         ),
   );
@@ -110,18 +112,13 @@ async function open(id, ctx) {
     });
     if (!v) return;
     const r = await api.post(`/v1/changes/${api.enc(id)}/${verb}`, v.comment ? { comment: v.comment } : {});
-    toast(
-      r.published
-        ? `Published ${r.published.name}@${r.published.version}`
-        : verb === 'approve'
-          ? 'Approval recorded'
-          : 'Rejected',
-      'good',
-    );
+    const decided = verb === 'approve' ? 'Approval recorded' : 'Rejected';
+    toast(r.published ? `Published ${r.published.name}@${r.published.version}` : decided, 'good');
     close(true);
     ctx.navigate('/changes');
     ctx.refreshBadges();
   };
+  const approvers = c.approvals.length ? ` — ${c.approvals.map((a) => a.name ?? a.by).join(', ')}` : '';
   await openDialog({
     title: `${c.workflowName} @ ${c.version}`,
     wide: true,
@@ -132,10 +129,7 @@ async function open(id, ctx) {
         ['Status', statusBadge(c.status)],
         ['Why it needs review', c.reason],
         ['Requested by', `${c.requestedByName ?? c.requestedBy}${c.origin === 'agent' ? ' (AI-authored)' : ''}`],
-        [
-          'Approvals',
-          `${c.approvals.length} of ${c.requiredApprovals}${c.approvals.length ? ` — ${c.approvals.map((a) => a.name ?? a.by).join(', ')}` : ''}`,
-        ],
+        ['Approvals', `${c.approvals.length} of ${c.requiredApprovals}${approvers}`],
         c.risk ? ['Risk', h('span', {}, statusBadge(c.risk.level), ` score ${c.risk.score}/100`)] : null,
       ]),
       findings.length

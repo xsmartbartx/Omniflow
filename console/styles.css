@@ -31,6 +31,13 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
   --dur-base: 200ms;
+  /* Derived, never raw: tinted surfaces for badges and alerts. */
+  --primary-soft: color-mix(in srgb, var(--primary) 14%, var(--background));
+  --secondary-soft: color-mix(in srgb, var(--secondary) 14%, var(--background));
+  --success-soft: color-mix(in srgb, var(--success) 14%, var(--background));
+  --warning-soft: color-mix(in srgb, var(--warning) 14%, var(--background));
+  --destructive-soft: color-mix(in srgb, var(--destructive) 14%, var(--background));
+  --shadow-pop: 0 12px 32px color-mix(in srgb, var(--background) 60%, transparent);
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -90,16 +97,6 @@
     --dur-fast: 0ms;
     --dur-base: 0ms;
   }
-}
-
-/* Derived, never raw: tinted surfaces for badges and alerts. */
-:root {
-  --primary-soft: color-mix(in srgb, var(--primary) 14%, var(--background));
-  --secondary-soft: color-mix(in srgb, var(--secondary) 14%, var(--background));
-  --success-soft: color-mix(in srgb, var(--success) 14%, var(--background));
-  --warning-soft: color-mix(in srgb, var(--warning) 14%, var(--background));
-  --destructive-soft: color-mix(in srgb, var(--destructive) 14%, var(--background));
-  --shadow-pop: 0 12px 32px color-mix(in srgb, var(--background) 60%, transparent);
 }
 
 * {
