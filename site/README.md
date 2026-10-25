@@ -15,6 +15,19 @@ docker build -t omniflow-site site     # image: Caddy + headers
 No testimonials, customer logos or user counts until real users agree to be quoted. Status says "in development".
 Plan allowances are a proposal; prices read "to be announced". The "not built yet" lists must match `replica/parity.md`.
 
+## Deploying it
+
+The site runs as the `site` service of the root `docker-compose.yml` (profile `site`): a hardened Caddy serving plain HTTP
+on the compose network, no published port, TLS terminated by whatever sits in front.
+
+```bash
+docker compose --profile site up -d --build site
+```
+
+On the NEXORA host the shared edge Caddy proxies `www.omniflow.onenexora.com` to it (the block is in the NEXORA repo,
+`infrastructure/edge/Caddyfile`). That hostname is a placeholder chosen so the app keeps `omniflow.onenexora.com`; swap it
+for the real product domain when you pick one. The header's "Sign in" link goes to the app.
+
 ## Before this goes live (owner decisions)
 
 1. **Domain** for the product site (for example `omniflow.<yours>`); set `SITE_ADDRESS` and add `sitemap.xml` / canonical URLs.

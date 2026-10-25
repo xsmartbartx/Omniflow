@@ -41,7 +41,7 @@ hosting files. **The site itself is not deployed** (the app below is). Every cal
 The standalone product (not NEXORA mode) runs on the shared NEXORA OCI host as its own compose project in `~/omniflow`,
 and is served at `https://omniflow.onenexora.com` through the shared edge Caddy (`infrastructure/edge` in the NEXORA
 repo carries the site block and the `omniflow_default` network). Secrets live only in `~/omniflow/.env` on the host.
-Redeploy: copy the repo with `git archive`, then `docker compose up -d --build`. NEXORA mode is not deployable until a
+The product site (`site/`) is the optional `site` compose service, served at `www.omniflow.onenexora.com` through the same edge. Redeploy: copy the repo with `git archive`, then `docker compose up -d --build`. NEXORA mode is not deployable until a
 real NEXORA Core exists (the fake Core is refused in production).
 
 ## Built since the last snapshot
