@@ -146,8 +146,10 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
       const state = states[n.id];
       const title = d.name ?? d.id;
       const sub = d.capability ?? KIND_LABEL[d.type] ?? d.type;
-      const stateSuffix = state ? ` — ${state}` : '';
-      const capabilitySuffix = d.capability ? ` — ${d.capability}` : '';
+      const titleText = clip(title, 24);
+      const subText = clip(`${sub}${d.hasCompensation ? ' · ↺' : ''}`, 28);
+      const label = `${titleText} ${subText}${state ? ` ${state}` : ''}`;
+      // The trailing space keeps the two drawn lines apart when read as text ("say util-echo", not "sayutil-echo").
       const g = svg(
         'g',
         {
@@ -161,16 +163,13 @@ export function renderGraph(graph, { states = {}, onSelect } = {}) {
           transform: `translate(${n.x}, ${n.y})`,
           tabindex: onSelect ? 0 : undefined,
           role: onSelect ? 'button' : undefined,
-          'aria-label': state ? `${title}, ${state}` : title,
+          // The accessible name must contain the text drawn on the node (WCAG 2.5.3), so the tooltip and the label say the same thing.
+          'aria-label': label,
         },
-        svg('title', {}, `${d.id}${capabilitySuffix}${stateSuffix}`),
+        svg('title', {}, label),
         svg('rect', { width: n.w, height: n.h, rx: d.type === 'branch' ? 26 : 9, class: 'dag-box' }),
-        svg('text', { x: n.w / 2, y: 22, class: 'dag-title', 'text-anchor': 'middle' }, clip(title, 24)),
-        svg(
-          'text',
-          { x: n.w / 2, y: 40, class: 'dag-sub', 'text-anchor': 'middle' },
-          clip(`${sub}${d.hasCompensation ? ' · ↺' : ''}`, 28),
-        ),
+        svg('text', { x: n.w / 2, y: 22, class: 'dag-title', 'text-anchor': 'middle' }, `${titleText} `),
+        svg('text', { x: n.w / 2, y: 40, class: 'dag-sub', 'text-anchor': 'middle' }, subText),
       );
       if (onSelect) {
         g.addEventListener('click', () => onSelect(d.id));
