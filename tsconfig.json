@@ -26,6 +26,7 @@
     "security",
     "capabilities",
     "state",
+    "billing",
     "orchestration",
     "insight",
     "authoring",

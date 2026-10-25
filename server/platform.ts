@@ -5,6 +5,7 @@ import { AuthoringService } from '../authoring/index.ts';
 import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '../capabilities/index.ts';
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
+import { StripeBillingService } from '../billing/service.ts';
 import type { OmniFlow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { FakeCore, NexoraService, OutboxWorker } from '../nexora/index.ts';
@@ -88,6 +89,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     : undefined;
   const fakeCore = config.mode === 'nexora' ? (overrides.core ?? new FakeCore()) : undefined;
   const nexoraService = fakeCore ? new NexoraService(state, fakeCore, { log }) : undefined;
+  const billing = new StripeBillingService(state, config.billing, config.publicUrl, clock);
   let stopMirroring: (() => void) | undefined;
   const runs = new RunService({
     state,
@@ -96,7 +98,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     policy,
     clock,
     onQueued: () => scheduler?.pump(),
-    ...(nexoraService ? { gate: nexoraService.gate } : {}),
+    ...(nexoraService ? { gate: nexoraService.gate } : config.billing.enabled ? { gate: billing.gate } : {}),
   });
   scheduler = new Scheduler({
     state,
@@ -153,6 +155,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     triggers,
     approvals,
     auth,
+    billing,
     metrics,
     analysis,
     alerts,

@@ -11,8 +11,8 @@ Map NEXORA roles to OmniFlow roles,identity,must,yes,yes,"owner/admin->admin+app
 Accept nx_live_ org API keys on /v1,api,must,yes,no,omf_ keys stay for self-hosted mode
 Register OmniFlow in Product Registry (slug/tagline/pillar/lifecycle),registry,must,yes,no,appears in GET /v1/products and site
 Product page on onenexora.com following the Gateway template,website,must,yes,no,owner publishes; draft only in this session
-Plan ladder Free/Starter/Pro/Business/Scale with run quotas,billing,must,yes,no,price points are an owner decision
-Stripe products/prices for OmniFlow plans,billing,must,yes,no,test mode only until owner approves live
+Plan ladder Free/Starter/Pro/Business/Scale with run quotas,billing,must,yes,partial,"built as Free $0 / Pro $19 / Team $49 with 25/500/2500 runs a month (a contributed proposal, not a decision); standalone mode only"
+Stripe products/prices for OmniFlow plans,billing,must,yes,partial,"Checkout, portal and signed webhooks are built against test mode and refuse live keys; the Stripe objects and live mode are the owner's to create"
 Entitlement enforcement (Free blocked at limit; Pro not),entitlements,must,yes,partial,gate + 429 + local reservation + outage grace done against fake Core; real C-ENT in M1
 Usage metering runs per org into NEXORA telemetry,telemetry,must,yes,yes,"run.started, terminal run outcomes (usage) and publish, kill, revive, deprecate, change and approval decisions (audit) via outbox with dedupe and retry"
 Product switcher / shared shell in console,ui,should,yes,no,needs NEXORA shell package decision (architecture R5)

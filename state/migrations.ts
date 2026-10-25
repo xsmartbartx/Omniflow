@@ -535,4 +535,28 @@ CREATE INDEX idx_webhook_due ON webhook_deliveries (status, next_attempt_at);
 CREATE INDEX idx_webhook_tenant ON webhook_deliveries (tenant_id, created_at DESC);
 `,
   },
+  {
+    id: 4,
+    name: 'stripe-billing',
+    sql: `
+CREATE TABLE billing_accounts (
+  tenant_id TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  stripe_customer_id TEXT UNIQUE,
+  stripe_subscription_id TEXT UNIQUE,
+  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free','pro','team')),
+  status TEXT NOT NULL DEFAULT 'free',
+  current_period_end TEXT,
+  cancel_at_period_end INTEGER NOT NULL DEFAULT 0 CHECK (cancel_at_period_end IN (0,1)),
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE billing_webhook_events (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  processed_at TEXT NOT NULL
+);
+
+CREATE INDEX billing_accounts_status ON billing_accounts (status, plan);
+`,
+  },
 ];

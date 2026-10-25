@@ -1161,3 +1161,53 @@ textarea.input {
 .login-card p a {
   text-decoration: underline;
 }
+
+/* Stripe Billing page */
+.billing-current-title,
+.billing-usage-line,
+.billing-usage-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.billing-current-title {
+  justify-content: flex-start;
+}
+.billing-usage-line {
+  margin-top: 18px;
+}
+.billing-usage-meta {
+  margin-top: 7px;
+  font-size: 0.82rem;
+}
+.billing-meter {
+  margin-top: 9px;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+}
+.billing-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent, #7c8cff);
+}
+.billing-plan-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.billing-plan-price {
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+.billing-features {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+.billing-section-title {
+  margin: 24px 0 12px;
+}

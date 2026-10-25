@@ -24,12 +24,24 @@ const ALLOWED: Record<string, string[]> = {
   security: ['core', 'schemas'],
   capabilities: ['core', 'schemas', 'security'],
   state: ['core', 'schemas', 'security'],
+  billing: ['core', 'schemas', 'state'],
   orchestration: ['core', 'schemas', 'security', 'capabilities', 'state'],
   insight: ['core', 'schemas', 'security', 'capabilities', 'state'],
   // NEXORA integration: implements ports declared by orchestration. Nothing below `gateway` may import it.
   nexora: ['core', 'schemas', 'security', 'state', 'orchestration'],
   authoring: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration'],
-  gateway: ['core', 'schemas', 'security', 'capabilities', 'state', 'orchestration', 'insight', 'authoring', 'nexora'],
+  gateway: [
+    'core',
+    'schemas',
+    'security',
+    'capabilities',
+    'state',
+    'orchestration',
+    'insight',
+    'authoring',
+    'nexora',
+    'billing',
+  ],
   // The CLI is an entry point like `server`, and its embedded mode (`omniflow dev`) uses the composition root.
   cli: [
     'core',
@@ -54,6 +66,7 @@ const ALLOWED: Record<string, string[]> = {
     'insight',
     'authoring',
     'nexora',
+    'billing',
     'gateway',
   ],
 };
