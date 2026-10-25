@@ -169,3 +169,20 @@ test('F01-E: workflow search supports * and the last-run filter narrows the list
   await expect(page.getByRole('link', { name: 'find-beta' })).toHaveCount(0);
   await a11y(page, 'workflows (filtered)');
 });
+
+test('self-serve sign-up: a visitor creates an account, lands in a workspace of their own, and the screen is accessible', async ({
+  page,
+}) => {
+  const w = watch(page);
+  await page.goto(BASE);
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  await a11y(page, 'sign-up');
+  const email = `visitor-${Date.now()}@example.com`;
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Company').fill('Visitors Ltd');
+  await page.getByLabel('Password (at least 12 characters)').fill('a-long-enough-passphrase');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  w.assertClean();
+});

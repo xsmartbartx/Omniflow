@@ -87,6 +87,8 @@ export async function buildServer(app: OmniFlow): Promise<{ server: FastifyInsta
     webhook: new RateLimiter(300, 60),
     // NEXORA sign-in verifies a signed assertion locally; a whole office can share one IP, so this is looser than password login.
     sso: new RateLimiter(240, 120),
+    // Account creation hashes a password and creates a tenant: a handful per IP, then one every 30 seconds.
+    signup: new RateLimiter(2, 5),
   };
   const headers = securityHeaders(app);
 

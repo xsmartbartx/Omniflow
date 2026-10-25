@@ -176,6 +176,10 @@ export function loadConfig(
     workflowsDir: resolve(cwd, env.OMNIFLOW_WORKFLOWS_DIR ?? './workflows'),
     seedExamples: bool(env, 'OMNIFLOW_SEED_EXAMPLES', false),
     publishApprovals: int(env, 'OMNIFLOW_PUBLISH_APPROVALS', 1, 1, 5),
+    signup: {
+      enabled: bool(env, 'OMNIFLOW_SIGNUP', false) && mode === 'standalone',
+      maxTenants: int(env, 'OMNIFLOW_SIGNUP_MAX_TENANTS', 50, 1, 100_000),
+    },
     maxConcurrentRuns: int(env, 'OMNIFLOW_MAX_CONCURRENT_RUNS', 16, 1, 1000),
     maxConcurrentSteps: int(env, 'OMNIFLOW_MAX_CONCURRENT_STEPS', 32, 1, 1000),
     sessionTtlHours: int(env, 'OMNIFLOW_SESSION_TTL_HOURS', 12, 1, 24 * 30),

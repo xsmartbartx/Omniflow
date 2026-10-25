@@ -38,6 +38,8 @@ export interface Config {
   workflowsDir: string;
   seedExamples: boolean;
   publishApprovals: number;
+  /** Self-serve account creation (standalone mode only); each sign-up gets its own tenant. */
+  signup: { enabled: boolean; maxTenants: number };
   maxConcurrentRuns: number;
   maxConcurrentSteps: number;
   sessionTtlHours: number;

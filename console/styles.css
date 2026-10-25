@@ -1156,3 +1156,8 @@ textarea.input {
   background: var(--primary);
   border-radius: 999px;
 }
+
+/* Links inside a sentence on the sign-in cards need more than colour to stand out (WCAG 1.4.1). */
+.login-card p a {
+  text-decoration: underline;
+}

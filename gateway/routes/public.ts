@@ -1,7 +1,24 @@
-import { AuthenticationError, ForbiddenError } from '../../core/index.ts';
+import { AuthenticationError, ForbiddenError, NotFoundError } from '../../core/index.ts';
 import { ACTIONS } from '../../schemas/index.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
 import { obj } from './util.ts';
+
+/** Who is asking, for the audit trail. */
+const clientOf = (req: { ip: string; headers: Record<string, unknown> }) => ({
+  ip: req.ip,
+  ...(typeof req.headers['user-agent'] === 'string' ? { userAgent: req.headers['user-agent'] } : {}),
+});
+
+/** Set the session cookie for a fresh sign-in (login or sign-up) and answer with who signed in. */
+function startedSession(
+  app: Parameters<RouteDef['handler']>[0]['app'],
+  reply: { header(name: string, value: string): unknown },
+  res: { token: string; user: unknown; principal: unknown; expiresAt: string },
+) {
+  const secure = app.config.publicUrl.startsWith('https:');
+  reply.header('set-cookie', sessionCookie(res.token, app.config.sessionTtlHours * 3600, secure));
+  return { user: res.user, principal: res.principal, expiresAt: res.expiresAt };
+}
 
 /** Health, meta, authentication and the signed webhook endpoint. */
 export function publicRoutes(getOpenApi: () => object): RouteDef[] {
@@ -41,6 +58,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         mode: app.config.mode,
         capabilities: app.capabilities.latest().length,
         setupRequired: app.state.identity.countUsers() === 0,
+        signup: app.config.signup.enabled,
       }),
     },
     {
@@ -90,15 +108,41 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
           ['email', 'password'],
         ),
       },
+      handler: async ({ req, reply, app, body }) =>
+        startedSession(
+          app,
+          reply,
+          await app.auth.login(body.email, body.password, {
+            ...(body.tenant ? { tenant: body.tenant } : {}),
+            ...clientOf(req),
+          }),
+        ),
+    },
+    {
+      method: 'POST',
+      url: '/v1/auth/signup',
+      summary: 'Create an account (a tenant of its own) and sign in; only when the operator turned sign-up on',
+      tag: 'Auth',
+      public: true,
+      limit: 'signup',
+      schema: {
+        body: obj(
+          {
+            email: { type: 'string', format: 'email', maxLength: 254 },
+            password: { type: 'string', maxLength: 256 },
+            name: { type: 'string', maxLength: 100 },
+            organization: { type: 'string', maxLength: 100 },
+          },
+          ['email', 'password'],
+        ),
+      },
       handler: async ({ req, reply, app, body }) => {
-        const res = await app.auth.login(body.email, body.password, {
-          ...(body.tenant ? { tenant: body.tenant } : {}),
-          ip: req.ip,
-          ...(req.headers['user-agent'] ? { userAgent: req.headers['user-agent'] } : {}),
-        });
-        const secure = app.config.publicUrl.startsWith('https:');
-        reply.header('set-cookie', sessionCookie(res.token, app.config.sessionTtlHours * 3600, secure));
-        return { user: res.user, principal: res.principal, expiresAt: res.expiresAt };
+        if (!app.config.signup.enabled) throw new NotFoundError('Not found');
+        return startedSession(
+          app,
+          reply,
+          await app.auth.signUp(body, { maxTenants: app.config.signup.maxTenants, ...clientOf(req) }),
+        );
       },
     },
     {
