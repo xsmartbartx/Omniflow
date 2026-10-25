@@ -11,6 +11,7 @@ import { buildOpenApi, fromFastifyValidation, problem, type RouteDef, registerRo
 import { RateLimiter } from './rate-limit.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { authoringRoutes } from './routes/authoring.ts';
+import { billingRoutes } from './routes/billing.ts';
 import { insightRoutes } from './routes/insight.ts';
 import { nexoraRoutes } from './routes/nexora.ts';
 import { publicRoutes } from './routes/public.ts';
@@ -96,7 +97,7 @@ export async function buildServer(app: OmniFlow): Promise<{ server: FastifyInsta
   const defaultJson = server.getDefaultJsonParser('error', 'ignore');
   server.removeContentTypeParser('application/json');
   server.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-    if (req.url.startsWith('/v1/hooks/')) return done(null, body);
+    if (req.url.startsWith('/v1/hooks/') || req.url === '/v1/billing/webhook') return done(null, body);
     return defaultJson(req, body as string, done);
   });
 
@@ -177,6 +178,7 @@ export async function buildServer(app: OmniFlow): Promise<{ server: FastifyInsta
   const getOpenApi = () => (openApi ??= buildOpenApi(defs, { version: app.config.version }));
   defs.push(
     ...publicRoutes(getOpenApi),
+    ...billingRoutes(),
     ...workflowRoutes(),
     ...runRoutes(),
     ...insightRoutes(),

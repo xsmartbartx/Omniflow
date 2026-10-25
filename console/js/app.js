@@ -58,6 +58,12 @@ const ROUTES = [
     can: 'user.manage',
     view: () => import('./views/admin.js'),
   },
+  {
+    path: '/billing',
+    title: 'Plans & billing',
+    nav: ['Configure', 'capability', 'Plans & billing'],
+    view: () => import('./views/billing.js'),
+  },
   { path: '/account', title: 'Account', view: () => import('./views/account.js') },
 ];
 

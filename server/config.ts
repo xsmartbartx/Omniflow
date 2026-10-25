@@ -155,7 +155,33 @@ export function loadConfig(
     fail('OMNIFLOW_RUN_WEBHOOKS', (e as Error).message);
   }
 
+  const billingEnabled = bool(env, 'OMNIFLOW_BILLING_ENABLED', false);
+  const stripeSecretKey = env.OMNIFLOW_STRIPE_SECRET_KEY?.trim();
+  const stripeWebhookSecret = env.OMNIFLOW_STRIPE_WEBHOOK_SECRET?.trim();
+  const stripePricePro = env.OMNIFLOW_STRIPE_PRICE_PRO?.trim();
+  const stripePriceTeam = env.OMNIFLOW_STRIPE_PRICE_TEAM?.trim();
+  if (stripeSecretKey && !/^(sk_test_|rk_test_)/.test(stripeSecretKey))
+    fail('OMNIFLOW_STRIPE_SECRET_KEY', 'must be a test-mode key (sk_test_ or rk_test_); live-mode keys are refused');
+  if (stripeWebhookSecret && !stripeWebhookSecret.startsWith('whsec_'))
+    fail('OMNIFLOW_STRIPE_WEBHOOK_SECRET', 'must be a Stripe webhook signing secret (whsec_...)');
+  if (stripePricePro && !/^price_[A-Za-z0-9]+$/.test(stripePricePro))
+    fail('OMNIFLOW_STRIPE_PRICE_PRO', 'must be a Stripe Price ID (price_...) from your test-mode account');
+  if (stripePriceTeam && !/^price_[A-Za-z0-9]+$/.test(stripePriceTeam))
+    fail('OMNIFLOW_STRIPE_PRICE_TEAM', 'must be a Stripe Price ID (price_...) from your test-mode account');
+  const billing: Config['billing'] = {
+    enabled: billingEnabled,
+    ...(stripeSecretKey ? { secretKey: stripeSecretKey } : {}),
+    ...(stripeWebhookSecret ? { webhookSecret: stripeWebhookSecret } : {}),
+    ...(stripePricePro ? { pricePro: stripePricePro } : {}),
+    ...(stripePriceTeam ? { priceTeam: stripePriceTeam } : {}),
+  };
+
   const mode = resolveMode(env, environment);
+  if (billing.enabled && mode === 'nexora')
+    fail(
+      'OMNIFLOW_BILLING_ENABLED',
+      'Stripe Billing is supported in standalone mode; NEXORA tenants use their Core entitlement provider',
+    );
 
   return {
     environment,
@@ -191,6 +217,7 @@ export function loadConfig(
     alertIntervalSeconds: int(env, 'OMNIFLOW_ALERT_INTERVAL_SECONDS', 60, 5, 3600),
     version: opts.version ?? '1.0.0',
     mode,
+    billing,
     runWebhooks,
     nexora: {
       core: 'fake',

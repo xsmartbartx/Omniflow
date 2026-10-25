@@ -17,6 +17,7 @@ COPY schemas ./schemas
 COPY security ./security
 COPY capabilities ./capabilities
 COPY state ./state
+COPY billing ./billing
 COPY orchestration ./orchestration
 COPY insight ./insight
 COPY nexora ./nexora

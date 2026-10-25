@@ -13,6 +13,7 @@ import type { SecretBroker } from '../security/secret-broker/index.ts';
 import type { State } from '../state/index.ts';
 import type { NexoraService, OutboxWorker } from '../nexora/index.ts';
 import type { Authenticator } from './auth.ts';
+import type { BillingConfig, StripeBillingService } from '../billing/service.ts';
 
 /**
  * The contract between the Gateway and whatever assembles the platform. The Gateway depends on
@@ -65,6 +66,7 @@ export interface Config {
     /** Cookie that carries the NEXORA identity assertion. */
     assertionCookie: string;
   };
+  billing: BillingConfig;
 }
 
 export interface OmniFlow {
@@ -87,6 +89,7 @@ export interface OmniFlow {
   analysis: AnalysisAgent;
   alerts: AlertManager;
   authoring: AuthoringService;
+  billing: StripeBillingService;
   /** Present only when OMNIFLOW_RUN_WEBHOOKS is set. */
   webhooks?: { tick(): Promise<number>; start(): void; stop(): void };
   /** Present only in `nexora` mode. */

@@ -35,6 +35,11 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 | `OMNIFLOW_PUBLISH_APPROVALS` | `1` | How many distinct people must approve a production change that needs review (1–5). |
 | `OMNIFLOW_SIGNUP` | `false` | Let visitors create their own account at the sign-in page (standalone mode only). Each sign-up gets a tenant of its own and is its administrator. Read the sign-up notes in [security.md](security.md) first. |
 | `OMNIFLOW_SIGNUP_MAX_TENANTS` | `50` | Stop accepting sign-ups once this many accounts exist (1–100000). |
+| `OMNIFLOW_BILLING_ENABLED` | `false` | Turn on the Free/Pro/Team ladder with monthly run quotas and Stripe test-mode Checkout. Standalone mode only. See [stripe-billing.md](stripe-billing.md). |
+| `OMNIFLOW_STRIPE_SECRET_KEY` | | A Stripe **test-mode** key (`sk_test_…` or `rk_test_…`). Live keys are refused at start-up. |
+| `OMNIFLOW_STRIPE_WEBHOOK_SECRET` | | The `whsec_…` signing secret for `POST /v1/billing/webhook`. |
+| `OMNIFLOW_STRIPE_PRICE_PRO` | | The test-mode recurring Price ID (`price_…`) for Pro. |
+| `OMNIFLOW_STRIPE_PRICE_TEAM` | | The test-mode recurring Price ID (`price_…`) for Team. |
 | `OMNIFLOW_POLICY_DIR` | `./policies` (`/etc/omniflow/policies` in the image) | Directory of `kind: Policy` documents ([examples](../policies/examples/house-rules.yaml)). A rule that fails to parse stops the server — a broken governance rule is never silently skipped. |
 | `OMNIFLOW_WORKFLOWS_DIR` | `./workflows` (`/app/workflows` in the image) | Where seeded example workflows come from. |
 | `OMNIFLOW_SEED_EXAMPLES` | `false` | Publish the example workflows at start-up (those needing review are left as change requests). |

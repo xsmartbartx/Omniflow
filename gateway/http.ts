@@ -78,6 +78,7 @@ const CODE_STATUS: Record<string, number> = {
   ENTITLEMENT_DENIED: 403,
   ENTITLEMENT_UNAVAILABLE: 503,
   AI_NOT_CONFIGURED: 503,
+  BILLING_NOT_CONFIGURED: 503,
 };
 
 /** HTTP status for a failure with no more specific mapping, by error class (architecture §12.2). */
@@ -87,6 +88,7 @@ const CLASS_STATUS: Record<string, number> = { contract: 400, authorisation: 403
 const USER_FACING_5XX = new Set([
   'ENTITLEMENT_UNAVAILABLE',
   'AI_NOT_CONFIGURED',
+  'BILLING_NOT_CONFIGURED',
   'LLM_UNAVAILABLE',
   'LLM_BAD_RESPONSE',
   'LLM_AUTH',

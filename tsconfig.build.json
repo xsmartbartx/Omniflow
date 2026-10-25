@@ -13,6 +13,7 @@
     "security",
     "capabilities",
     "state",
+    "billing",
     "orchestration",
     "insight",
     "nexora",

@@ -128,6 +128,7 @@ test('F01-E: every console screen passes the accessibility scan, dark and light'
     'secrets',
     'audit',
     'admin',
+    'billing',
     'account',
   ];
   await page.goto(BASE);
