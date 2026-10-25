@@ -33,6 +33,8 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 | Variable | Default | |
 |---|---|---|
 | `OMNIFLOW_PUBLISH_APPROVALS` | `1` | How many distinct people must approve a production change that needs review (1–5). |
+| `OMNIFLOW_SIGNUP` | `false` | Let visitors create their own account at the sign-in page (standalone mode only). Each sign-up gets a tenant of its own and is its administrator. Read the sign-up notes in [security.md](security.md) first. |
+| `OMNIFLOW_SIGNUP_MAX_TENANTS` | `50` | Stop accepting sign-ups once this many accounts exist (1–100000). |
 | `OMNIFLOW_POLICY_DIR` | `./policies` (`/etc/omniflow/policies` in the image) | Directory of `kind: Policy` documents ([examples](../policies/examples/house-rules.yaml)). A rule that fails to parse stops the server — a broken governance rule is never silently skipped. |
 | `OMNIFLOW_WORKFLOWS_DIR` | `./workflows` (`/app/workflows` in the image) | Where seeded example workflows come from. |
 | `OMNIFLOW_SEED_EXAMPLES` | `false` | Publish the example workflows at start-up (those needing review are left as change requests). |

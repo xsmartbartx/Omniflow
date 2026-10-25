@@ -293,6 +293,43 @@ export class Authenticator {
     return user;
   }
 
+  /**
+   * Self-serve account creation: a new tenant of its own with the sign-up as its administrator, then a normal sign-in.
+   * Email addresses are unique across tenants (sign-in looks users up by email), and the number of tenants is capped.
+   */
+  async signUp(
+    u: { email: string; password: string; name?: string; organization?: string },
+    opts: { maxTenants: number; ip?: string; userAgent?: string },
+  ): Promise<LoginResult> {
+    const email = u.email.trim();
+    checkPasswordPolicy(u.password, email);
+    if (this.st.identity.findUsersByEmail(email).length > 0)
+      throw new ConflictError('An account with this email already exists. Sign in instead.');
+    // the operator's own tenant does not count against the cap
+    if (this.st.identity.listTenants().length - 1 >= opts.maxTenants)
+      throw new ForbiddenError('New accounts are not being accepted right now.');
+    const passwordHash = await hashPassword(u.password);
+    const tenant = `acct-${randomToken(6)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, 'x')}`;
+    const name = u.name?.trim() || email;
+    this.st.db.transaction(() => {
+      this.st.identity.createTenant(tenant, u.organization?.trim() || `${name}'s workspace`);
+      const user = this.st.identity.createUser({ tenant, email, name, passwordHash, roles: ['admin'] });
+      this.st.events.append({
+        tenant,
+        type: 'auth.user-created',
+        actor: { type: 'system', id: 'system:signup', name: 'self-serve sign-up' },
+        data: { userId: user.id, email: user.email, roles: user.roles, selfServe: true },
+      });
+    });
+    return this.login(email, u.password, {
+      tenant,
+      ...(opts.ip ? { ip: opts.ip } : {}),
+      ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
+    });
+  }
+
   /** Operator-initiated reset (break-glass): sets a temporary password, clears any lockout and signs the user out. */
   async resetPassword(actor: Principal, userId: string, password: string): Promise<void> {
     const user = this.st.identity.getUser(userId);

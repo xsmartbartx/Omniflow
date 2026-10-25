@@ -49,7 +49,7 @@ export interface RouteDef {
   /** Handler takes over the raw response (streaming). */
   raw?: boolean;
   /** Stricter per-IP rate limit bucket name. */
-  limit?: 'login' | 'webhook' | 'sso';
+  limit?: 'login' | 'webhook' | 'sso' | 'signup';
   handler: (ctx: Ctx) => unknown; // may return a promise; the route plumbing awaits it
 }
 
@@ -197,7 +197,13 @@ export function registerRoutes(
   fastify: FastifyInstance,
   app: OmniFlow,
   defs: RouteDef[],
-  limiters: { api: RateLimiter; login: RateLimiter; webhook: RateLimiter; sso: RateLimiter },
+  limiters: {
+    api: RateLimiter;
+    login: RateLimiter;
+    webhook: RateLimiter;
+    sso: RateLimiter;
+    signup: RateLimiter;
+  },
 ): void {
   for (const def of defs) {
     const handler: RouteHandlerMethod = async (req, reply) => {

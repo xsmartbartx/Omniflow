@@ -75,6 +75,13 @@ OmniFlow reduces risk; it does not remove your part in it.
   else works without them.
 - **Who holds `admin`.** An administrator can publish, approve, read audit logs and manage keys. Use named
   accounts, keep the group small, and review the audit log.
+- **Open sign-up.** With `OMNIFLOW_SIGNUP=true`, anyone who can reach the sign-in page can create an account. Each
+  one gets a tenant of its own (data, secrets, keys and runs are kept apart per tenant, which the tests check), and
+  is that tenant's administrator. Email addresses are **not verified**, there is no CAPTCHA, and the only
+  controls are a per-IP rate limit and the cap `OMNIFLOW_SIGNUP_MAX_TENANTS`. New accounts use your host's
+  compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
+  allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
+  lone administrator cannot approve their own risky change.
 - **Retention.** Run history and the audit log are kept until you archive them.
 
 ## Hardening checklist
@@ -82,6 +89,7 @@ OmniFlow reduces risk; it does not remove your part in it.
 - [ ] `OMNIFLOW_ENV=production`; `omniflow admin doctor` passes with no warnings you have not accepted
 - [ ] HTTPS in front; `OMNIFLOW_PUBLIC_URL=https://…`; `OMNIFLOW_TRUST_PROXY=true`; raw port not exposed
 - [ ] `OMNIFLOW_MASTER_KEY` from a secret manager, copy stored elsewhere; backups tested
+- [ ] `OMNIFLOW_SIGNUP` left `false` unless you mean to take open sign-ups (see above)
 - [ ] Bootstrap admin's password changed; named accounts; API keys scoped to minimal roles with expiry
 - [ ] `OMNIFLOW_PUBLISH_APPROVALS` ≥ 1 and a policy file for your organisation's rules
 - [ ] Shell steps disabled, or confined to a network-restricted container and a short allow-list

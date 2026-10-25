@@ -240,7 +240,12 @@ async function showLogin() {
   shellParts = undefined;
   const mod = await import('./views/login.js');
   const info = await api.get('/v1/info').catch(() => undefined);
-  clear(root).append(info?.mode === 'nexora' ? mod.nexoraSignIn() : mod.default({ onSignedIn: start }));
+  if (info?.mode === 'nexora') clear(root).append(mod.nexoraSignIn());
+  else if (info?.signup && location.hash === '#/signup') {
+    clear(root).append(mod.signUp({ onSignedIn: start }));
+    document.title = 'Create an account · OmniFlow';
+    return;
+  } else clear(root).append(mod.default({ onSignedIn: start, signup: Boolean(info?.signup) }));
   document.title = 'Sign in · OmniFlow';
 }
 
@@ -258,7 +263,7 @@ async function start() {
     return;
   }
   boot();
-  if (location.hash.startsWith('#/login') || !location.hash) location.hash = '#/dashboard';
+  if (['#/login', '#/signup'].some((h) => location.hash.startsWith(h)) || !location.hash) location.hash = '#/dashboard';
   void renderRoute();
 }
 
