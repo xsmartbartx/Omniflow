@@ -80,4 +80,47 @@ describe('self-serve sign-up', () => {
         expect((await api.anon.get('/v1/info')).body.signup).toBe(false);
       },
     ));
+
+  it('asks for acceptance when terms pages are configured, and records what was accepted', () =>
+    withApi(
+      {
+        ...ON,
+        OMNIFLOW_SIGNUP_TERMS_URL: 'https://example.com/terms',
+        OMNIFLOW_SIGNUP_PRIVACY_URL: 'https://example.com/privacy',
+      },
+      async (api) => {
+        expect((await api.anon.get('/v1/info')).body.signupTerms).toEqual({
+          termsUrl: 'https://example.com/terms',
+          privacyUrl: 'https://example.com/privacy',
+        });
+        const without = await signup(api, 'c1@example.com');
+        expect(without.status).toBe(400);
+        expect(JSON.stringify(without.body)).toContain('acceptTerms');
+        expect(
+          (await api.anon.post('/v1/auth/signup', { email: 'c1@example.com', password: PASSWORD, acceptTerms: false }))
+            .status,
+        ).toBe(400);
+
+        const ok = await api.anon.post('/v1/auth/signup', {
+          email: 'c1@example.com',
+          password: PASSWORD,
+          acceptTerms: true,
+        });
+        expect(ok.status, ok.text).toBe(200);
+        const [created] = api.app.state.events.list({ tenant: ok.body.principal.tenant, types: ['auth.user-created'] });
+        expect(created?.data).toMatchObject({
+          selfServe: true,
+          accepted: { termsUrl: 'https://example.com/terms', privacyUrl: 'https://example.com/privacy' },
+        });
+      },
+    ));
+
+  it('does not ask when no pages are configured, and refuses a non-https page at start-up', async () => {
+    await withApi(ON, async (api) => {
+      expect((await api.anon.get('/v1/info')).body.signupTerms).toBeUndefined();
+    });
+    await expect(makeApi({ env: { ...ON, OMNIFLOW_SIGNUP_TERMS_URL: 'http://example.com/terms' } })).rejects.toThrow(
+      /OMNIFLOW_SIGNUP_TERMS_URL/,
+    );
+  });
 });

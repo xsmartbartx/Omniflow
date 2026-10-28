@@ -248,7 +248,7 @@ async function showLogin() {
   const info = await api.get('/v1/info').catch(() => undefined);
   if (info?.mode === 'nexora') clear(root).append(mod.nexoraSignIn());
   else if (info?.signup && location.hash === '#/signup') {
-    clear(root).append(mod.signUp({ onSignedIn: start }));
+    clear(root).append(mod.signUp({ onSignedIn: start, terms: info.signupTerms }));
     document.title = 'Create an account · OmniFlow';
     return;
   } else clear(root).append(mod.default({ onSignedIn: start, signup: Boolean(info?.signup) }));

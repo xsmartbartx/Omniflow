@@ -183,6 +183,10 @@ test('self-serve sign-up: a visitor creates an account, lands in a workspace of 
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Company').fill('Visitors Ltd');
   await page.getByLabel('Password (at least 12 characters)').fill('a-long-enough-passphrase');
+  // without the acceptance box the browser refuses to submit, so nothing is created
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  await page.getByRole('checkbox', { name: /I accept the terms and the privacy policy/ }).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   w.assertClean();

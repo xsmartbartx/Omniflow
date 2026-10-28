@@ -103,8 +103,23 @@ export function changePassword({ onDone }) {
   );
 }
 
+/** The "I agree" line: a real checkbox whose label links to the pages the operator configured. */
+function consent(checkbox, { termsUrl, privacyUrl }) {
+  const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
+  const pages = [
+    termsUrl ? link(termsUrl, 'terms') : null,
+    privacyUrl ? link(privacyUrl, 'privacy policy') : null,
+  ].filter(Boolean);
+  return h(
+    'label',
+    { class: 'consent' },
+    checkbox,
+    h('span', {}, 'I accept the ', pages[0], pages[1] ? [' and the ', pages[1]] : null, '.'),
+  );
+}
+
 /** Self-serve account creation (only offered when the operator turned it on). */
-export function signUp({ onSignedIn }) {
+export function signUp({ onSignedIn, terms }) {
   const name = input({ type: 'text', name: 'name', autocomplete: 'name', placeholder: 'Your name' });
   const organization = input({
     type: 'text',
@@ -126,12 +141,14 @@ export function signUp({ onSignedIn }) {
     required: true,
     minlength: 12,
   });
+  const accept = terms ? h('input', { type: 'checkbox', name: 'acceptTerms', required: true }) : null;
   const slot = h('div');
   const submit = async (ev) => {
     ev?.preventDefault();
     clear(slot);
     try {
       await api.post('/v1/auth/signup', {
+        ...(terms ? { acceptTerms: accept.checked } : {}),
         email: email.value.trim(),
         password: password.value,
         ...(name.value.trim() ? { name: name.value.trim() } : {}),
@@ -153,6 +170,7 @@ export function signUp({ onSignedIn }) {
       field('Company', organization),
       field('Email', email),
       field('Password (at least 12 characters)', password),
+      terms ? consent(accept, terms) : null,
       slot,
       button('Create account', { kind: 'primary', type: 'submit' }),
       h('p', { class: 'muted' }, 'Already have an account? ', h('a', { href: '#/login' }, 'Sign in')),

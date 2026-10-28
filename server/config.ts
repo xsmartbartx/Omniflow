@@ -12,6 +12,24 @@ export type { Config };
 
 type Env = Record<string, string | undefined>;
 
+/** An optional https page the operator points sign-up at; anything else is a configuration mistake. */
+function pageUrl<K extends string>(
+  env: Record<string, string | undefined>,
+  name: string,
+  key: K,
+): { [P in K]?: string } {
+  const raw = env[name]?.trim();
+  if (!raw) return {};
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return fail(name, 'must be a full https:// URL');
+  }
+  if (url.protocol !== 'https:') return fail(name, 'must be a full https:// URL');
+  return { [key]: url.toString() } as { [P in K]?: string };
+}
+
 function fail(name: string, message: string): never {
   throw new OmniflowError('INVALID_CONFIG', `Invalid configuration: ${name} ${message}`, {
     errorClass: 'catastrophic',
@@ -205,6 +223,8 @@ export function loadConfig(
     signup: {
       enabled: bool(env, 'OMNIFLOW_SIGNUP', false) && mode === 'standalone',
       maxTenants: int(env, 'OMNIFLOW_SIGNUP_MAX_TENANTS', 50, 1, 100_000),
+      ...pageUrl(env, 'OMNIFLOW_SIGNUP_TERMS_URL', 'termsUrl'),
+      ...pageUrl(env, 'OMNIFLOW_SIGNUP_PRIVACY_URL', 'privacyUrl'),
     },
     maxConcurrentRuns: int(env, 'OMNIFLOW_MAX_CONCURRENT_RUNS', 16, 1, 1000),
     maxConcurrentSteps: int(env, 'OMNIFLOW_MAX_CONCURRENT_STEPS', 32, 1, 1000),
