@@ -40,6 +40,8 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 | `OMNIFLOW_STRIPE_WEBHOOK_SECRET` | | The `whsec_…` signing secret for `POST /v1/billing/webhook`. |
 | `OMNIFLOW_STRIPE_PRICE_PRO` | | The test-mode recurring Price ID (`price_…`) for Pro. |
 | `OMNIFLOW_STRIPE_PRICE_TEAM` | | The test-mode recurring Price ID (`price_…`) for Team. |
+| `OMNIFLOW_SIGNUP_TERMS_URL` | | An `https://` page of terms. With this or the privacy URL set, sign-up requires ticking an acceptance box, and the acceptance (with the URLs agreed to) is recorded on the account's creation event. |
+| `OMNIFLOW_SIGNUP_PRIVACY_URL` | | An `https://` privacy policy page, handled the same way. |
 | `OMNIFLOW_POLICY_DIR` | `./policies` (`/etc/omniflow/policies` in the image) | Directory of `kind: Policy` documents ([examples](../policies/examples/house-rules.yaml)). A rule that fails to parse stops the server — a broken governance rule is never silently skipped. |
 | `OMNIFLOW_WORKFLOWS_DIR` | `./workflows` (`/app/workflows` in the image) | Where seeded example workflows come from. |
 | `OMNIFLOW_SEED_EXAMPLES` | `false` | Publish the example workflows at start-up (those needing review are left as change requests). |

@@ -299,7 +299,12 @@ export class Authenticator {
    */
   async signUp(
     u: { email: string; password: string; name?: string; organization?: string },
-    opts: { maxTenants: number; ip?: string; userAgent?: string },
+    opts: {
+      maxTenants: number;
+      accepted?: { termsUrl?: string; privacyUrl?: string };
+      ip?: string;
+      userAgent?: string;
+    },
   ): Promise<LoginResult> {
     const email = u.email.trim();
     checkPasswordPolicy(u.password, email);
@@ -320,7 +325,14 @@ export class Authenticator {
         tenant,
         type: 'auth.user-created',
         actor: { type: 'system', id: 'system:signup', name: 'self-serve sign-up' },
-        data: { userId: user.id, email: user.email, roles: user.roles, selfServe: true },
+        data: {
+          userId: user.id,
+          email: user.email,
+          roles: user.roles,
+          selfServe: true,
+          // what the person agreed to, and when (the event's own timestamp), so consent can be shown later
+          ...(opts.accepted ? { accepted: opts.accepted } : {}),
+        },
       });
     });
     return this.login(email, u.password, {

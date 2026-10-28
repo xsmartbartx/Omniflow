@@ -1211,3 +1211,17 @@ textarea.input {
 .billing-section-title {
   margin: 24px 0 12px;
 }
+
+/* Sign-up consent line */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+.consent input {
+  margin-top: 3px;
+}
+.login-card .consent a {
+  text-decoration: underline;
+}

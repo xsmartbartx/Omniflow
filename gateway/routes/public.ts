@@ -1,4 +1,4 @@
-import { AuthenticationError, ForbiddenError, NotFoundError } from '../../core/index.ts';
+import { AuthenticationError, ForbiddenError, NotFoundError, ValidationError } from '../../core/index.ts';
 import { ACTIONS } from '../../schemas/index.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
 import { obj } from './util.ts';
@@ -59,6 +59,14 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         capabilities: app.capabilities.latest().length,
         setupRequired: app.state.identity.countUsers() === 0,
         signup: app.config.signup.enabled,
+        ...(app.config.signup.enabled && (app.config.signup.termsUrl || app.config.signup.privacyUrl)
+          ? {
+              signupTerms: {
+                ...(app.config.signup.termsUrl ? { termsUrl: app.config.signup.termsUrl } : {}),
+                ...(app.config.signup.privacyUrl ? { privacyUrl: app.config.signup.privacyUrl } : {}),
+              },
+            }
+          : {}),
       }),
     },
     {
@@ -132,16 +140,33 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
             password: { type: 'string', maxLength: 256 },
             name: { type: 'string', maxLength: 100 },
             organization: { type: 'string', maxLength: 100 },
+            acceptTerms: { type: 'boolean' },
           },
           ['email', 'password'],
         ),
       },
       handler: async ({ req, reply, app, body }) => {
-        if (!app.config.signup.enabled) throw new NotFoundError('Not found');
+        const { enabled, maxTenants, termsUrl, privacyUrl } = app.config.signup;
+        if (!enabled) throw new NotFoundError('Not found');
+        const consentRequired = Boolean(termsUrl || privacyUrl);
+        if (consentRequired && body.acceptTerms !== true)
+          throw new ValidationError('You must accept the terms and the privacy policy to create an account', [
+            {
+              path: 'acceptTerms',
+              code: 'TERMS_NOT_ACCEPTED',
+              message: 'Accept the terms and privacy policy to continue',
+            },
+          ]);
         return startedSession(
           app,
           reply,
-          await app.auth.signUp(body, { maxTenants: app.config.signup.maxTenants, ...clientOf(req) }),
+          await app.auth.signUp(body, {
+            maxTenants,
+            ...(consentRequired
+              ? { accepted: { ...(termsUrl ? { termsUrl } : {}), ...(privacyUrl ? { privacyUrl } : {}) } }
+              : {}),
+            ...clientOf(req),
+          }),
         );
       },
     },
