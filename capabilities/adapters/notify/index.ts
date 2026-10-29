@@ -213,10 +213,34 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
   return [channel];
 }
 
+/** The part of a mail transport this code uses; nodemailer's transporter and the development sink both fit it. */
+export interface MailTransport {
+  sendMail(message: {
+    from: string;
+    to: string | string[];
+    subject: string;
+    text?: string;
+    html?: string;
+    replyTo?: string;
+    messageId?: string;
+    headers?: Record<string, string>;
+  }): Promise<{ messageId?: unknown; accepted?: unknown[]; rejected?: unknown[] }>;
+}
+
+/** `json:` is a development sink: nothing is sent, and every recipient is reported as accepted. */
+const developmentSink: MailTransport = {
+  async sendMail(message) {
+    return {
+      ...(message.messageId ? { messageId: message.messageId } : {}),
+      accepted: [message.to].flat(),
+      rejected: [],
+    };
+  },
+};
+
 /** The one place the operator's SMTP URL becomes a transport (shared by `notify-email` and the platform's own mail). */
-export function smtpTransport(smtp: string) {
-  // `json:` is a development sink: messages are built but not sent, and returned in the output.
-  if (smtp === 'json:') return nodemailer.createTransport({ jsonTransport: true });
+export function smtpTransport(smtp: string): MailTransport {
+  if (smtp === 'json:') return developmentSink;
   let url: URL;
   try {
     url = new URL(smtp);
@@ -226,9 +250,10 @@ export function smtpTransport(smtp: string) {
   if (url.protocol !== 'smtps:' && url.protocol !== 'smtp:')
     throw new Error('OMNIFLOW_SMTP_URL must start with smtps:// (TLS) or smtp:// (STARTTLS)');
   const secure = url.protocol === 'smtps:';
+  const defaultPort = secure ? 465 : 587;
   return nodemailer.createTransport({
     host: url.hostname,
-    port: url.port ? Number(url.port) : secure ? 465 : 587,
+    port: url.port ? Number(url.port) : defaultPort,
     secure,
     ...(url.username
       ? { auth: { user: decodeURIComponent(url.username), pass: decodeURIComponent(url.password) } }

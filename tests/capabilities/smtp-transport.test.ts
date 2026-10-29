@@ -22,8 +22,9 @@ describe('smtpTransport', () => {
     expect(plain.auth).toBeUndefined();
   });
 
-  it('keeps the json: development sink, and refuses anything else with a plain message', () => {
-    expect(() => smtpTransport('json:')).not.toThrow();
+  it('keeps the json: development sink (accepts every recipient, sends nothing), and refuses anything else plainly', async () => {
+    const info = await smtpTransport('json:').sendMail({ from: 'a@example.com', to: ['b@example.com'], subject: 's' });
+    expect(info.accepted).toEqual(['b@example.com']);
     expect(() => smtpTransport('not a url')).toThrow(/OMNIFLOW_SMTP_URL/);
     expect(() => smtpTransport('http://mail.example.com')).toThrow(/smtps:\/\//);
   });
