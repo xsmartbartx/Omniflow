@@ -213,12 +213,16 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
   return [channel];
 }
 
+/** The one place the operator's SMTP URL becomes a transport (shared by `notify-email` and the platform's own mail). */
+export function smtpTransport(smtp: string) {
+  // `json:` is a development sink: messages are built but not sent, and returned in the output.
+  return smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
+}
+
 export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] {
   const smtp = config.email.smtpUrl;
   if (!smtp) return [];
-  // `json:` is a development sink: messages are built but not sent, and returned in the output.
-  const transport =
-    smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
+  const transport = smtpTransport(smtp);
   const email: CapabilityAdapter = {
     declaration: {
       name: 'notify-email',

@@ -184,7 +184,8 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         if (!mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
         const reset = app.auth.requestPasswordReset(body.email);
         if (reset) {
-          const link = `${app.config.publicUrl.replace(/\/+$/, '')}/#/reset?token=${reset.token}`;
+          const base = app.config.publicUrl.endsWith('/') ? app.config.publicUrl.slice(0, -1) : app.config.publicUrl;
+          const link = `${base}/#/reset?token=${reset.token}`;
           // not awaited: the answer must not reveal, by how long it takes, whether an address has an account
           void mailer
             .send({
