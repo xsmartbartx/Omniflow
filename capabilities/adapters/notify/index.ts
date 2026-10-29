@@ -224,17 +224,18 @@ export interface MailTransport {
     replyTo?: string;
     messageId?: string;
     headers?: Record<string, string>;
-  }): Promise<{ messageId?: unknown; accepted?: unknown[]; rejected?: unknown[] }>;
+  }): Promise<{ messageId?: string; accepted?: unknown[]; rejected?: unknown[] }>;
 }
 
 /** `json:` is a development sink: nothing is sent, and every recipient is reported as accepted. */
 const developmentSink: MailTransport = {
-  async sendMail(message) {
-    return {
+  sendMail: (message) =>
+    Promise.resolve({
       ...(message.messageId ? { messageId: message.messageId } : {}),
       accepted: [message.to].flat(),
       rejected: [],
-    };
+    }),
+};
   },
 };
 
