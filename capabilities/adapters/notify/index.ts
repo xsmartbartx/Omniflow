@@ -216,7 +216,24 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
 /** The one place the operator's SMTP URL becomes a transport (shared by `notify-email` and the platform's own mail). */
 export function smtpTransport(smtp: string) {
   // `json:` is a development sink: messages are built but not sent, and returned in the output.
-  return smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
+  if (smtp === 'json:') return nodemailer.createTransport({ jsonTransport: true });
+  let url: URL;
+  try {
+    url = new URL(smtp);
+  } catch {
+    throw new Error('OMNIFLOW_SMTP_URL must look like smtps://user:password@host:465 (or smtp://… for STARTTLS)');
+  }
+  if (url.protocol !== 'smtps:' && url.protocol !== 'smtp:')
+    throw new Error('OMNIFLOW_SMTP_URL must start with smtps:// (TLS) or smtp:// (STARTTLS)');
+  const secure = url.protocol === 'smtps:';
+  return nodemailer.createTransport({
+    host: url.hostname,
+    port: url.port ? Number(url.port) : secure ? 465 : 587,
+    secure,
+    ...(url.username
+      ? { auth: { user: decodeURIComponent(url.username), pass: decodeURIComponent(url.password) } }
+      : {}),
+  });
 }
 
 export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] {
