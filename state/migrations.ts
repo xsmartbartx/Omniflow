@@ -559,4 +559,19 @@ CREATE TABLE billing_webhook_events (
 CREATE INDEX billing_accounts_status ON billing_accounts (status, plan);
 `,
   },
+  {
+    id: 5,
+    name: 'password-resets',
+    sql: `
+-- Only a hash of each reset token is stored; a token works once and expires.
+CREATE TABLE password_resets (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE INDEX password_resets_user ON password_resets (user_id);
+`,
+  },
 ];

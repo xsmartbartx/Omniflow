@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { stringify } from 'yaml';
 import type { LlmClient } from '../../authoring/index.ts';
 import { systemClock } from '../../core/index.ts';
+import type { Mailer } from '../../gateway/context.ts';
 import { buildServer } from '../../gateway/server.ts';
 import type { Role } from '../../schemas/index.ts';
 import { loadConfig } from '../../server/config.ts';
@@ -40,7 +41,9 @@ export interface Client {
   apiKey?: string;
 }
 
-export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmClient } = {}): Promise<Api> {
+export async function makeApi(
+  opts: { env?: Record<string, string>; llm?: LlmClient; mailer?: Mailer } = {},
+): Promise<Api> {
   const dir = mkdtempSync(join(tmpdir(), 'omniflow-api-'));
   const config = loadConfig(
     {
@@ -56,7 +59,7 @@ export async function makeApi(opts: { env?: Record<string, string>; llm?: LlmCli
     { cwd: dir },
   );
   const state = makeState({ clock: systemClock });
-  const app = createOmniflow(config, { state, llm: opts.llm ?? null });
+  const app = createOmniflow(config, { state, llm: opts.llm ?? null, ...(opts.mailer ? { mailer: opts.mailer } : {}) });
   await app.start();
   const { server } = await buildServer(app);
   await server.ready();

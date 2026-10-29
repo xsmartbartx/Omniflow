@@ -49,7 +49,7 @@ export interface RouteDef {
   /** Handler takes over the raw response (streaming). */
   raw?: boolean;
   /** Stricter per-IP rate limit bucket name. */
-  limit?: 'login' | 'webhook' | 'sso' | 'signup';
+  limit?: 'login' | 'webhook' | 'sso' | 'signup' | 'reset' | 'redeem';
   handler: (ctx: Ctx) => unknown; // may return a promise; the route plumbing awaits it
 }
 
@@ -205,6 +205,8 @@ export function registerRoutes(
     webhook: RateLimiter;
     sso: RateLimiter;
     signup: RateLimiter;
+    reset: RateLimiter;
+    redeem: RateLimiter;
   },
 ): void {
   for (const def of defs) {

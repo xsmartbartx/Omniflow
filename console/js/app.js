@@ -246,13 +246,33 @@ async function showLogin() {
   shellParts = undefined;
   const mod = await import('./views/login.js');
   const info = await api.get('/v1/info').catch(() => undefined);
-  if (info?.mode === 'nexora') clear(root).append(mod.nexoraSignIn());
-  else if (info?.signup && location.hash === '#/signup') {
-    clear(root).append(mod.signUp({ onSignedIn: start, terms: info.signupTerms }));
-    document.title = 'Create an account · OmniFlow';
-    return;
-  } else clear(root).append(mod.default({ onSignedIn: start, signup: Boolean(info?.signup) }));
-  document.title = 'Sign in · OmniFlow';
+  const { node, title } = loginScreen(mod, info);
+  clear(root).append(node);
+  document.title = `${title} · OmniFlow`;
+}
+
+/** Which signed-out screen the address asks for: sign in, create an account, or one of the password-reset steps. */
+function loginScreen(mod, info) {
+  const hash = location.hash;
+  if (info?.mode === 'nexora') return { node: mod.nexoraSignIn(), title: 'Sign in' };
+  if (info?.signup && hash === '#/signup')
+    return { node: mod.signUp({ onSignedIn: start, terms: info.signupTerms }), title: 'Create an account' };
+  if (info?.passwordReset && hash === '#/forgot') return { node: mod.forgotPassword(), title: 'Reset your password' };
+  if (info?.passwordReset && hash.startsWith('#/reset')) {
+    const token = new URLSearchParams(hash.split('?')[1] ?? '').get('token') ?? '';
+    const onDone = () => {
+      location.hash = '#/login';
+    };
+    return { node: mod.resetPassword({ token, onDone }), title: 'Choose a new password' };
+  }
+  return {
+    node: mod.default({
+      onSignedIn: start,
+      signup: Boolean(info?.signup),
+      passwordReset: Boolean(info?.passwordReset),
+    }),
+    title: 'Sign in',
+  };
 }
 
 async function start() {

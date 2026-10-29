@@ -90,6 +90,10 @@ export async function buildServer(app: OmniFlow): Promise<{ server: FastifyInsta
     sso: new RateLimiter(240, 120),
     // Account creation hashes a password and creates a tenant: a handful per IP, then one every 30 seconds.
     signup: new RateLimiter(2, 5),
+    // Each reset request may send an email: a few per address range, then slowly.
+    reset: new RateLimiter(2, 5),
+    // Redeeming a link sends nothing and the tokens are unguessable, so this is looser, and apart from sign-in attempts.
+    redeem: new RateLimiter(10, 10),
   };
   const headers = securityHeaders(app);
 

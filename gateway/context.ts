@@ -69,6 +69,11 @@ export interface Config {
   billing: BillingConfig;
 }
 
+/** Sends the platform's own mail (password resets). Absent when no SMTP relay is configured. */
+export interface Mailer {
+  send(message: { to: string; subject: string; text: string }): Promise<void>;
+}
+
 export interface OmniFlow {
   config: Config;
   log: Logger;
@@ -90,6 +95,8 @@ export interface OmniFlow {
   alerts: AlertManager;
   authoring: AuthoringService;
   billing: StripeBillingService;
+  /** Outgoing mail, when an SMTP relay is configured. */
+  mailer: Mailer | undefined;
   /** Present only when OMNIFLOW_RUN_WEBHOOKS is set. */
   webhooks?: { tick(): Promise<number>; start(): void; stop(): void };
   /** Present only in `nexora` mode. */
