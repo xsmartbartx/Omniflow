@@ -82,6 +82,11 @@ OmniFlow reduces risk; it does not remove your part in it.
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.
+- **Password reset by email.** With `OMNIFLOW_SMTP_URL` set, the sign-in page offers a reset link. The link carries a random
+  token that works once and expires in 30 minutes; only its hash is stored. The request always answers the same whether or not
+  the address has an account, and sends the email without making the person wait for it, so it cannot be used to find accounts.
+  Redeeming a link ends every session of that user and clears a lockout. Whoever controls the mailbox controls the account, so
+  point the relay at a sender whose mail you trust to arrive.
 - **Retention.** Run history and the audit log are kept until you archive them.
 
 ## Hardening checklist

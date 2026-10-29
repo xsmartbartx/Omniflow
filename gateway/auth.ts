@@ -24,6 +24,8 @@ const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const MIN_PASSWORD = 12;
 const MAX_FAILURES = 5;
 const LOCK_MS = 15 * 60_000;
+/** A mailed reset link works for this long, once. */
+const RESET_TTL_MS = 30 * 60_000;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
@@ -259,6 +261,53 @@ export class Authenticator {
       type: 'auth.user-updated',
       actor: { type: 'user', id: userId },
       data: { userId, change: 'password' },
+    });
+  }
+
+  /**
+   * Start a password reset. Returns the token to mail out, or undefined when there is nothing to send (no such account,
+   * disabled, or ambiguous): the caller answers the same either way so the form cannot be used to find accounts.
+   */
+  requestPasswordReset(
+    email: string,
+  ): { to: string; name: string; token: string; expiresInMinutes: number } | undefined {
+    const matches = this.st.identity.findUsersByEmail(email.trim());
+    const user = matches.length === 1 ? matches[0] : undefined;
+    if (!user || user.disabled || !user.passwordHash) return undefined;
+    const token = randomToken(32);
+    this.st.identity.createPasswordReset(
+      user.id,
+      createHash('sha256').update(token).digest('hex'),
+      new Date(Date.now() + RESET_TTL_MS).toISOString(),
+    );
+    this.st.events.append({
+      tenant: user.tenant,
+      type: 'auth.user-updated',
+      actor: { type: 'user', id: user.id },
+      data: { userId: user.id, change: 'password-reset-requested' },
+    });
+    return { to: user.email, name: user.name, token, expiresInMinutes: RESET_TTL_MS / 60_000 };
+  }
+
+  /** Finish a reset with the mailed token: new password, every session ended, any lockout cleared. */
+  async completePasswordReset(token: string, next: string): Promise<void> {
+    const invalid = new AuthenticationError('This reset link is invalid or has expired. Request a new one.');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const owner = this.st.identity.peekPasswordReset(tokenHash);
+    const user = owner ? this.st.identity.getUser(owner) : undefined;
+    if (!user || user.disabled) throw invalid;
+    // check the password before redeeming, so a weak one does not use up the link
+    checkPasswordPolicy(next, user.email);
+    const passwordHash = await hashPassword(next);
+    if (this.st.identity.consumePasswordReset(tokenHash) !== user.id) throw invalid;
+    this.st.identity.updateUser(user.id, { passwordHash, mustChangePassword: false });
+    this.st.identity.recordLoginSuccess(user.id);
+    this.st.identity.deleteUserSessions(user.id);
+    this.st.events.append({
+      tenant: user.tenant,
+      type: 'auth.user-updated',
+      actor: { type: 'user', id: user.id },
+      data: { userId: user.id, change: 'password-reset' },
     });
   }
 

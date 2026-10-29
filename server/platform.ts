@@ -6,7 +6,8 @@ import { type CapabilityRegistry, createDefaultRegistry, sendToChannel } from '.
 import { type Clock, createLogger, type Logger, randomToken, systemClock } from '../core/index.ts';
 import { Authenticator } from '../gateway/auth.ts';
 import { StripeBillingService } from '../billing/service.ts';
-import type { OmniFlow } from '../gateway/context.ts';
+import { createMailer } from './mailer.ts';
+import type { Mailer, OmniFlow } from '../gateway/context.ts';
 import { AlertManager, AnalysisAgent, createMetrics, formatAlert } from '../insight/index.ts';
 import { FakeCore, NexoraService, OutboxWorker } from '../nexora/index.ts';
 import { ApprovalService, Orchestrator } from '../orchestration/orchestrator/index.ts';
@@ -37,6 +38,8 @@ export interface OmniflowOverrides {
   clock?: Clock;
   log?: Logger;
   capabilities?: CapabilityRegistry;
+  /** Replace the SMTP mailer (tests). */
+  mailer?: Mailer;
   /** Replace the fake NEXORA Core (tests; `nexora` mode only). */
   core?: FakeCore;
 }
@@ -156,6 +159,7 @@ export function createOmniflow(config: Config, overrides: OmniflowOverrides = {}
     approvals,
     auth,
     billing,
+    mailer: overrides.mailer ?? createMailer(config),
     metrics,
     analysis,
     alerts,

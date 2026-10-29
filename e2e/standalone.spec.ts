@@ -191,3 +191,26 @@ test('self-serve sign-up: a visitor creates an account, lands in a workspace of 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   w.assertClean();
 });
+
+test('password reset: the request screen answers the same for any address, and a made-up link is refused', async ({
+  page,
+}) => {
+  const w = watch(page);
+  await page.goto(BASE);
+  await page.getByRole('link', { name: 'Forgot your password?' }).click();
+  await expect(page.getByRole('button', { name: 'Send reset link' })).toBeVisible();
+  await a11y(page, 'forgot password');
+  await page.getByLabel('Email').fill('nobody-at-all@example.com');
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByText(/If an account exists for that address/)).toBeVisible();
+
+  await page.goto(`${BASE}/#/reset?token=${'a'.repeat(43)}`);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Change password' })).toBeVisible();
+  await a11y(page, 'reset password');
+  await page.getByLabel('New password (at least 12 characters)').fill('a-long-enough-passphrase');
+  await page.getByLabel('Repeat the new password').fill('a-long-enough-passphrase');
+  await page.getByRole('button', { name: 'Change password' }).click();
+  await expect(page.getByText(/invalid or has expired/)).toBeVisible();
+  w.assertClean();
+});

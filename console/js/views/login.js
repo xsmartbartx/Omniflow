@@ -6,7 +6,7 @@ const loginShell = (...children) =>
   h('div', { class: 'login' }, h('div', { class: 'login-card' }, card(null, ...children)));
 
 /** Sign-in screen. Returns a node; calls onSignedIn() after the session cookie is set. */
-export default function login({ onSignedIn, signup = false }) {
+export default function login({ onSignedIn, signup = false, passwordReset = false }) {
   const email = input({
     type: 'email',
     name: 'email',
@@ -35,6 +35,7 @@ export default function login({ onSignedIn, signup = false }) {
     field('Password', password),
     slot,
     button('Sign in', { kind: 'primary', type: 'submit' }),
+    passwordReset ? h('p', { class: 'muted' }, h('a', { href: '#/forgot' }, 'Forgot your password?')) : null,
     signup ? h('p', { class: 'muted' }, 'New here? ', h('a', { href: '#/signup' }, 'Create an account')) : null,
   );
   return loginShell(
@@ -175,5 +176,91 @@ export function signUp({ onSignedIn, terms }) {
       button('Create account', { kind: 'primary', type: 'submit' }),
       h('p', { class: 'muted' }, 'Already have an account? ', h('a', { href: '#/login' }, 'Sign in')),
     ),
+  );
+}
+
+/** A small card with one form, for the password-reset screens. */
+function resetCard(title, intro, fields, slot, submitLabel, onSubmit) {
+  return loginShell(
+    h(
+      'form',
+      { class: 'form', onSubmit },
+      h('h2', {}, title),
+      h('p', { class: 'muted' }, intro),
+      ...fields,
+      slot,
+      button(submitLabel, { kind: 'primary', type: 'submit' }),
+      h('p', { class: 'muted' }, h('a', { href: '#/login' }, 'Back to sign in')),
+    ),
+  );
+}
+
+/** Ask for a reset link. The answer never says whether the address has an account. */
+export function forgotPassword() {
+  const email = input({
+    type: 'email',
+    name: 'email',
+    autocomplete: 'username',
+    required: true,
+    autofocus: true,
+    placeholder: 'you@company.com',
+  });
+  const slot = h('div');
+  const submit = async (ev) => {
+    ev?.preventDefault();
+    clear(slot);
+    try {
+      await api.post('/v1/auth/forgot', { email: email.value.trim() });
+      clear(slot).append(
+        notice(
+          'info',
+          'If an account exists for that address, a reset link is on its way. It works once and expires in 30 minutes.',
+        ),
+      );
+    } catch (e) {
+      clear(slot).append(errorBox(e));
+    }
+  };
+  return resetCard(
+    'Reset your password',
+    'Enter your email and we will send you a link.',
+    [field('Email', email)],
+    slot,
+    'Send reset link',
+    submit,
+  );
+}
+
+/** Choose a new password with the token from the emailed link. */
+export function resetPassword({ token, onDone }) {
+  const next = input({
+    type: 'password',
+    name: 'password',
+    autocomplete: 'new-password',
+    required: true,
+    minlength: 12,
+  });
+  const again = input({ type: 'password', name: 'again', autocomplete: 'new-password', required: true, minlength: 12 });
+  const slot = h('div');
+  const submit = async (ev) => {
+    ev?.preventDefault();
+    clear(slot);
+    if (next.value !== again.value) return clear(slot).append(notice('bad', 'The two passwords do not match.'));
+    try {
+      await api.post('/v1/auth/reset', { token, password: next.value });
+      toast('Password changed. Sign in with your new password.', 'good');
+      await onDone();
+    } catch (e) {
+      clear(slot).append(errorBox(e, { title: 'Could not reset the password' }));
+    }
+  };
+  const fields = [field('New password (at least 12 characters)', next), field('Repeat the new password', again)];
+  return resetCard(
+    'Choose a new password',
+    'The link you followed is valid once.',
+    fields,
+    slot,
+    'Change password',
+    submit,
   );
 }

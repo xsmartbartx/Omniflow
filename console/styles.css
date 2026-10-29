@@ -17,6 +17,8 @@
   --muted: #1b202d;
   --muted-foreground: #98a3b3;
   --destructive: #e14747;
+  /* red for text: lighter than the fill colour so it stays readable on raised dark surfaces (WCAG 1.4.3) */
+  --destructive-text: #f07575;
   --destructive-foreground: #070a13;
   --success: #2eb877;
   --warning: #f6a823;
@@ -56,6 +58,7 @@
     --muted: #f3f4f7;
     --muted-foreground: #5c6370;
     --destructive: #dc2828;
+    --destructive-text: #be1d1d;
     --destructive-foreground: #f9fafb;
     --success: #1c6e48;
     --warning: #845606;
@@ -82,6 +85,7 @@
   --muted: #f3f4f7;
   --muted-foreground: #5c6370;
   --destructive: #dc2828;
+  --destructive-text: #be1d1d;
   --destructive-foreground: #f9fafb;
   --success: #1c6e48;
   --warning: #845606;
@@ -546,7 +550,7 @@ textarea.input {
 .badge-bad {
   background: transparent;
   border-color: color-mix(in srgb, var(--destructive) 45%, transparent);
-  color: var(--destructive);
+  color: var(--destructive-text);
 }
 .badge-neutral {
   background: transparent;

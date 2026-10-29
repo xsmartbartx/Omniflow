@@ -213,12 +213,57 @@ export function createChannelNotifier(config: AdapterConfig): CapabilityAdapter[
   return [channel];
 }
 
+/** The part of a mail transport this code uses; nodemailer's transporter and the development sink both fit it. */
+export interface MailTransport {
+  sendMail(message: {
+    from: string;
+    to: string | string[];
+    subject: string;
+    text?: string;
+    html?: string;
+    replyTo?: string;
+    messageId?: string;
+    headers?: Record<string, string>;
+  }): Promise<{ messageId?: string; accepted?: unknown[]; rejected?: unknown[] }>;
+}
+
+/** `json:` is a development sink: nothing is sent, and every recipient is reported as accepted. */
+const developmentSink: MailTransport = {
+  sendMail: (message) =>
+    Promise.resolve({
+      ...(message.messageId ? { messageId: message.messageId } : {}),
+      accepted: [message.to].flat(),
+      rejected: [],
+    }),
+};
+
+/** The one place the operator's SMTP URL becomes a transport (shared by `notify-email` and the platform's own mail). */
+export function smtpTransport(smtp: string): MailTransport {
+  if (smtp === 'json:') return developmentSink;
+  let url: URL;
+  try {
+    url = new URL(smtp);
+  } catch {
+    throw new Error('OMNIFLOW_SMTP_URL must look like smtps://user:password@host:465 (or smtp://… for STARTTLS)');
+  }
+  if (url.protocol !== 'smtps:' && url.protocol !== 'smtp:')
+    throw new Error('OMNIFLOW_SMTP_URL must start with smtps:// (TLS) or smtp:// (STARTTLS)');
+  const secure = url.protocol === 'smtps:';
+  const defaultPort = secure ? 465 : 587;
+  return nodemailer.createTransport({
+    host: url.hostname,
+    port: url.port ? Number(url.port) : defaultPort,
+    secure,
+    ...(url.username
+      ? { auth: { user: decodeURIComponent(url.username), pass: decodeURIComponent(url.password) } }
+      : {}),
+  });
+}
+
 export function createEmailNotifier(config: AdapterConfig): CapabilityAdapter[] {
   const smtp = config.email.smtpUrl;
   if (!smtp) return [];
-  // `json:` is a development sink: messages are built but not sent, and returned in the output.
-  const transport =
-    smtp === 'json:' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(smtp);
+  const transport = smtpTransport(smtp);
   const email: CapabilityAdapter = {
     declaration: {
       name: 'notify-email',

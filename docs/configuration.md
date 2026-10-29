@@ -70,7 +70,7 @@ Docker Compose reads `.env` next to `docker-compose.yml` (or the file named by `
 |---|---|---|
 | `OMNIFLOW_STORAGE_DIR` | `<data dir>/files` | Root that the `file-*` capabilities are confined to. |
 | `OMNIFLOW_DATASOURCES` | `{}` | JSON `name → URL` (`postgres://…` or `sqlite:///path`). Enables `database-query` / `database-command`. |
-| `OMNIFLOW_SMTP_URL` / `OMNIFLOW_SMTP_FROM` | | SMTP connection (`smtps://user:pass@host:465`) and sender. Enables `notify-email`. |
+| `OMNIFLOW_SMTP_URL` / `OMNIFLOW_SMTP_FROM` | | SMTP connection (`smtps://user:pass@host:465`) and sender. Enables `notify-email`, and the "Forgot your password?" email reset on the sign-in page (standalone mode). |
 | `OMNIFLOW_LLM_API_KEY` (or `ANTHROPIC_API_KEY`) | | Enables `llm-inference` and AI authoring (Planner, script importer). |
 | `OMNIFLOW_LLM_MODEL` | `claude-sonnet-5` | Model used for both. |
 | `OMNIFLOW_LLM_BASE_URL` | `https://api.anthropic.com` | Point at a compatible gateway if you need one. |

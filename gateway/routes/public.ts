@@ -58,6 +58,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         mode: app.config.mode,
         capabilities: app.capabilities.latest().length,
         setupRequired: app.state.identity.countUsers() === 0,
+        passwordReset: Boolean(app.mailer) && app.config.mode === 'standalone',
         signup: app.config.signup.enabled,
         ...(app.config.signup.enabled && (app.config.signup.termsUrl || app.config.signup.privacyUrl)
           ? {
@@ -168,6 +169,52 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
             ...clientOf(req),
           }),
         );
+      },
+    },
+    {
+      method: 'POST',
+      url: '/v1/auth/forgot',
+      summary: 'Email a password reset link; always answers the same, whether or not the address has an account',
+      tag: 'Auth',
+      public: true,
+      limit: 'reset',
+      schema: { body: obj({ email: { type: 'string', format: 'email', maxLength: 254 } }, ['email']) },
+      handler: ({ app, body, req }) => {
+        const mailer = app.mailer;
+        if (!mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
+        const reset = app.auth.requestPasswordReset(body.email);
+        if (reset) {
+          const base = app.config.publicUrl.endsWith('/') ? app.config.publicUrl.slice(0, -1) : app.config.publicUrl;
+          const link = `${base}/#/reset?token=${reset.token}`;
+          // not awaited: the answer must not reveal, by how long it takes, whether an address has an account
+          void mailer
+            .send({
+              to: reset.to,
+              subject: 'Reset your OmniFlow password',
+              text: `Hello ${reset.name},\n\nUse this link to choose a new password. It works once and expires in ${reset.expiresInMinutes} minutes:\n\n${link}\n\nIf you did not ask for this, ignore this email: your password has not changed.\n`,
+            })
+            .catch((error: unknown) => app.log.warn('could not send a password reset email', { error, ip: req.ip }));
+        }
+        return { ok: true };
+      },
+    },
+    {
+      method: 'POST',
+      url: '/v1/auth/reset',
+      summary: 'Choose a new password with the token from the reset email',
+      tag: 'Auth',
+      public: true,
+      limit: 'redeem',
+      schema: {
+        body: obj(
+          { token: { type: 'string', minLength: 20, maxLength: 200 }, password: { type: 'string', maxLength: 256 } },
+          ['token', 'password'],
+        ),
+      },
+      handler: async ({ app, body }) => {
+        if (!app.mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
+        await app.auth.completePasswordReset(body.token, body.password);
+        return { ok: true };
       },
     },
     {

@@ -238,6 +238,37 @@ export class IdentityStore {
       ],
     );
   }
+  /** Store a reset token's hash (never the token) and retire any earlier open ones for the user. */
+  createPasswordReset(userId: string, tokenHash: string, expiresAt: string): void {
+    this.db.transaction(() => {
+      this.db.run('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL', [this.now(), userId]);
+      this.db.run('INSERT INTO password_resets (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', [
+        tokenHash,
+        userId,
+        this.now(),
+        expiresAt,
+      ]);
+    });
+  }
+  /** Who a reset token belongs to, without using it up (undefined if unknown, used or expired). */
+  peekPasswordReset(tokenHash: string): string | undefined {
+    return this.db.get<{ user_id: string }>(
+      'SELECT user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?',
+      [tokenHash, this.now()],
+    )?.user_id;
+  }
+  /** Redeem a reset token once: returns the user it belongs to, or undefined if unknown, used or expired. */
+  consumePasswordReset(tokenHash: string): string | undefined {
+    return this.db.transaction(() => {
+      const row = this.db.get<{ user_id: string }>(
+        'SELECT user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?',
+        [tokenHash, this.now()],
+      );
+      if (!row) return undefined;
+      this.db.run('UPDATE password_resets SET used_at = ? WHERE token_hash = ?', [this.now(), tokenHash]);
+      return row.user_id;
+    });
+  }
   recordLoginSuccess(id: string): void {
     this.db.run('UPDATE users SET last_login_at = ?, failed_logins = 0, locked_until = NULL WHERE id = ?', [
       this.now(),
