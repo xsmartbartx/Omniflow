@@ -236,8 +236,6 @@ const developmentSink: MailTransport = {
       rejected: [],
     }),
 };
-  },
-};
 
 /** The one place the operator's SMTP URL becomes a transport (shared by `notify-email` and the platform's own mail). */
 export function smtpTransport(smtp: string): MailTransport {
