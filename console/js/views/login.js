@@ -6,7 +6,7 @@ const loginShell = (...children) =>
   h('div', { class: 'login' }, h('div', { class: 'login-card' }, card(null, ...children)));
 
 /** Sign-in screen. Returns a node; calls onSignedIn() after the session cookie is set. */
-export default function login({ onSignedIn, signup = false, passwordReset = false }) {
+export default function login({ onSignedIn, signup = false, passwordReset = false, confirmLink = false }) {
   const email = input({
     type: 'email',
     name: 'email',
@@ -36,6 +36,9 @@ export default function login({ onSignedIn, signup = false, passwordReset = fals
     slot,
     button('Sign in', { kind: 'primary', type: 'submit' }),
     passwordReset ? h('p', { class: 'muted' }, h('a', { href: '#/forgot' }, 'Forgot your password?')) : null,
+    confirmLink
+      ? h('p', { class: 'muted' }, h('a', { href: '#/confirm' }, 'Did not get the confirmation email?'))
+      : null,
     signup ? h('p', { class: 'muted' }, 'New here? ', h('a', { href: '#/signup' }, 'Create an account')) : null,
   );
   return loginShell(
@@ -148,7 +151,7 @@ export function signUp({ onSignedIn, terms }) {
     ev?.preventDefault();
     clear(slot);
     try {
-      await api.post('/v1/auth/signup', {
+      const res = await api.post('/v1/auth/signup', {
         ...(terms ? { acceptTerms: accept.checked } : {}),
         email: email.value.trim(),
         password: password.value,
@@ -156,25 +159,47 @@ export function signUp({ onSignedIn, terms }) {
         ...(organization.value.trim() ? { organization: organization.value.trim() } : {}),
       });
       password.value = '';
+      if (res?.verify) return clear(page).append(checkYourEmail(email.value.trim()));
       await onSignedIn();
     } catch (e) {
       clear(slot).append(errorBox(e, { title: 'Could not create the account' }));
     }
   };
-  return loginShell(
+  const page = h('div', { class: 'stack' });
+  const form = h(
+    'form',
+    { class: 'form', onSubmit: submit },
+    h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
+    h('p', { class: 'muted' }, 'Create an account. You get a workspace of your own, and you are its administrator.'),
+    field('Name', name),
+    field('Company', organization),
+    field('Email', email),
+    field('Password (at least 12 characters)', password),
+    terms ? consent(accept, terms) : null,
+    slot,
+    button('Create account', { kind: 'primary', type: 'submit' }),
+    h('p', { class: 'muted' }, 'Already have an account? ', h('a', { href: '#/login' }, 'Sign in')),
+  );
+  page.append(form);
+  return loginShell(page);
+}
+
+/** After sign-up with email confirmation on: tell the person to look in their inbox. */
+function checkYourEmail(address) {
+  return h(
+    'div',
+    { class: 'stack' },
+    h('h2', {}, 'Check your email'),
+    notice(
+      'info',
+      `We sent a confirmation link to ${address}. Follow it to finish creating your account; it works once and expires in 30 minutes.`,
+    ),
     h(
-      'form',
-      { class: 'form', onSubmit: submit },
-      h('div', { class: 'brand' }, h('img', { src: '/favicon.svg', alt: '', width: 30, height: 30 }), 'OmniFlow'),
-      h('p', { class: 'muted' }, 'Create an account. You get a workspace of your own, and you are its administrator.'),
-      field('Name', name),
-      field('Company', organization),
-      field('Email', email),
-      field('Password (at least 12 characters)', password),
-      terms ? consent(accept, terms) : null,
-      slot,
-      button('Create account', { kind: 'primary', type: 'submit' }),
-      h('p', { class: 'muted' }, 'Already have an account? ', h('a', { href: '#/login' }, 'Sign in')),
+      'p',
+      { class: 'muted' },
+      h('a', { href: '#/confirm' }, 'Send the link again'),
+      ' · ',
+      h('a', { href: '#/login' }, 'Sign in'),
     ),
   );
 }
@@ -195,8 +220,8 @@ function resetCard(title, intro, fields, slot, submitLabel, onSubmit) {
   );
 }
 
-/** Ask for a reset link. The answer never says whether the address has an account. */
-export function forgotPassword() {
+/** A screen that takes an email address and asks the server to mail a link; the answer never says whether the address has an account. */
+function emailLinkScreen({ title, intro, endpoint, submitLabel, done }) {
   const email = input({
     type: 'email',
     name: 'email',
@@ -210,25 +235,55 @@ export function forgotPassword() {
     ev?.preventDefault();
     clear(slot);
     try {
-      await api.post('/v1/auth/forgot', { email: email.value.trim() });
-      clear(slot).append(
-        notice(
-          'info',
-          'If an account exists for that address, a reset link is on its way. It works once and expires in 30 minutes.',
-        ),
-      );
+      await api.post(endpoint, { email: email.value.trim() });
+      clear(slot).append(notice('info', done));
     } catch (e) {
       clear(slot).append(errorBox(e));
     }
   };
-  return resetCard(
-    'Reset your password',
-    'Enter your email and we will send you a link.',
-    [field('Email', email)],
-    slot,
-    'Send reset link',
-    submit,
-  );
+  return resetCard(title, intro, [field('Email', email)], slot, submitLabel, submit);
+}
+
+/** Ask for a password reset link. */
+export const forgotPassword = () =>
+  emailLinkScreen({
+    title: 'Reset your password',
+    intro: 'Enter your email and we will send you a link.',
+    endpoint: '/v1/auth/forgot',
+    submitLabel: 'Send reset link',
+    done: 'If an account exists for that address, a reset link is on its way. It works once and expires in 30 minutes.',
+  });
+
+/** Ask for the sign-up confirmation link again. */
+export const resendConfirmation = () =>
+  emailLinkScreen({
+    title: 'Confirm your email address',
+    intro: 'Enter the address you signed up with and we will send the confirmation link again.',
+    endpoint: '/v1/auth/resend-verification',
+    submitLabel: 'Send confirmation link',
+    done: 'If that address is waiting for confirmation, a new link is on its way. It works once and expires in 30 minutes.',
+  });
+
+/** Follow the confirmation link from the sign-up email: confirm straight away and say how it went. */
+export function confirmEmail({ token }) {
+  const result = h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'Confirming your email address…'));
+  api
+    .post('/v1/auth/verify', { token })
+    .then(() => {
+      clear(result).append(
+        h('h2', {}, 'Email confirmed'),
+        notice('good', 'Your account is ready.'),
+        h('a', { class: 'btn btn-primary', href: '#/login' }, 'Sign in'),
+      );
+    })
+    .catch((e) => {
+      clear(result).append(
+        h('h2', {}, 'Could not confirm'),
+        errorBox(e),
+        h('p', { class: 'muted' }, h('a', { href: '#/confirm' }, 'Send a new link')),
+      );
+    });
+  return loginShell(result);
 }
 
 /** Choose a new password with the token from the emailed link. */

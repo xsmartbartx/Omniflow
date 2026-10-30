@@ -52,7 +52,7 @@ OMNIFLOW_SIGNUP_PRIVACY_URL=https://www.omniflow.onenexora.com/privacy.html
 
 ## 5. Open sign-up (you, after 2 to 4)
 
-Read the open sign-up notes in [`security.md`](security.md) first: emails are not verified and new accounts use the host's compute.
+Read the open sign-up notes in [`security.md`](security.md) first: set `OMNIFLOW_SMTP_URL` and `OMNIFLOW_SIGNUP_VERIFY_EMAIL=true` so emails are verified, and remember that new accounts use the host's compute.
 Then set `OMNIFLOW_SIGNUP=true` (and keep `OMNIFLOW_SIGNUP_MAX_TENANTS` modest) and restart. Point the product site's call to
 action at `https://omniflow.onenexora.com/#/signup`.
 

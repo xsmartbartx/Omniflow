@@ -1,5 +1,6 @@
 import { AuthenticationError, ForbiddenError, NotFoundError, ValidationError } from '../../core/index.ts';
 import { ACTIONS } from '../../schemas/index.ts';
+import type { MailedToken } from '../auth.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
 import { obj } from './util.ts';
 
@@ -8,6 +9,42 @@ const clientOf = (req: { ip: string; headers: Record<string, unknown> }) => ({
   ip: req.ip,
   ...(typeof req.headers['user-agent'] === 'string' ? { userAgent: req.headers['user-agent'] } : {}),
 });
+
+type App = Parameters<RouteDef['handler']>[0]['app'];
+
+/** The wording of one kind of emailed link. */
+interface LinkMail {
+  fragment: 'reset' | 'verify';
+  subject: string;
+  action: string;
+  ignore: string;
+}
+const RESET_MAIL: LinkMail = {
+  fragment: 'reset',
+  subject: 'Reset your OmniFlow password',
+  action: 'choose a new password',
+  ignore: 'your password has not changed',
+};
+const VERIFY_MAIL: LinkMail = {
+  fragment: 'verify',
+  subject: 'Confirm your email address for OmniFlow',
+  action: 'confirm your email address and finish creating your account',
+  ignore: 'no account will be usable without it',
+};
+
+/** Email a single-use link. Not awaited: the answer must not reveal, by how long it takes, whether an address has an account. */
+function mailLink(app: App, ip: string, mailed: MailedToken, mail: LinkMail): void {
+  if (!app.mailer) return;
+  const base = app.config.publicUrl.endsWith('/') ? app.config.publicUrl.slice(0, -1) : app.config.publicUrl;
+  const link = `${base}/#/${mail.fragment}?token=${mailed.token}`;
+  void app.mailer
+    .send({
+      to: mailed.to,
+      subject: mail.subject,
+      text: `Hello ${mailed.name},\n\nUse this link to ${mail.action}. It works once and expires in ${mailed.expiresInMinutes} minutes:\n\n${link}\n\nIf you did not ask for this, ignore this email: ${mail.ignore}.\n`,
+    })
+    .catch((error: unknown) => app.log.warn('could not send an email', { error, ip, subject: mail.subject }));
+}
 
 /** Set the session cookie for a fresh sign-in (login or sign-up) and answer with who signed in. */
 function startedSession(
@@ -59,6 +96,7 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
         capabilities: app.capabilities.latest().length,
         setupRequired: app.state.identity.countUsers() === 0,
         passwordReset: Boolean(app.mailer) && app.config.mode === 'standalone',
+        signupVerifyEmail: app.config.signup.enabled && app.config.signup.verifyEmail && Boolean(app.mailer),
         signup: app.config.signup.enabled,
         ...(app.config.signup.enabled && (app.config.signup.termsUrl || app.config.signup.privacyUrl)
           ? {
@@ -158,17 +196,49 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
               message: 'Accept the terms and privacy policy to continue',
             },
           ]);
-        return startedSession(
-          app,
-          reply,
-          await app.auth.signUp(body, {
-            maxTenants,
-            ...(consentRequired
-              ? { accepted: { ...(termsUrl ? { termsUrl } : {}), ...(privacyUrl ? { privacyUrl } : {}) } }
-              : {}),
-            ...clientOf(req),
-          }),
-        );
+        const result = await app.auth.signUp(body, {
+          maxTenants,
+          ...(app.config.signup.verifyEmail && app.mailer ? { verifyEmail: true } : {}),
+          ...(consentRequired
+            ? { accepted: { ...(termsUrl ? { termsUrl } : {}), ...(privacyUrl ? { privacyUrl } : {}) } }
+            : {}),
+          ...clientOf(req),
+        });
+        if ('verify' in result) {
+          mailLink(app, req.ip, result.verify, VERIFY_MAIL);
+          reply.code(202);
+          return { verify: true };
+        }
+        return startedSession(app, reply, result);
+      },
+    },
+    {
+      method: 'POST',
+      url: '/v1/auth/verify',
+      summary: 'Confirm an email address with the token from the sign-up email',
+      tag: 'Auth',
+      public: true,
+      limit: 'redeem',
+      schema: { body: obj({ token: { type: 'string', minLength: 20, maxLength: 200 } }, ['token']) },
+      handler: ({ app, body }) => {
+        if (!app.config.signup.verifyEmail || !app.mailer) throw new NotFoundError('Not found');
+        app.auth.verifyEmail(body.token);
+        return { ok: true };
+      },
+    },
+    {
+      method: 'POST',
+      url: '/v1/auth/resend-verification',
+      summary: 'Email a new confirmation link; always answers the same, whether or not the address awaits confirmation',
+      tag: 'Auth',
+      public: true,
+      limit: 'reset',
+      schema: { body: obj({ email: { type: 'string', format: 'email', maxLength: 254 } }, ['email']) },
+      handler: ({ app, body, req }) => {
+        if (!app.config.signup.verifyEmail || !app.mailer) throw new NotFoundError('Not found');
+        const pending = app.auth.resendEmailVerification(body.email);
+        if (pending) mailLink(app, req.ip, pending, VERIFY_MAIL);
+        return { ok: true };
       },
     },
     {
@@ -180,21 +250,9 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
       limit: 'reset',
       schema: { body: obj({ email: { type: 'string', format: 'email', maxLength: 254 } }, ['email']) },
       handler: ({ app, body, req }) => {
-        const mailer = app.mailer;
-        if (!mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
+        if (!app.mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
         const reset = app.auth.requestPasswordReset(body.email);
-        if (reset) {
-          const base = app.config.publicUrl.endsWith('/') ? app.config.publicUrl.slice(0, -1) : app.config.publicUrl;
-          const link = `${base}/#/reset?token=${reset.token}`;
-          // not awaited: the answer must not reveal, by how long it takes, whether an address has an account
-          void mailer
-            .send({
-              to: reset.to,
-              subject: 'Reset your OmniFlow password',
-              text: `Hello ${reset.name},\n\nUse this link to choose a new password. It works once and expires in ${reset.expiresInMinutes} minutes:\n\n${link}\n\nIf you did not ask for this, ignore this email: your password has not changed.\n`,
-            })
-            .catch((error: unknown) => app.log.warn('could not send a password reset email', { error, ip: req.ip }));
-        }
+        if (reset) mailLink(app, req.ip, reset, RESET_MAIL);
         return { ok: true };
       },
     },

@@ -1,28 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Mailer } from '../../gateway/context.ts';
 import { type Api, makeApi } from '../helpers/api.ts';
+import { inbox, type Sent, tokenOf } from '../helpers/inbox.ts';
 
 const PASSWORD = 'a-long-enough-passphrase';
 const NEW_PASSWORD = 'another-long-passphrase-9';
-
-interface Sent {
-  to: string;
-  subject: string;
-  text: string;
-}
-/** A mailer that keeps what it was asked to send. */
-function inbox(): { mailer: Mailer; sent: Sent[] } {
-  const sent: Sent[] = [];
-  return {
-    sent,
-    mailer: {
-      async send(message) {
-        sent.push(message);
-      },
-    },
-  };
-}
-const tokenOf = (mail: Sent) => /#\/reset\?token=([A-Za-z0-9_-]+)/.exec(mail.text)?.[1] ?? '';
 
 async function withApi(fn: (api: Api, sent: Sent[]) => Promise<void>, env: Record<string, string> = {}) {
   const { mailer, sent } = inbox();
@@ -59,7 +40,7 @@ describe('password reset by email', () => {
       expect((await forgot(api, 'forgetful@example.com')).status).toBe(200);
       expect(sent).toHaveLength(1);
       expect(sent[0]).toMatchObject({ to: 'forgetful@example.com', subject: expect.stringContaining('Reset') });
-      const token = tokenOf(sent[0]!);
+      const token = tokenOf(sent[0]!, 'reset');
       expect(token.length).toBeGreaterThan(20);
 
       expect((await reset(api, token, NEW_PASSWORD)).status).toBe(200);
@@ -89,14 +70,14 @@ describe('password reset by email', () => {
     withApi(async (api, sent) => {
       await signup(api, 'careful@example.com');
       await forgot(api, 'careful@example.com');
-      const token = tokenOf(sent[0]!);
+      const token = tokenOf(sent[0]!, 'reset');
       expect((await reset(api, token, 'short')).status).toBe(400);
       expect((await reset(api, 'z'.repeat(43), NEW_PASSWORD)).status).toBe(401);
 
       // asking again retires the earlier link
       await forgot(api, 'careful@example.com');
       expect((await reset(api, token, NEW_PASSWORD)).status).toBe(401);
-      const fresh = tokenOf(sent[1]!);
+      const fresh = tokenOf(sent[1]!, 'reset');
 
       // an expired link is refused
       api.app.state.db.run("UPDATE password_resets SET expires_at = '2020-01-01T00:00:00.000Z'");
@@ -109,7 +90,7 @@ describe('password reset by email', () => {
       for (let i = 0; i < 6; i++)
         await api.anon.post('/v1/auth/login', { email: 'locked@example.com', password: 'wrong-password-123' });
       await forgot(api, 'locked@example.com');
-      await reset(api, tokenOf(sent[0]!), NEW_PASSWORD);
+      await reset(api, tokenOf(sent[0]!, 'reset'), NEW_PASSWORD);
       expect(
         (await api.anon.post('/v1/auth/login', { email: 'locked@example.com', password: NEW_PASSWORD })).status,
       ).toBe(200);

@@ -40,7 +40,7 @@ export interface Config {
   seedExamples: boolean;
   publishApprovals: number;
   /** Self-serve account creation (standalone mode only); each sign-up gets its own tenant. */
-  signup: { enabled: boolean; maxTenants: number; termsUrl?: string; privacyUrl?: string };
+  signup: { enabled: boolean; maxTenants: number; verifyEmail: boolean; termsUrl?: string; privacyUrl?: string };
   maxConcurrentRuns: number;
   maxConcurrentSteps: number;
   sessionTtlHours: number;
