@@ -313,6 +313,18 @@ export function publicRoutes(getOpenApi: () => object): RouteDef[] {
     },
     {
       method: 'POST',
+      url: '/v1/auth/delete-account',
+      summary: 'Delete your self-serve account and all its data',
+      tag: 'Auth',
+      schema: { body: obj({ password: { type: 'string', maxLength: 256 } }, ['password']) },
+      handler: async ({ reply, app, principal, body }) => {
+        await app.auth.deleteAccount(principal, body.password);
+        reply.header('set-cookie', clearSessionCookie(app.config.publicUrl.startsWith('https:')));
+        return { ok: true };
+      },
+    },
+    {
+      method: 'POST',
       url: '/v1/auth/password',
       summary: 'Change your password (signs out every other session)',
       tag: 'Auth',

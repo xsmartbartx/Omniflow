@@ -123,7 +123,7 @@ export class Authenticator {
   }
 
   private audit(
-    type: 'auth.login' | 'auth.login-failed' | 'auth.logout',
+    type: 'auth.login' | 'auth.login-failed' | 'auth.logout' | 'auth.account-deleted',
     tenant: string,
     data: Record<string, unknown>,
     actor?: { type: string; id: string },
@@ -273,6 +273,31 @@ export class Authenticator {
       actor: { type: 'user', id: userId },
       data: { userId, change: 'password' },
     });
+  }
+
+  /**
+   * Delete a self-serve account and everything it owns. Only the administrator of a tenant made by sign-up may do it,
+   * must re-enter the password, and must have cancelled any paid subscription first. The audit log is append-only and
+   * keeps its record of what happened, including the address used to sign up; the chain still verifies.
+   */
+  async deleteAccount(principal: Principal, password: string): Promise<void> {
+    if (principal.type !== 'user') throw new ForbiddenError('Only people can delete an account');
+    if (!principal.tenant.startsWith('acct-') || !principal.roles.includes('admin'))
+      throw new ForbiddenError('Only the administrator of a self-serve account can delete it');
+    const user = this.st.identity.getUser(principal.id);
+    if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash)))
+      throw new AuthenticationError('The password is incorrect');
+    const subscription = this.st.db.get<{ status: string }>(
+      `SELECT status FROM billing_accounts
+       WHERE tenant_id = ? AND stripe_subscription_id IS NOT NULL AND status IN ('active', 'trialing', 'past_due')`,
+      [principal.tenant],
+    );
+    if (subscription) throw new ConflictError('Cancel your subscription first, then delete the account.');
+    this.st.db.transaction(() => {
+      this.audit('auth.account-deleted', principal.tenant, { userId: user.id }, { type: 'user', id: user.id });
+      this.st.identity.removeTenant(principal.tenant);
+    });
+    this.st.artifacts.eraseTenantFiles(principal.tenant);
   }
 
   /**

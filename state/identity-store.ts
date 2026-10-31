@@ -1,6 +1,7 @@
 import { type Clock, ConflictError, newId, systemClock } from '../core/index.ts';
 import type { Role } from '../schemas/index.ts';
 import { type Db, fromJson, toBit } from './database.ts';
+import { purgeTenant } from './tenant-purge.ts';
 
 export interface TenantRecord {
   id: string;
@@ -298,14 +299,9 @@ export class IdentityStore {
       )
       .map((r) => r.id);
   }
-  /** Remove a tenant returned by `staleUnconfirmedTenants`, with its people. The audit log keeps its record of them. */
+  /** Delete a tenant and everything it owns (see `purgeTenant`). The audit log keeps its record. */
   removeTenant(id: string): void {
-    this.db.transaction(() => {
-      this.db.run('DELETE FROM sessions WHERE tenant_id = ?', [id]);
-      this.db.run('DELETE FROM api_keys WHERE tenant_id = ?', [id]);
-      this.db.run('DELETE FROM users WHERE tenant_id = ?', [id]);
-      this.db.run('DELETE FROM tenants WHERE id = ?', [id]);
-    });
+    purgeTenant(this.db, id);
   }
   markEmailVerified(id: string): void {
     this.db.run('UPDATE users SET email_unverified = 0 WHERE id = ?', [id]);

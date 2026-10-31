@@ -1,7 +1,7 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
 import { session } from '../session.js';
-import { button, card, errorBox, field, input, kv, notice, pageHeader, toast } from '../ui.js';
+import { button, card, confirmDialog, errorBox, field, input, kv, notice, pageHeader, toast } from '../ui.js';
 
 export default async function account() {
   const me = session.me;
@@ -10,6 +10,8 @@ export default async function account() {
   const next = input({ type: 'password', autocomplete: 'new-password' });
   const again = input({ type: 'password', autocomplete: 'new-password' });
   const slot = h('div');
+  const confirm = input({ type: 'password', autocomplete: 'current-password' });
+  const erased = h('div');
   const change = async (ev) => {
     ev?.preventDefault();
     clear(slot);
@@ -22,6 +24,26 @@ export default async function account() {
       clear(slot).append(errorBox(e));
     }
   };
+  const remove = async (ev) => {
+    ev?.preventDefault();
+    clear(erased);
+    const ok = await confirmDialog({
+      title: 'Delete this account?',
+      message: 'Every workflow, run, secret and person in this workspace is erased for good. This cannot be undone.',
+      confirmLabel: 'Delete account',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.post('/v1/auth/delete-account', { password: confirm.value });
+      toast('Your account was deleted.', 'good');
+      location.reload();
+    } catch (e) {
+      clear(erased).append(errorBox(e));
+    }
+  };
+  // only the administrator of a workspace made by sign-up can delete it
+  const deletable = me.principal.tenant.startsWith('acct-') && me.principal.roles.includes('admin');
   return h(
     'div',
     {},
@@ -52,6 +74,22 @@ export default async function account() {
           h('p', { class: 'muted' }, 'You will be signed out everywhere and asked to sign in again.'),
         ),
       ),
+      deletable &&
+        card(
+          'Delete account',
+          h(
+            'form',
+            { class: 'form', onSubmit: remove },
+            h(
+              'p',
+              { class: 'muted' },
+              'Erases this workspace and everything in it. The audit log is append-only, so it keeps its record of events, including your email address.',
+            ),
+            field('Password', confirm),
+            erased,
+            button('Delete account', { kind: 'danger', type: 'submit' }),
+          ),
+        ),
     ),
   );
 }

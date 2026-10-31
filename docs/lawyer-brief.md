@@ -59,7 +59,9 @@ configure (off by default; prompts are sent to that provider).
 1. Controller and processor roles: for customers' workflow data, OmniFlow is probably a processor. A data processing agreement and a
    list of sub-processors are needed.
 2. GDPR and UK GDPR basics: lawful bases, retention (run history and the audit log are kept until the customer archives them and the
-   audit log is append-only by design, so what a deletion request can mean needs an answer), international transfers, breach notice.
+   audit log is append-only by design, so what a deletion request can mean needs an answer: self-serve accounts can now delete
+   themselves, which erases all their data except the audit events, and those include the sign-up email address), international
+   transfers, breach notice.
 3. Consumer and business terms: auto-renewing subscriptions, cancellation, refunds, withdrawal rights for consumers, price display and
    VAT or sales tax (billing does not collect tax yet).
 4. Liability, warranty and acceptable use. The product can run shell and network steps, so misuse and security-testing rules matter.
