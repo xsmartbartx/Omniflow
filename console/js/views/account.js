@@ -1,6 +1,6 @@
 import * as api from '../api.js';
 import { clear, h } from '../dom.js';
-import { session } from '../session.js';
+import { can, session } from '../session.js';
 import { button, card, confirmDialog, errorBox, field, input, kv, notice, pageHeader, toast } from '../ui.js';
 
 export default async function account() {
@@ -74,6 +74,20 @@ export default async function account() {
           h('p', { class: 'muted' }, 'You will be signed out everywhere and asked to sign in again.'),
         ),
       ),
+      can('audit.read') &&
+        card(
+          'Download your data',
+          h(
+            'p',
+            { class: 'muted' },
+            'A JSON copy of this workspace: people, workflows, runs and the names of your secrets (never their values).',
+          ),
+          h(
+            'a',
+            { class: 'btn', href: '/v1/account/export', download: `omniflow-account-${me.principal.tenant}.json` },
+            'Download',
+          ),
+        ),
       deletable &&
         card(
           'Delete account',
@@ -83,7 +97,7 @@ export default async function account() {
             h(
               'p',
               { class: 'muted' },
-              'Erases this workspace and everything in it. The audit log is append-only, so it keeps its record of events, including your email address.',
+              'Download your data first. Erases this workspace and everything in it. The audit log is append-only, so it keeps its record of events, including your email address.',
             ),
             field('Password', confirm),
             erased,
