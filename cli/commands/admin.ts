@@ -185,6 +185,8 @@ function prune(ctx: CliContext, env: AdminEnv): number {
   if (!dryRun)
     for (const a of artifacts)
       if (state.artifacts.tombstone(a.tenant, a.ref, `retention: older than ${days} days`)) erased++;
+  const stale = state.identity.staleUnconfirmedTenants(cutoff);
+  if (!dryRun) for (const tenant of stale) state.identity.removeTenant(tenant);
   const outbox = dryRun ? undefined : state.nexora.pruneSent(cutoff);
   const deliveries = dryRun ? undefined : state.webhooks.pruneFinished(cutoff);
 
@@ -192,6 +194,7 @@ function prune(ctx: CliContext, env: AdminEnv): number {
     cutoff,
     dryRun,
     artifacts: dryRun ? artifacts.length : erased,
+    unconfirmedAccounts: stale.length,
     nexoraOutbox: outbox ?? null,
     webhookDeliveries: deliveries ?? null,
   };
@@ -200,6 +203,7 @@ function prune(ctx: CliContext, env: AdminEnv): number {
     result,
     () =>
       `${s.green('✓')} ${dryRun ? 'would erase' : 'erased'} ${result.artifacts} artifact(s) from runs finished before ${cutoff}` +
+      `\n  ${dryRun ? 'would remove' : 'removed'} ${stale.length} sign-up(s) that never confirmed their email` +
       (dryRun
         ? ''
         : `\n  removed ${outbox} settled NEXORA outbox row(s) and ${deliveries} settled webhook delivery row(s)`) +

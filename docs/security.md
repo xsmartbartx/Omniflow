@@ -80,7 +80,8 @@ OmniFlow reduces risk; it does not remove your part in it.
   is that tenant's administrator. Email addresses are **not verified** unless you set `OMNIFLOW_SIGNUP_VERIFY_EMAIL=true`
   (which holds each account until its owner follows an emailed link; it needs an SMTP relay). There is no CAPTCHA, and the
   other controls are a per-IP rate limit and the cap `OMNIFLOW_SIGNUP_MAX_TENANTS`. Unconfirmed accounts still count toward that
-  cap until you remove them, so a flood of fake addresses can fill it. New accounts use your host's
+  cap until they are removed, so a flood of fake addresses can fill it: `omniflow admin prune --older-than-days 7` removes
+  self-serve accounts that never confirmed and never did anything. New accounts use your host's
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.

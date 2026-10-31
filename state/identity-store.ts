@@ -281,6 +281,32 @@ export class IdentityStore {
       return userId;
     });
   }
+  /**
+   * Self-serve tenants older than `cutoff` whose only people never confirmed their email, and that never did anything
+   * (no runs, no workflows): the accounts a sign-up flood leaves behind.
+   */
+  staleUnconfirmedTenants(cutoff: string): string[] {
+    return this.db
+      .all<{ id: string }>(
+        `SELECT t.id FROM tenants t
+         WHERE t.id LIKE 'acct-%' AND t.created_at < ?
+           AND EXISTS (SELECT 1 FROM users u WHERE u.tenant_id = t.id AND u.email_unverified = 1)
+           AND NOT EXISTS (SELECT 1 FROM users u WHERE u.tenant_id = t.id AND u.email_unverified = 0)
+           AND NOT EXISTS (SELECT 1 FROM runs r WHERE r.tenant_id = t.id)
+           AND NOT EXISTS (SELECT 1 FROM workflow_versions w WHERE w.tenant_id = t.id)`,
+        [cutoff],
+      )
+      .map((r) => r.id);
+  }
+  /** Remove a tenant returned by `staleUnconfirmedTenants`, with its people. The audit log keeps its record of them. */
+  removeTenant(id: string): void {
+    this.db.transaction(() => {
+      this.db.run('DELETE FROM sessions WHERE tenant_id = ?', [id]);
+      this.db.run('DELETE FROM api_keys WHERE tenant_id = ?', [id]);
+      this.db.run('DELETE FROM users WHERE tenant_id = ?', [id]);
+      this.db.run('DELETE FROM tenants WHERE id = ?', [id]);
+    });
+  }
   markEmailVerified(id: string): void {
     this.db.run('UPDATE users SET email_unverified = 0 WHERE id = ?', [id]);
   }
