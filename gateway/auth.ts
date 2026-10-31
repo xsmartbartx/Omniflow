@@ -11,7 +11,7 @@ import {
 } from '../core/index.ts';
 import type { Principal, Role } from '../schemas/index.ts';
 import { ROLES } from '../schemas/index.ts';
-import type { ApiKeyRecord, State, UserRecord } from '../state/index.ts';
+import type { ApiKeyRecord, State, TokenKind, UserRecord } from '../state/index.ts';
 
 const scrypt = promisify(scryptCb) as (
   pw: string,
@@ -24,8 +24,8 @@ const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const MIN_PASSWORD = 12;
 const MAX_FAILURES = 5;
 const LOCK_MS = 15 * 60_000;
-/** A mailed reset link works for this long, once. */
-const RESET_TTL_MS = 30 * 60_000;
+/** A mailed link (password reset, email verification) works for this long, once. */
+const TOKEN_TTL_MS = 30 * 60_000;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
@@ -99,6 +99,14 @@ const toPrincipalFromKey = (k: ApiKeyRecord): Principal => ({
   roles: k.roles,
 });
 
+/** A single-use token to put in an email, with who it is for. */
+export interface MailedToken {
+  to: string;
+  name: string;
+  token: string;
+  expiresInMinutes: number;
+}
+
 /** Gateway authentication: sessions for people, API keys for machines. Authorisation is the Policy Engine's job. */
 export class Authenticator {
   private readonly st: State;
@@ -165,6 +173,9 @@ export class Authenticator {
       throw generic;
     }
     if (this.st.identity.getTenant(user.tenant)?.disabled) throw generic;
+    // only after the password is right, so this cannot be used to learn which addresses have accounts
+    if (user.emailUnverified)
+      throw new AuthenticationError('Confirm your email address first: we sent you a link when you signed up.');
 
     this.st.identity.recordLoginSuccess(user.id);
     const token = randomToken(32);
@@ -268,38 +279,31 @@ export class Authenticator {
    * Start a password reset. Returns the token to mail out, or undefined when there is nothing to send (no such account,
    * disabled, or ambiguous): the caller answers the same either way so the form cannot be used to find accounts.
    */
-  requestPasswordReset(
-    email: string,
-  ): { to: string; name: string; token: string; expiresInMinutes: number } | undefined {
+  requestPasswordReset(email: string): MailedToken | undefined {
     const matches = this.st.identity.findUsersByEmail(email.trim());
     const user = matches.length === 1 ? matches[0] : undefined;
     if (!user || user.disabled || !user.passwordHash) return undefined;
-    const token = randomToken(32);
-    this.st.identity.createPasswordReset(
-      user.id,
-      createHash('sha256').update(token).digest('hex'),
-      new Date(Date.now() + RESET_TTL_MS).toISOString(),
-    );
+    const mailed = this.issueToken('password-reset', user.id, user.email, user.name);
     this.st.events.append({
       tenant: user.tenant,
       type: 'auth.user-updated',
       actor: { type: 'user', id: user.id },
       data: { userId: user.id, change: 'password-reset-requested' },
     });
-    return { to: user.email, name: user.name, token, expiresInMinutes: RESET_TTL_MS / 60_000 };
+    return mailed;
   }
 
   /** Finish a reset with the mailed token: new password, every session ended, any lockout cleared. */
   async completePasswordReset(token: string, next: string): Promise<void> {
     const invalid = new AuthenticationError('This reset link is invalid or has expired. Request a new one.');
     const tokenHash = createHash('sha256').update(token).digest('hex');
-    const owner = this.st.identity.peekPasswordReset(tokenHash);
+    const owner = this.st.identity.peekToken('password-reset', tokenHash);
     const user = owner ? this.st.identity.getUser(owner) : undefined;
     if (!user || user.disabled) throw invalid;
     // check the password before redeeming, so a weak one does not use up the link
     checkPasswordPolicy(next, user.email);
     const passwordHash = await hashPassword(next);
-    if (this.st.identity.consumePasswordReset(tokenHash) !== user.id) throw invalid;
+    if (this.st.identity.consumeToken('password-reset', tokenHash) !== user.id) throw invalid;
     this.st.identity.updateUser(user.id, { passwordHash, mustChangePassword: false });
     this.st.identity.recordLoginSuccess(user.id);
     this.st.identity.deleteUserSessions(user.id);
@@ -351,10 +355,12 @@ export class Authenticator {
     opts: {
       maxTenants: number;
       accepted?: { termsUrl?: string; privacyUrl?: string };
+      /** Hold the account until the email address is confirmed: the result is a link to mail, not a session. */
+      verifyEmail?: boolean;
       ip?: string;
       userAgent?: string;
     },
-  ): Promise<LoginResult> {
+  ): Promise<LoginResult | { verify: MailedToken }> {
     const email = u.email.trim();
     checkPasswordPolicy(u.password, email);
     if (this.st.identity.findUsersByEmail(email).length > 0)
@@ -367,9 +373,16 @@ export class Authenticator {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, 'x')}`;
     const name = u.name?.trim() || email;
-    this.st.db.transaction(() => {
+    const userId = this.st.db.transaction(() => {
       this.st.identity.createTenant(tenant, u.organization?.trim() || `${name}'s workspace`);
-      const user = this.st.identity.createUser({ tenant, email, name, passwordHash, roles: ['admin'] });
+      const user = this.st.identity.createUser({
+        tenant,
+        email,
+        name,
+        passwordHash,
+        roles: ['admin'],
+        ...(opts.verifyEmail ? { emailUnverified: true } : {}),
+      });
       this.st.events.append({
         tenant,
         type: 'auth.user-created',
@@ -379,15 +392,55 @@ export class Authenticator {
           email: user.email,
           roles: user.roles,
           selfServe: true,
+          ...(opts.verifyEmail ? { emailVerification: 'pending' } : {}),
           // what the person agreed to, and when (the event's own timestamp), so consent can be shown later
           ...(opts.accepted ? { accepted: opts.accepted } : {}),
         },
       });
+      return user.id;
     });
+    if (opts.verifyEmail) return { verify: this.issueToken('email-verification', userId, email, name) };
     return this.login(email, u.password, {
       tenant,
       ...(opts.ip ? { ip: opts.ip } : {}),
       ...(opts.userAgent ? { userAgent: opts.userAgent } : {}),
+    });
+  }
+
+  /** Make a single-use token for a user, store its hash, and hand back what the caller needs to mail it. */
+  private issueToken(kind: TokenKind, userId: string, to: string, name: string): MailedToken {
+    const token = randomToken(32);
+    this.st.identity.createToken(
+      kind,
+      userId,
+      createHash('sha256').update(token).digest('hex'),
+      new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+    );
+    return { to, name, token, expiresInMinutes: TOKEN_TTL_MS / 60_000 };
+  }
+
+  /** A fresh verification link for an unconfirmed account; undefined (and nothing to send) for any other address. */
+  resendEmailVerification(email: string): MailedToken | undefined {
+    const matches = this.st.identity.findUsersByEmail(email.trim());
+    const user = matches.length === 1 ? matches[0] : undefined;
+    if (!user?.emailUnverified || user.disabled) return undefined;
+    return this.issueToken('email-verification', user.id, user.email, user.name);
+  }
+
+  /** Confirm an email address with the mailed token. */
+  verifyEmail(token: string): void {
+    const userId = this.st.identity.consumeToken(
+      'email-verification',
+      createHash('sha256').update(token).digest('hex'),
+    );
+    const user = userId ? this.st.identity.getUser(userId) : undefined;
+    if (!user) throw new AuthenticationError('This confirmation link is invalid or has expired. Request a new one.');
+    this.st.identity.markEmailVerified(user.id);
+    this.st.events.append({
+      tenant: user.tenant,
+      type: 'auth.user-updated',
+      actor: { type: 'user', id: user.id },
+      data: { userId: user.id, change: 'email-verified' },
     });
   }
 

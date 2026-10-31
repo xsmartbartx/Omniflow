@@ -22,7 +22,16 @@ export interface UserRecord {
   lastLoginAt?: string;
   failedLogins: number;
   lockedUntil?: string;
+  /** Signed up by email and has not yet followed the link we sent; cannot sign in until they do. */
+  emailUnverified?: boolean;
 }
+
+/** The kinds of single-use email token; the table names are a closed set, never taken from input. */
+export type TokenKind = 'password-reset' | 'email-verification';
+const TOKEN_TABLES: Record<TokenKind, string> = {
+  'password-reset': 'password_resets',
+  'email-verification': 'email_verifications',
+};
 
 export interface ApiKeyRecord {
   id: string;
@@ -69,6 +78,7 @@ interface URow {
   last_login_at: string | null;
   failed_logins: number;
   locked_until: string | null;
+  email_unverified: number;
 }
 interface KRow {
   id: string;
@@ -113,6 +123,7 @@ const toUser = (r: URow): UserRecord => ({
   ...(r.last_login_at ? { lastLoginAt: r.last_login_at } : {}),
   failedLogins: r.failed_logins,
   ...(r.locked_until ? { lockedUntil: r.locked_until } : {}),
+  ...(r.email_unverified === 1 ? { emailUnverified: true } : {}),
 });
 const toKey = (r: KRow): ApiKeyRecord => ({
   id: r.id,
@@ -180,13 +191,14 @@ export class IdentityStore {
     passwordHash?: string;
     roles: Role[];
     mustChangePassword?: boolean;
+    emailUnverified?: boolean;
   }): UserRecord {
     const email = u.email.trim().toLowerCase();
     if (this.getUserByEmail(u.tenant, email)) throw new ConflictError(`A user with email '${email}' already exists`);
     const id = newId('usr');
     this.db.run(
-      `INSERT INTO users (id, tenant_id, email, name, password_hash, roles, must_change_password, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO users (id, tenant_id, email, name, password_hash, roles, must_change_password, email_unverified, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         u.tenant,
@@ -195,6 +207,7 @@ export class IdentityStore {
         u.passwordHash ?? null,
         JSON.stringify(u.roles),
         u.mustChangePassword ? 1 : 0,
+        u.emailUnverified ? 1 : 0,
         this.now(),
       ],
     );
@@ -238,11 +251,13 @@ export class IdentityStore {
       ],
     );
   }
-  /** Store a reset token's hash (never the token) and retire any earlier open ones for the user. */
-  createPasswordReset(userId: string, tokenHash: string, expiresAt: string): void {
+  // ---- single-use email tokens (password reset, email verification): only a hash is stored, it works once and expires
+  /** Store a token's hash (never the token) and retire any earlier open ones of that kind for the user. */
+  createToken(kind: TokenKind, userId: string, tokenHash: string, expiresAt: string): void {
+    const table = TOKEN_TABLES[kind];
     this.db.transaction(() => {
-      this.db.run('UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL', [this.now(), userId]);
-      this.db.run('INSERT INTO password_resets (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', [
+      this.db.run(`UPDATE ${table} SET used_at = ? WHERE user_id = ? AND used_at IS NULL`, [this.now(), userId]);
+      this.db.run(`INSERT INTO ${table} (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)`, [
         tokenHash,
         userId,
         this.now(),
@@ -250,24 +265,24 @@ export class IdentityStore {
       ]);
     });
   }
-  /** Who a reset token belongs to, without using it up (undefined if unknown, used or expired). */
-  peekPasswordReset(tokenHash: string): string | undefined {
+  /** Who a token belongs to, without using it up (undefined if unknown, used or expired). */
+  peekToken(kind: TokenKind, tokenHash: string): string | undefined {
     return this.db.get<{ user_id: string }>(
-      'SELECT user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?',
+      `SELECT user_id FROM ${TOKEN_TABLES[kind]} WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
       [tokenHash, this.now()],
     )?.user_id;
   }
-  /** Redeem a reset token once: returns the user it belongs to, or undefined if unknown, used or expired. */
-  consumePasswordReset(tokenHash: string): string | undefined {
+  /** Redeem a token once: returns the user it belongs to, or undefined if unknown, used or expired. */
+  consumeToken(kind: TokenKind, tokenHash: string): string | undefined {
     return this.db.transaction(() => {
-      const row = this.db.get<{ user_id: string }>(
-        'SELECT user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?',
-        [tokenHash, this.now()],
-      );
-      if (!row) return undefined;
-      this.db.run('UPDATE password_resets SET used_at = ? WHERE token_hash = ?', [this.now(), tokenHash]);
-      return row.user_id;
+      const userId = this.peekToken(kind, tokenHash);
+      if (!userId) return undefined;
+      this.db.run(`UPDATE ${TOKEN_TABLES[kind]} SET used_at = ? WHERE token_hash = ?`, [this.now(), tokenHash]);
+      return userId;
     });
+  }
+  markEmailVerified(id: string): void {
+    this.db.run('UPDATE users SET email_unverified = 0 WHERE id = ?', [id]);
   }
   recordLoginSuccess(id: string): void {
     this.db.run('UPDATE users SET last_login_at = ?, failed_logins = 0, locked_until = NULL WHERE id = ?', [

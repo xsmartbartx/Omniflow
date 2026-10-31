@@ -574,4 +574,20 @@ CREATE TABLE password_resets (
 CREATE INDEX password_resets_user ON password_resets (user_id);
 `,
   },
+  {
+    id: 6,
+    name: 'email-verification',
+    sql: `
+-- Set only for people who signed up by email while verification is on; every existing account stays 0 (can sign in).
+ALTER TABLE users ADD COLUMN email_unverified INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE email_verifications (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE INDEX email_verifications_user ON email_verifications (user_id);
+`,
+  },
 ];

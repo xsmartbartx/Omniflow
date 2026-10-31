@@ -214,3 +214,46 @@ test('password reset: the request screen answers the same for any address, and a
   await expect(page.getByText(/invalid or has expired/)).toBeVisible();
   w.assertClean();
 });
+
+test('email confirmation: the screens after sign-up and after following the link are accessible and say what happened', async ({
+  page,
+}) => {
+  const w = watch(page);
+  // the e2e server has confirmation off, so answer as a server with it on would
+  await page.route('**/v1/info', async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), signupVerifyEmail: true } });
+  });
+  await page.route('**/v1/auth/signup', (route) =>
+    route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ verify: true }) }),
+  );
+  let confirmed = false;
+  await page.route('**/v1/auth/verify', (route) => {
+    confirmed = true;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+  });
+
+  await page.goto(BASE);
+  await expect(page.getByRole('link', { name: 'Did not get the confirmation email?' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  // the mocked /v1/info is slower than the real one, so let the screen finish rendering before typing into it
+  await page.waitForLoadState('networkidle');
+  await page.getByLabel('Email').fill('new-person@example.com');
+  await page.getByLabel('Password (at least 12 characters)').fill('a-long-enough-passphrase');
+  await page.getByRole('checkbox', { name: /I accept the terms and the privacy policy/ }).check();
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+  await expect(page.getByText(/new-person@example.com/)).toBeVisible();
+  await a11y(page, 'check your email');
+
+  await page.getByRole('link', { name: 'Send the link again' }).click();
+  await expect(page.getByRole('button', { name: 'Send confirmation link' })).toBeVisible();
+  await a11y(page, 'resend confirmation');
+
+  await page.goto(`${BASE}/#/verify?token=${'b'.repeat(43)}`);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Email confirmed' })).toBeVisible();
+  expect(confirmed).toBe(true);
+  await a11y(page, 'email confirmed');
+  w.assertClean();
+});

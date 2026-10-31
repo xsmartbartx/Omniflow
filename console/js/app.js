@@ -251,25 +251,55 @@ async function showLogin() {
   document.title = `${title} · OmniFlow`;
 }
 
-/** Which signed-out screen the address asks for: sign in, create an account, or one of the password-reset steps. */
-function loginScreen(mod, info) {
+const hashToken = (hash) => new URLSearchParams(hash.split('?')[1] ?? '').get('token') ?? '';
+
+/** The signed-out screens reached by address, when the server has the feature on: sign-up, and the emailed-link steps. */
+const SIGNED_OUT_SCREENS = [
+  {
+    on: (info, hash) => info.signup && hash === '#/signup',
+    make: (mod, info) => mod.signUp({ onSignedIn: start, terms: info.signupTerms }),
+    title: 'Create an account',
+  },
+  {
+    on: (info, hash) => info.passwordReset && hash === '#/forgot',
+    make: (mod) => mod.forgotPassword(),
+    title: 'Reset your password',
+  },
+  {
+    on: (info, hash) => info.passwordReset && hash.startsWith('#/reset'),
+    make: (mod, _info, hash) =>
+      mod.resetPassword({
+        token: hashToken(hash),
+        onDone: () => {
+          location.hash = '#/login';
+        },
+      }),
+    title: 'Choose a new password',
+  },
+  {
+    on: (info, hash) => info.signupVerifyEmail && hash === '#/confirm',
+    make: (mod) => mod.resendConfirmation(),
+    title: 'Confirm your email',
+  },
+  {
+    on: (info, hash) => info.signupVerifyEmail && hash.startsWith('#/verify'),
+    make: (mod, _info, hash) => mod.confirmEmail({ token: hashToken(hash) }),
+    title: 'Confirm your email',
+  },
+];
+
+/** Which signed-out screen the address asks for: sign in, or one of the screens above. */
+function loginScreen(mod, info = {}) {
+  if (info.mode === 'nexora') return { node: mod.nexoraSignIn(), title: 'Sign in' };
   const hash = location.hash;
-  if (info?.mode === 'nexora') return { node: mod.nexoraSignIn(), title: 'Sign in' };
-  if (info?.signup && hash === '#/signup')
-    return { node: mod.signUp({ onSignedIn: start, terms: info.signupTerms }), title: 'Create an account' };
-  if (info?.passwordReset && hash === '#/forgot') return { node: mod.forgotPassword(), title: 'Reset your password' };
-  if (info?.passwordReset && hash.startsWith('#/reset')) {
-    const token = new URLSearchParams(hash.split('?')[1] ?? '').get('token') ?? '';
-    const onDone = () => {
-      location.hash = '#/login';
-    };
-    return { node: mod.resetPassword({ token, onDone }), title: 'Choose a new password' };
-  }
+  const screen = SIGNED_OUT_SCREENS.find((s) => s.on(info, hash));
+  if (screen) return { node: screen.make(mod, info, hash), title: screen.title };
   return {
     node: mod.default({
       onSignedIn: start,
-      signup: Boolean(info?.signup),
-      passwordReset: Boolean(info?.passwordReset),
+      signup: Boolean(info.signup),
+      passwordReset: Boolean(info.passwordReset),
+      confirmLink: Boolean(info.signupVerifyEmail),
     }),
     title: 'Sign in',
   };

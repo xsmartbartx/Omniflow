@@ -12,6 +12,14 @@ export type { Config };
 
 type Env = Record<string, string | undefined>;
 
+/** Email confirmation for sign-ups needs a mail relay to send the link through; asking for it without one is a mistake. */
+function verifyEmail(env: Record<string, string | undefined>): boolean {
+  const on = bool(env, 'OMNIFLOW_SIGNUP_VERIFY_EMAIL', false);
+  if (on && !env.OMNIFLOW_SMTP_URL)
+    fail('OMNIFLOW_SIGNUP_VERIFY_EMAIL', 'needs OMNIFLOW_SMTP_URL, to send the confirmation link');
+  return on;
+}
+
 /** An optional https page the operator points sign-up at; anything else is a configuration mistake. */
 function pageUrl<K extends string>(
   env: Record<string, string | undefined>,
@@ -223,6 +231,7 @@ export function loadConfig(
     signup: {
       enabled: bool(env, 'OMNIFLOW_SIGNUP', false) && mode === 'standalone',
       maxTenants: int(env, 'OMNIFLOW_SIGNUP_MAX_TENANTS', 50, 1, 100_000),
+      verifyEmail: verifyEmail(env),
       ...pageUrl(env, 'OMNIFLOW_SIGNUP_TERMS_URL', 'termsUrl'),
       ...pageUrl(env, 'OMNIFLOW_SIGNUP_PRIVACY_URL', 'privacyUrl'),
     },

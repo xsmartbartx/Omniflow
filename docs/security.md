@@ -77,8 +77,10 @@ OmniFlow reduces risk; it does not remove your part in it.
   accounts, keep the group small, and review the audit log.
 - **Open sign-up.** With `OMNIFLOW_SIGNUP=true`, anyone who can reach the sign-in page can create an account. Each
   one gets a tenant of its own (data, secrets, keys and runs are kept apart per tenant, which the tests check), and
-  is that tenant's administrator. Email addresses are **not verified**, there is no CAPTCHA, and the only
-  controls are a per-IP rate limit and the cap `OMNIFLOW_SIGNUP_MAX_TENANTS`. New accounts use your host's
+  is that tenant's administrator. Email addresses are **not verified** unless you set `OMNIFLOW_SIGNUP_VERIFY_EMAIL=true`
+  (which holds each account until its owner follows an emailed link; it needs an SMTP relay). There is no CAPTCHA, and the
+  other controls are a per-IP rate limit and the cap `OMNIFLOW_SIGNUP_MAX_TENANTS`. Unconfirmed accounts still count toward that
+  cap until you remove them, so a flood of fake addresses can fill it. New accounts use your host's
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.
