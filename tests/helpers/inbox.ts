@@ -22,4 +22,4 @@ export function inbox(): { mailer: Mailer; sent: Sent[] } {
 
 /** The single-use token in the link of a `#/<fragment>?token=…` email. */
 export const tokenOf = (mail: Sent, fragment: 'reset' | 'verify') =>
-  new RegExp(`#/${fragment}\\?token=([A-Za-z0-9_-]+)`).exec(mail.text)?.[1] ?? '';
+  new RegExp(String.raw`#/${fragment}\?token=([A-Za-z0-9_-]+)`).exec(mail.text)?.[1] ?? '';
