@@ -1,10 +1,34 @@
 import { NotFoundError } from '../../core/index.ts';
 import { ROLES } from '../../schemas/index.ts';
 import { GLOBAL_TENANT } from '../../state/index.ts';
+import { accountExport } from '../account-export.ts';
 import type { RouteDef } from '../http.ts';
 import { id, name, obj } from './util.ts';
 
 const roles = { type: 'array', items: { enum: [...ROLES] }, minItems: 1, uniqueItems: true } as const;
+
+/** Audit that a copy of the data was taken, then start a file download on the raw response. */
+function startDownload(
+  app: Parameters<RouteDef['handler']>[0]['app'],
+  principal: Parameters<RouteDef['handler']>[0]['principal'],
+  reply: Parameters<RouteDef['handler']>[0]['reply'],
+  contentType: string,
+  filename: string,
+  scope: 'audit' | 'account',
+): void {
+  app.state.events.append({
+    tenant: principal.tenant,
+    type: 'audit.export',
+    actor: { type: principal.type, id: principal.id, name: principal.name },
+    data: { by: principal.name, scope },
+  });
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    'content-type': `${contentType}; charset=utf-8`,
+    'content-disposition': `attachment; filename="${filename}"`,
+    'cache-control': 'no-store',
+  });
+}
 
 export function adminRoutes(): RouteDef[] {
   return [
@@ -343,25 +367,42 @@ export function adminRoutes(): RouteDef[] {
     },
     {
       method: 'GET',
+      url: '/v1/account/export',
+      summary: 'Download a copy of this workspace as JSON (people, workflows, runs, secret names; no secret values)',
+      tag: 'Audit',
+      action: 'audit.read',
+      raw: true,
+      handler: ({ app, principal, reply }) => {
+        const exportedAt = new Date().toISOString();
+        const body = JSON.stringify(accountExport(app.state, principal.tenant, exportedAt), null, 2);
+        startDownload(
+          app,
+          principal,
+          reply,
+          'application/json',
+          `omniflow-account-${principal.tenant}.json`,
+          'account',
+        );
+        reply.raw.end(body);
+      },
+    },
+    {
+      method: 'GET',
       url: '/v1/audit/export',
       summary: 'Export the audit log as newline-delimited JSON (evidence for auditors)',
       tag: 'Audit',
       action: 'audit.read',
       raw: true,
       handler: ({ app, principal, reply }) => {
-        app.state.events.append({
-          tenant: principal.tenant,
-          type: 'audit.export',
-          actor: { type: principal.type, id: principal.id, name: principal.name },
-          data: { by: principal.name },
-        });
-        const verification = app.state.events.verify(principal.tenant);
-        reply.hijack();
-        reply.raw.writeHead(200, {
-          'content-type': 'application/x-ndjson; charset=utf-8',
-          'content-disposition': `attachment; filename="omniflow-audit-${principal.tenant}.ndjson"`,
-          'cache-control': 'no-store',
-        });
+        startDownload(
+          app,
+          principal,
+          reply,
+          'application/x-ndjson',
+          `omniflow-audit-${principal.tenant}.ndjson`,
+          'audit',
+        );
+        const verification = app.state.events.verify(principal.tenant); // after the export event, as before
         reply.raw.write(
           `${JSON.stringify({ _meta: { tenant: principal.tenant, exportedAt: new Date().toISOString(), chain: verification } })}\n`,
         );

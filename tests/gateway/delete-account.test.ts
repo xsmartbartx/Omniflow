@@ -111,4 +111,24 @@ describe('deleting a self-serve account', () => {
       expect(() => db.run('DELETE FROM workflow_versions WHERE tenant_id = ?', [tenant])).toThrow(/cannot be deleted/);
       expect(() => db.run('DELETE FROM plans WHERE tenant_id = ?', [tenant])).toThrow(/cannot be deleted/);
     }));
+
+  it('offers a copy of the workspace first, without secret values or password hashes', () =>
+    withApi(async (api) => {
+      const { tenant, client } = await signUp(api, 'portable@example.com');
+      expect((await client.post('/v1/workflows', { manifest: hello })).status).toBeLessThan(300);
+      api.app.state.secrets.put(tenant, 'API_TOKEN', 'v1:cipher-bytes-not-a-real-secret', 'k1', 'test');
+      const res = await client.get('/v1/account/export');
+      expect(res.status, res.text).toBe(200);
+      expect(String(res.headers['content-disposition'])).toContain(`omniflow-account-${tenant}.json`);
+      expect(res.body.format).toBe('omniflow-account-export/1');
+      expect(res.body.people.map((p: { email: string }) => p.email)).toEqual(['portable@example.com']);
+      expect(res.body.workflows[0].name).toBe('doomed-flow');
+      expect(res.body.secrets.map((x: { name: string }) => x.name)).toEqual(['API_TOKEN']);
+      expect(res.text).not.toContain('cipher-bytes-not-a-real-secret');
+      expect(res.text).not.toContain('passwordHash');
+      expect(res.text).not.toContain('scrypt');
+      // nobody else's data, and signed-out callers get nothing
+      expect(res.text).not.toContain('admin@example.com');
+      expect((await api.anon.get('/v1/account/export')).status).toBe(401);
+    }));
 });

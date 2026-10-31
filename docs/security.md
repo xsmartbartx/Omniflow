@@ -85,6 +85,10 @@ OmniFlow reduces risk; it does not remove your part in it.
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.
+- **Copy of your data.** `GET /v1/account/export` (the Account page's "Download") returns a JSON copy of a workspace for an
+  administrator: people, workflows with every version, runs, and the names of secrets. Secret values, password hashes and
+  key hashes are never included. The audit log has its own export (`/v1/audit/export`). Each download is recorded in the
+  audit log.
 - **Deleting an account.** The administrator of a self-serve account can delete it from the Account page (or
   `POST /v1/auth/delete-account`) after re-entering their password. It erases the tenant and everything it owns: people,
   sessions, keys, secrets, workflows, runs, approvals, stored artifacts. A paid subscription must be cancelled first. The
