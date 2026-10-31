@@ -68,6 +68,7 @@ export const EVENT_CATALOGUE = {
   'auth.logout': { run: false, required: [] },
   'auth.user-created': { run: false, required: ['userId'] },
   'auth.user-updated': { run: false, required: ['userId'] },
+  'auth.account-deleted': { run: false, required: ['userId'] },
   'auth.apikey-created': { run: false, required: ['keyId'] },
   'auth.apikey-revoked': { run: false, required: ['keyId'] },
   // ---- capabilities

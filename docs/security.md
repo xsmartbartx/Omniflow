@@ -85,6 +85,12 @@ OmniFlow reduces risk; it does not remove your part in it.
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.
+- **Deleting an account.** The administrator of a self-serve account can delete it from the Account page (or
+  `POST /v1/auth/delete-account`) after re-entering their password. It erases the tenant and everything it owns: people,
+  sessions, keys, secrets, workflows, runs, approvals, stored artifacts. A paid subscription must be cancelled first. The
+  audit log is append-only by design, so it **keeps its events for that tenant, including the email address used to sign
+  up**; the chain still verifies. If a deletion request must also remove those events, that needs a decision (and a lawyer),
+  see [`lawyer-brief.md`](lawyer-brief.md). `omniflow admin prune` uses the same erasure for unconfirmed sign-ups.
 - **Password reset by email.** With `OMNIFLOW_SMTP_URL` set, the sign-in page offers a reset link. The link carries a random
   token that works once and expires in 30 minutes; only its hash is stored. The request always answers the same whether or not
   the address has an account, and sends the email without making the person wait for it, so it cannot be used to find accounts.

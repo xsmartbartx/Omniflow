@@ -58,6 +58,11 @@ export class ArtifactStore {
     return join(this.root, tenant.replace(/[^A-Za-z0-9_-]/g, '_'), hex.slice(0, 2), hex);
   }
 
+  /** Destroy every stored byte a tenant owns (the rows go with the tenant); used when an account is deleted. */
+  eraseTenantFiles(tenant: string): void {
+    rmSync(join(this.root, tenant.replace(/[^A-Za-z0-9_-]/g, '_')), { recursive: true, force: true });
+  }
+
   put(tenant: string, data: Buffer | string, opts: { contentType?: string; runId?: string } = {}): ArtifactMeta {
     const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
     const hex = createHash('sha256').update(bytes).digest('hex');

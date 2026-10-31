@@ -590,4 +590,20 @@ CREATE TABLE email_verifications (
 CREATE INDEX email_verifications_user ON email_verifications (user_id);
 `,
   },
+  {
+    id: 7,
+    name: 'purge-deleted-tenants',
+    sql: `
+-- Published workflow versions and plans stay undeletable while their tenant exists. Deleting an account removes the
+-- tenant row first, and only then may its versions and plans go.
+DROP TRIGGER workflow_versions_no_delete;
+CREATE TRIGGER workflow_versions_no_delete BEFORE DELETE ON workflow_versions
+WHEN EXISTS (SELECT 1 FROM tenants WHERE id = OLD.tenant_id)
+BEGIN SELECT RAISE(ABORT, 'published workflow versions cannot be deleted'); END;
+DROP TRIGGER plans_no_delete;
+CREATE TRIGGER plans_no_delete BEFORE DELETE ON plans
+WHEN EXISTS (SELECT 1 FROM tenants WHERE id = OLD.tenant_id)
+BEGIN SELECT RAISE(ABORT, 'plans cannot be deleted'); END;
+`,
+  },
 ];

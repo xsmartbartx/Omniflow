@@ -59,7 +59,7 @@ Paths are under `/v1`. The *Needs* column names the roles that may call it (`adm
 | Area | Endpoints | Needs |
 |---|---|---|
 | **Meta** | `GET /healthz` · `GET /readyz` · `GET /v1/info` · `GET /v1/openapi.json` · `GET /metrics` | none (metrics: token) |
-| **Auth** | `POST /auth/login` · `POST /auth/signup` (only with `OMNIFLOW_SIGNUP=true`) · `POST /auth/forgot` and `POST /auth/reset` (only with an SMTP relay configured) · `POST /auth/verify` and `POST /auth/resend-verification` (only with `OMNIFLOW_SIGNUP_VERIFY_EMAIL=true`) · `POST /auth/logout` · `GET /auth/me` · `POST /auth/password` | — |
+| **Auth** | `POST /auth/login` · `POST /auth/signup` (only with `OMNIFLOW_SIGNUP=true`) · `POST /auth/forgot` and `POST /auth/reset` (only with an SMTP relay configured) · `POST /auth/verify` and `POST /auth/resend-verification` (only with `OMNIFLOW_SIGNUP_VERIFY_EMAIL=true`) · `POST /auth/logout` · `GET /auth/me` · `POST /auth/password` · `POST /auth/delete-account` (self-serve accounts only) | — |
 | **Workflows** | `GET /workflows` · `GET /workflows/{name}` · `GET …/versions/{v}` · `GET …/graph` · `GET …/explain` · `GET …/docs` | any signed-in role |
 | | `POST /workflows/validate` (check without saving) · `POST /workflows` (publish, or open a change request) | author |
 | | `POST /workflows/{name}/run` | author, operator |
