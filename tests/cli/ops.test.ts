@@ -293,3 +293,45 @@ describe('admin prune', () => {
     }
   });
 });
+
+describe('admin prune: sign-ups that never confirmed their email', () => {
+  it('removes only old, never-confirmed, never-used self-serve tenants, and a dry run changes nothing', async () => {
+    const dir = await provision();
+    const st = openState(stateOptionsFor(dir));
+    const person = (tenant: string, unverified: boolean) => {
+      st.identity.createTenant(tenant, tenant);
+      st.identity.createUser({
+        tenant,
+        email: `${tenant}@example.com`,
+        name: tenant,
+        roles: ['admin'],
+        ...(unverified ? { emailUnverified: true } : {}),
+      });
+    };
+    person('acct-stale', true); // the one to remove
+    person('acct-confirmed', false); // confirmed: stays
+    person('acct-fresh', true); // too new: stays
+    person('acct-used', true); // unconfirmed but has a workflow: stays
+    st.db.run(
+      "UPDATE tenants SET created_at = '2020-01-01T00:00:00.000Z' WHERE id IN ('acct-stale', 'acct-confirmed', 'acct-used')",
+    );
+    st.db.run(
+      `INSERT INTO workflow_versions (tenant_id, name, version, manifest_text, manifest_hash, plan_hash, environment, published_by, published_at)
+       VALUES ('acct-used', 'w', '1.0.0', '{}', 'h', 'h', 'production', 'u', '2020-01-01T00:00:00.000Z')`,
+    );
+    st.close();
+    const env = { OMNIFLOW_DATA_DIR: dir };
+
+    const dry = JSON.parse((await cli(['admin', 'prune', '--older-than-days', '30', '--dry-run', '--json'], env)).out);
+    expect(dry.unconfirmedAccounts).toBe(1);
+    const real = JSON.parse((await cli(['admin', 'prune', '--older-than-days', '30', '--json'], env)).out);
+    expect(real.unconfirmedAccounts).toBe(1);
+
+    const after = openState(stateOptionsFor(dir));
+    const tenants = after.identity.listTenants().map((x) => x.id);
+    after.close();
+    expect(tenants).toEqual(expect.arrayContaining(['acct-confirmed', 'acct-fresh', 'acct-used']));
+    expect(tenants).not.toContain('acct-stale');
+    expect((await cli(['admin', 'verify-audit'], env)).code).toBe(0);
+  });
+});

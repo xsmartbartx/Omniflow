@@ -198,5 +198,5 @@ only to that suggestion queue.
 | A publish opened a change request instead | Production policy needs a second person; `omniflow changes` shows why and who can approve. |
 | `doctor` says secrets cannot be decrypted | The master key differs from the one they were written with — restore the right key. |
 | `doctor` says the audit chain is broken | Something modified history. Preserve the database and the latest good backup, then investigate. |
-| Disk filling | Check `doctor`'s disk line, then free space with `omniflow admin prune --older-than-days 90 --dry-run` (drop `--dry-run` to apply). It erases old runs' artifact bytes and settled delivery rows; the audit log only grows, so back it up and archive it. |
+| Disk filling | Check `doctor`'s disk line, then free space with `omniflow admin prune --older-than-days 90 --dry-run` (drop `--dry-run` to apply). It erases old runs' artifact bytes, settled delivery rows, and sign-ups that never confirmed their email and never did anything; the audit log only grows, so back it up and archive it. |
 | Kill switch / rollback in an incident | `omniflow workflows kill <name> --reason …`; `omniflow workflows activate <name> <old-version>`; and to stop everything that uses a broken integration, kill the capability in the console (**Capabilities**). |
