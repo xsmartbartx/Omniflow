@@ -1,7 +1,7 @@
 import { AuthenticationError, ForbiddenError, NotFoundError, ValidationError } from '../../core/index.ts';
 import { ACTIONS } from '../../schemas/index.ts';
-import type { MailedToken } from '../auth.ts';
 import { clearSessionCookie, type RouteDef, sessionCookie } from '../http.ts';
+import { mailLink, RESET_MAIL, VERIFY_MAIL } from './mail.ts';
 import { obj } from './util.ts';
 
 /** Who is asking, for the audit trail. */
@@ -9,42 +9,6 @@ const clientOf = (req: { ip: string; headers: Record<string, unknown> }) => ({
   ip: req.ip,
   ...(typeof req.headers['user-agent'] === 'string' ? { userAgent: req.headers['user-agent'] } : {}),
 });
-
-type App = Parameters<RouteDef['handler']>[0]['app'];
-
-/** The wording of one kind of emailed link. */
-interface LinkMail {
-  fragment: 'reset' | 'verify';
-  subject: string;
-  action: string;
-  ignore: string;
-}
-const RESET_MAIL: LinkMail = {
-  fragment: 'reset',
-  subject: 'Reset your OmniFlow password',
-  action: 'choose a new password',
-  ignore: 'your password has not changed',
-};
-const VERIFY_MAIL: LinkMail = {
-  fragment: 'verify',
-  subject: 'Confirm your email address for OmniFlow',
-  action: 'confirm your email address and finish creating your account',
-  ignore: 'no account will be usable without it',
-};
-
-/** Email a single-use link. Not awaited: the answer must not reveal, by how long it takes, whether an address has an account. */
-function mailLink(app: App, ip: string, mailed: MailedToken, mail: LinkMail): void {
-  if (!app.mailer) return;
-  const base = app.config.publicUrl.endsWith('/') ? app.config.publicUrl.slice(0, -1) : app.config.publicUrl;
-  const link = `${base}/#/${mail.fragment}?token=${mailed.token}`;
-  void app.mailer
-    .send({
-      to: mailed.to,
-      subject: mail.subject,
-      text: `Hello ${mailed.name},\n\nUse this link to ${mail.action}. It works once and expires in ${mailed.expiresInMinutes} minutes:\n\n${link}\n\nIf you did not ask for this, ignore this email: ${mail.ignore}.\n`,
-    })
-    .catch((error: unknown) => app.log.warn('could not send an email', { error, ip, subject: mail.subject }));
-}
 
 /** Set the session cookie for a fresh sign-in (login or sign-up) and answer with who signed in. */
 function startedSession(

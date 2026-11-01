@@ -87,7 +87,7 @@ Paths are under `/v1`. The *Needs* column names the roles that may call it (`adm
 | **Triggers** | `GET /triggers` · `GET /channels` | any signed-in role |
 | | `POST /workflows/{name}/triggers/{trigger}/rotate-secret` · `POST /events` | operator |
 | **Webhooks** | `GET /webhooks/deliveries` (recent outbound deliveries and their status) | operator |
-| **Governance** | `GET/POST /users` · `PATCH /users/{id}` · `GET/POST /api-keys` · `DELETE /api-keys/{id}` · `GET/POST /tenants` | admin |
+| **Governance** | `GET/POST /users` · `POST /users/invite` (emails a link; needs an SMTP relay) · `PATCH /users/{id}` · `GET/POST /api-keys` · `DELETE /api-keys/{id}` · `GET/POST /tenants` | admin |
 | | `GET /audit/events` · `GET /audit/verify` · `GET /audit/export` (NDJSON) · `GET /account/export` (JSON copy of the workspace) | operator |
 
 ## Starting a run

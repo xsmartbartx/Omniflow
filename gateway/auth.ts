@@ -26,6 +26,7 @@ const MAX_FAILURES = 5;
 const LOCK_MS = 15 * 60_000;
 /** A mailed link (password reset, email verification) works for this long, once. */
 const TOKEN_TTL_MS = 30 * 60_000;
+const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
@@ -432,16 +433,44 @@ export class Authenticator {
     });
   }
 
+  /**
+   * Invite someone into the caller's own workspace: an account with a password nobody knows, and a link (good for a
+   * week) that lets them choose their own. Nothing is shared in advance, unlike `createUser` with a temporary password.
+   */
+  async inviteUser(
+    actor: Principal,
+    u: { email: string; name?: string; roles: Role[] },
+  ): Promise<{ user: UserRecord; mailed: MailedToken }> {
+    this.assertRoles(u.roles);
+    const email = u.email.trim();
+    if (this.st.identity.findUsersByEmail(email).length > 0)
+      throw new ConflictError('An account with this email already exists.');
+    const user = this.st.identity.createUser({
+      tenant: actor.tenant,
+      email,
+      name: u.name?.trim() || email,
+      passwordHash: await hashPassword(randomToken(32)),
+      roles: u.roles,
+    });
+    this.st.events.append({
+      tenant: actor.tenant,
+      type: 'auth.user-created',
+      actor: { type: actor.type, id: actor.id, name: actor.name },
+      data: { userId: user.id, email: user.email, roles: user.roles, invited: true },
+    });
+    return { user, mailed: this.issueToken('password-reset', user.id, user.email, user.name, INVITE_TTL_MS) };
+  }
+
   /** Make a single-use token for a user, store its hash, and hand back what the caller needs to mail it. */
-  private issueToken(kind: TokenKind, userId: string, to: string, name: string): MailedToken {
+  private issueToken(kind: TokenKind, userId: string, to: string, name: string, ttlMs = TOKEN_TTL_MS): MailedToken {
     const token = randomToken(32);
     this.st.identity.createToken(
       kind,
       userId,
       createHash('sha256').update(token).digest('hex'),
-      new Date(Date.now() + TOKEN_TTL_MS).toISOString(),
+      new Date(Date.now() + ttlMs).toISOString(),
     );
-    return { to, name, token, expiresInMinutes: TOKEN_TTL_MS / 60_000 };
+    return { to, name, token, expiresInMinutes: ttlMs / 60_000 };
   }
 
   /** A fresh verification link for an unconfirmed account; undefined (and nothing to send) for any other address. */

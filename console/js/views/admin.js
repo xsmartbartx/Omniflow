@@ -55,7 +55,32 @@ export default async function admin(ctx) {
     });
 
   const users = async () => {
-    const { items } = await api.get('/v1/users');
+    const [{ items }, info] = await Promise.all([api.get('/v1/users'), api.get('/v1/info')]);
+    // invitations need the mail relay, the same switch as password reset
+    const invite = info.passwordReset
+      ? button('Invite by email', {
+          small: true,
+          onClick: async () => {
+            const v = await formDialog({
+              title: 'Invite someone',
+              intro: 'They get an email with a link, good for 7 days, to choose their own password.',
+              fields: [
+                { name: 'email', label: 'Email', type: 'email', required: true },
+                { name: 'name', label: 'Name' },
+                ...roleFields(['viewer']),
+              ],
+              submitLabel: 'Send invitation',
+              wide: true,
+            });
+            if (!v) return;
+            const roles = pickRoles(v);
+            if (!roles.length) return toast('Pick at least one role', 'bad');
+            await api.post('/v1/users/invite', { email: v.email.trim(), ...(v.name ? { name: v.name } : {}), roles });
+            toast('Invitation sent', 'good');
+            reload('users');
+          },
+        })
+      : null;
     return card(
       null,
       dataTable({
@@ -105,42 +130,45 @@ export default async function admin(ctx) {
       }),
       {
         flush: true,
-        actions: button('Add user', {
-          kind: 'primary',
-          small: true,
-          icon: 'plus',
-          onClick: async () => {
-            const v = await formDialog({
-              title: 'Add a user',
-              intro: 'They sign in with this temporary password and choose their own.',
-              fields: [
-                { name: 'email', label: 'Email', type: 'email', required: true },
-                { name: 'name', label: 'Name' },
-                {
-                  name: 'password',
-                  label: 'Temporary password',
-                  type: 'password',
-                  required: true,
-                  help: 'At least 12 characters.',
-                },
-                ...roleFields(['viewer']),
-              ],
-              submitLabel: 'Create user',
-              wide: true,
-            });
-            if (!v) return;
-            const roles = pickRoles(v);
-            if (!roles.length) return toast('Pick at least one role', 'bad');
-            await api.post('/v1/users', {
-              email: v.email.trim(),
-              ...(v.name ? { name: v.name } : {}),
-              password: v.password,
-              roles,
-            });
-            toast('User created', 'good');
-            reload('users');
-          },
-        }),
+        actions: [
+          invite,
+          button('Add user', {
+            kind: 'primary',
+            small: true,
+            icon: 'plus',
+            onClick: async () => {
+              const v = await formDialog({
+                title: 'Add a user',
+                intro: 'They sign in with this temporary password and choose their own.',
+                fields: [
+                  { name: 'email', label: 'Email', type: 'email', required: true },
+                  { name: 'name', label: 'Name' },
+                  {
+                    name: 'password',
+                    label: 'Temporary password',
+                    type: 'password',
+                    required: true,
+                    help: 'At least 12 characters.',
+                  },
+                  ...roleFields(['viewer']),
+                ],
+                submitLabel: 'Create user',
+                wide: true,
+              });
+              if (!v) return;
+              const roles = pickRoles(v);
+              if (!roles.length) return toast('Pick at least one role', 'bad');
+              await api.post('/v1/users', {
+                email: v.email.trim(),
+                ...(v.name ? { name: v.name } : {}),
+                password: v.password,
+                roles,
+              });
+              toast('User created', 'good');
+              reload('users');
+            },
+          }),
+        ],
       },
     );
   };
