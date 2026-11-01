@@ -3,6 +3,7 @@ import { ROLES } from '../../schemas/index.ts';
 import { GLOBAL_TENANT } from '../../state/index.ts';
 import { accountExport } from '../account-export.ts';
 import type { RouteDef } from '../http.ts';
+import { INVITE_MAIL, mailLink } from './mail.ts';
 import { id, name, obj } from './util.ts';
 
 const roles = { type: 'array', items: { enum: [...ROLES] }, minItems: 1, uniqueItems: true } as const;
@@ -225,6 +226,31 @@ export function adminRoutes(): RouteDef[] {
       handler: async ({ app, principal, body }) => {
         const { passwordHash: _p, ...u } = await app.auth.createUser(principal, { ...body, mustChangePassword: true });
         return u;
+      },
+    },
+    {
+      method: 'POST',
+      url: '/v1/users/invite',
+      summary: 'Invite someone by email to your workspace; they choose their own password from the link',
+      tag: 'Administration',
+      action: 'user.manage',
+      status: 201,
+      schema: {
+        body: obj(
+          {
+            email: { type: 'string', format: 'email', maxLength: 254 },
+            name: { type: 'string', maxLength: 100 },
+            roles,
+          },
+          ['email', 'roles'],
+        ),
+      },
+      handler: async ({ app, principal, body, req }) => {
+        if (!app.mailer || app.config.mode !== 'standalone') throw new NotFoundError('Not found');
+        const { user, mailed } = await app.auth.inviteUser(principal, body);
+        mailLink(app, req.ip, mailed, INVITE_MAIL);
+        const { passwordHash: _p, ...rest } = user;
+        return rest;
       },
     },
     {

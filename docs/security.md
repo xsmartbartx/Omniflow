@@ -85,6 +85,11 @@ OmniFlow reduces risk; it does not remove your part in it.
   compute and network, so leave shell steps disabled, keep egress limited, and put the page behind a proxy or
   allow-list if you do not want the open internet creating accounts. Production publishing gates still apply: a
   lone administrator cannot approve their own risky change.
+- **Inviting people.** With a mail relay configured, an administrator can invite someone by email (Users, "Invite by email", or
+  `POST /v1/users/invite`). The account is created in the inviter's workspace with a random password nobody knows, and the
+  invitee chooses their own from a single-use link that works for 7 days (it is the password-reset link; only its hash is
+  stored). Nothing is shared in advance, unlike adding a user with a temporary password. Addresses stay unique across
+  workspaces, so an address that already has an account cannot be invited.
 - **Copy of your data.** `GET /v1/account/export` (the Account page's "Download") returns a JSON copy of a workspace for an
   administrator: people, workflows with every version, runs, and the names of secrets. Secret values, password hashes and
   key hashes are never included. The audit log has its own export (`/v1/audit/export`). Each download is recorded in the
