@@ -1,59 +1,59 @@
 /* OmniFlow product site. Tokens match the NEXORA family (dark by default, light by OS preference or the toggle). */
 :root {
-  --background: #070a13;
-  --foreground: #edf0f3;
-  --card: #0b0f19;
-  --primary: #695def;
-  --primary-foreground: #f9fafb;
-  --link: #a49dff;
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card: #18181b;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --link: #818cf8;
   --secondary: #35b7f3;
-  --muted: #121724;
-  --muted-foreground: #a3adbd;
-  --border: #252a37;
-  --success: #2eb877;
-  --warning: #f6a823;
-  --accent: #1e2431;
-  --glow: rgb(105 93 239 / 0.35);
-  --glow-2: rgb(53 183 243 / 0.18);
-  --radius: 0.875rem;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --border: #27272a;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --accent: #27272a;
+  --glow: rgb(79 70 229 / 0.35);
+  --glow-2: rgb(129 140 248 / 0.15);
+  --radius: 0.75rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root:not(.dark) {
     --background: #ffffff;
-    --foreground: #0b111e;
+    --foreground: #18181b;
     --card: #ffffff;
-    --primary: #4536e2;
-    --link: #4536e2;
+    --primary: #4f46e5;
+    --link: #4f46e5;
     --secondary: #096c9a;
-    --muted: #f5f6f9;
-    --muted-foreground: #565e6c;
-    --border: #dcdfe5;
-    --success: #1c6e48;
-    --warning: #845606;
-    --accent: #eceff4;
-    --glow: rgb(69 54 226 / 0.16);
-    --glow-2: rgb(9 108 154 / 0.1);
+    --muted: #f4f4f5;
+    --muted-foreground: #52525b;
+    --border: #e4e4e7;
+    --success: #047857;
+    --warning: #92400e;
+    --accent: #f4f4f5;
+    --glow: rgb(79 70 229 / 0.14);
+    --glow-2: rgb(99 102 241 / 0.08);
     color-scheme: light;
   }
 }
 .light {
   --background: #ffffff;
-  --foreground: #0b111e;
+  --foreground: #18181b;
   --card: #ffffff;
-  --primary: #4536e2;
-  --link: #4536e2;
+  --primary: #4f46e5;
+  --link: #4f46e5;
   --secondary: #096c9a;
-  --muted: #f5f6f9;
-  --muted-foreground: #565e6c;
-  --border: #dcdfe5;
-  --success: #1c6e48;
-  --warning: #845606;
-  --accent: #eceff4;
-  --glow: rgb(69 54 226 / 0.16);
-  --glow-2: rgb(9 108 154 / 0.1);
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --border: #e4e4e7;
+  --success: #047857;
+  --warning: #92400e;
+  --accent: #f4f4f5;
+  --glow: rgb(79 70 229 / 0.14);
+  --glow-2: rgb(99 102 241 / 0.08);
   color-scheme: light;
 }
 
@@ -241,11 +241,11 @@ pre {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 2.75rem;
-  padding: 0.55rem 1.4rem;
-  border-radius: 999px;
-  font-weight: 600;
-  font-size: 1rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
   text-decoration: none;
   border: 1px solid transparent;
   transition:
@@ -298,13 +298,13 @@ pre {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.3rem 0.85rem;
-  border: 1px solid var(--border);
+  padding: 0.25rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
   border-radius: 999px;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  color: var(--muted-foreground);
-  background: color-mix(in srgb, var(--card) 70%, transparent);
+  color: var(--link);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 .eyebrow .dot {
   width: 0.5rem;
@@ -314,14 +314,14 @@ pre {
 }
 .hero h1 {
   margin-top: 1.5rem;
-  font-size: clamp(2.5rem, 7.2vw, 5.25rem);
-  line-height: 1.04;
-  letter-spacing: -0.035em;
-  font-weight: 750;
+  font-size: clamp(2.25rem, 6vw, 3.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  font-weight: 700;
   text-wrap: balance;
 }
 .grad {
-  background: linear-gradient(100deg, var(--foreground) 10%, var(--link) 55%, var(--secondary) 95%);
+  background: linear-gradient(100deg, var(--foreground) 20%, var(--link) 90%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -411,9 +411,10 @@ pre {
   gap: 0.35rem;
   padding: 0.1rem 0.6rem;
   border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  border: 1px solid currentColor;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 0;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 .badge.ok {
   color: var(--success);
@@ -474,10 +475,8 @@ pre {
 }
 .explain h3,
 .label {
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 700;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--muted-foreground);
 }
 .explain p {
@@ -546,9 +545,7 @@ section {
 }
 .kicker {
   font-size: 0.875rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--link);
 }
 h2 {
@@ -770,8 +767,7 @@ td {
 }
 th {
   font-size: 0.8125rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 500;
   color: var(--muted-foreground);
   background: var(--muted);
 }
@@ -899,10 +895,8 @@ details p {
 }
 .site-footer h2 {
   margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: var(--foreground);
 }
 .site-footer ul {
